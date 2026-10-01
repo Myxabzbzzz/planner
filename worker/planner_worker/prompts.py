@@ -1,4 +1,5 @@
-from datetime import timedelta
+import re
+from datetime import date, timedelta
 
 from .schemas import Extraction, UserContext
 
@@ -23,9 +24,40 @@ SYSTEM = """Ты — парсер личного планера. Раздели 
 - source_text — дословный фрагмент сообщения, к которому относится запись.
 - Даты и время — локальные, формат YYYY-MM-DDTHH:MM:SS, без часового пояса. Относительные даты («завтра», «в пятницу») считай от текущего момента. «В 3» без уточнения — 15:00.
 - Для дней недели и относительных дат бери дату из строки «Календарь» — ближайший будущий такой день (сегодняшний день недели = сегодня).
+- Если после слова стоит дата в скобках (YYYY-MM-DD) — используй именно её.
 - Суммы: «40 000» → 40000, «22,4» → 22.4, «пятьсот» → 500, «2к» → 2000.
 - Ничего не выдумывай. Если записей нет — items: [].
 """
+
+
+_WEEKDAY_STEMS = [
+    ("понедельник", r"понедельник(?:а)?"),
+    ("вторник", r"вторник(?:а)?"),
+    ("среда", r"сред(?:а|у|ы)"),
+    ("четверг", r"четверг(?:а)?"),
+    ("пятница", r"пят(?:ница|ницу|ницы)"),
+    ("суббота", r"суббот(?:а|у|ы)"),
+    ("воскресенье", r"воскресень(?:е|я)"),
+]
+_DATE_WORDS = r"послезавтра|завтра|сегодня|" + "|".join(p for _, p in _WEEKDAY_STEMS)
+_DATE_RE = re.compile(rf"(?<!\w)({_DATE_WORDS})(?!\w)(?!\s*\(\d{{4}}-\d{{2}}-\d{{2}}\))", re.IGNORECASE)
+
+
+def annotate_dates(text: str, today: date) -> str:
+    def resolve(word: str) -> date:
+        w = word.lower()
+        if w == "сегодня":
+            return today
+        if w == "завтра":
+            return today + timedelta(days=1)
+        if w == "послезавтра":
+            return today + timedelta(days=2)
+        for idx, (_, pat) in enumerate(_WEEKDAY_STEMS):
+            if re.fullmatch(pat, w):
+                return today + timedelta(days=(idx - today.weekday()) % 7)
+        raise ValueError(word)
+
+    return _DATE_RE.sub(lambda m: f"{m.group(1)} ({resolve(m.group(1)).isoformat()})", text)
 
 
 def build_extract_messages(
@@ -50,5 +82,5 @@ def build_extract_messages(
         user += f"Пользователь уточнил: это запись типа {hint_kind}. Верни ровно одну запись этого типа.\n"
     if feedback:
         user += "Прошлый разбор содержал ошибки, исправь их:\n- " + "\n- ".join(feedback) + "\n"
-    user += f"\nСообщение:\n{text}"
+    user += f"\nСообщение:\n{annotate_dates(text, today)}"
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]

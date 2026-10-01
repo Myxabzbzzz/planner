@@ -81,3 +81,27 @@ def test_messages_contain_calendar(ctx):
     assert "завтра пт 2026-10-02" in line
     assert "пн 2026-10-05" in line
     assert len(re.findall(r"\d{4}-\d{2}-\d{2}", line)) == 14
+
+
+def test_annotate_dates():
+    from datetime import date
+
+    from planner_worker.prompts import annotate_dates
+
+    t = date(2026, 10, 1)
+    assert "пятницы (2026-10-02)" in annotate_dates("до пятницы сдать отчёт", t)
+    assert "понедельник (2026-10-05)" in annotate_dates("в понедельник в 10", t)
+    out = annotate_dates("послезавтра в 19:30", t)
+    assert "послезавтра (2026-10-03)" in out and "завтра (2026-10-02)" not in out
+    assert "(2026-10-01)" in annotate_dates("в четверг", t)
+    assert "(2026-10-03)" in annotate_dates("в субботу", t)
+    assert "завтра (2026-10-02)" in annotate_dates("Завтра в 3", t) or "Завтра (2026-10-02)" in annotate_dates("Завтра в 3", t)
+    for s in ["до пятницы, завтра и в субботу", "послезавтра"]:
+        once = annotate_dates(s, t)
+        assert annotate_dates(once, t) == once
+    assert annotate_dates("кофе 40 000", t) == "кофе 40 000"
+
+
+def test_message_text_is_annotated(ctx):
+    user = build_extract_messages("в субботу футбол", ctx)[1]["content"]
+    assert user.endswith("в субботу (2026-10-03) футбол")
