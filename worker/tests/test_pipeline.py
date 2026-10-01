@@ -21,6 +21,8 @@ class FakeStore:
         self.saved_rates = []
         self.failed: list[InboxRow] = []
         self.notified: list[str] = []
+        self.cleared: list[str] = []
+        self.events: list[str] = []
 
     def load_context(self, user_id, now_utc):
         return self.ctx
@@ -32,7 +34,12 @@ class FakeStore:
         self.saved_rates.append(t)
 
     def insert(self, table, row):
+        self.events.append("insert")
         self.inserted.append((table, row))
+
+    def clear_records(self, inbox_id):
+        self.events.append("clear")
+        self.cleared.append(inbox_id)
 
     def finish(self, inbox_id, status, result, error=None, notified=False):
         self.finished.append((inbox_id, status, result, error, notified))
@@ -266,3 +273,85 @@ def test_notify_failed(ctx):
     notify_failed(store, tg)
     assert "Не получилось" in tg.sent[0][1]
     assert store.notified == ["i9"]
+
+
+def test_telegram_failure_after_done_does_not_raise(ctx):
+    p, store, tg = make(ctx, FakeExtractor([TAXI]))
+
+    def boom(*a, **k):
+        raise RuntimeError("telegram down")
+
+    tg.edit = boom
+    p.process(row())
+    assert store.finished[-1][1] == "done"
+    assert len(store.inserted) == 1
+
+
+def test_main_path_clears_records_before_insert(ctx):
+    p, store, _ = make(ctx, FakeExtractor([TAXI]))
+    p.process(row())
+    assert store.cleared == ["i1"]
+    assert store.events == ["clear", "insert"]
+
+
+def _review_pending(kind_from, forced, text):
+    return [{"item": item(kind=kind_from, title="Созвон", source_text=text).model_dump(mode="json"),
+             "reason": "laya", "laya": None, "forced_kind": forced}]
+
+
+def test_review_reextract_error_is_contained(ctx):
+    p, store, tg = make(ctx, FakeExtractor(ExtractionError("bad json")))
+    p.process(row(result={"pending_review": _review_pending("task", "event", "созвон")}))
+    _, status, result, _, _ = store.finished[-1]
+    assert status == "done"
+    e = result["pending_review"][0]
+    assert e["resolved"] is True and e["failed"] is True
+    assert tg.edited == [] and "⚠️" in tg.sent[0][1]
+
+
+def test_review_save_error_is_contained(ctx):
+    p, store, tg = make(ctx, FakeExtractor())
+
+    def boom(table, r):
+        raise RuntimeError("db down")
+
+    store.insert = boom
+    pending = [{"item": item(kind="note", title="n", source_text="n").model_dump(mode="json"),
+                "reason": "laya", "laya": None, "forced_kind": "note"}]
+    p.process(row(result={"pending_review": pending}))
+    e = store.finished[-1][2]["pending_review"][0]
+    assert e["resolved"] is True and e["failed"] is True
+    assert "⚠️" in tg.sent[0][1]
+
+
+def test_fetch_rates_network_error_goes_to_review(ctx):
+    import httpx
+
+    def boom():
+        raise httpx.ConnectError("no network")
+
+    store = FakeStore(ctx, rates=None)
+    sub = item(kind="expense", title="Подписка", source_text="s", amount=1, currency="USD")
+    p, store, _ = make(ctx, FakeExtractor([sub]), store=store, fetch=boom)
+    p.process(row())
+    assert store.finished[-1][1] == "needs_review"
+    assert "курс" in store.finished[-1][2]["pending_review"][0]["reason"]
+
+
+def test_run_one_persists_pre_process_result(ctx):
+    class FlakyStore(FakeStore):
+        def finish(self, *a, **k):
+            if not self.finished:
+                self.finished.append(("boom",))
+                raise RuntimeError("db hiccup")
+            super().finish(*a, **k)
+
+    store = FlakyStore(ctx)
+    pending = [{"item": item(kind="note", title="n", source_text="n").model_dump(mode="json"),
+                "reason": "laya", "laya": None, "forced_kind": "note"}]
+    r = row(attempts=1, result={"pending_review": pending})
+    p, store, tg = make(ctx, FakeExtractor(), store=store)
+    run_one(r, p, store, tg)
+    _, status, result, _, _ = store.finished[-1]
+    assert status == "pending"
+    assert "resolved" not in result["pending_review"][0]

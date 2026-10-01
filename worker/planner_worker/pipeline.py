@@ -1,3 +1,4 @@
+import copy
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -43,7 +44,9 @@ class Pipeline:
 
         lines: list[str] = []
         review: list[dict] = []
-        for it, errs in self._extract_checked(text, ctx):
+        checked = self._extract_checked(text, ctx)
+        self.store.clear_records(row.id)  # retried main pass must not duplicate records
+        for it, errs in checked:
             if errs:
                 review.append(self._review_entry(it, "; ".join(errs), None))
                 continue
@@ -58,10 +61,18 @@ class Pipeline:
 
         status = "needs_review" if review else "done"
         self.store.finish(row.id, status, {"text": text, "saved": len(lines), "pending_review": review})
-        reply(self.tg, row, render_summary(lines, len(review)), summary_buttons(row.id) if lines else None)
+        self._best_effort(reply, self.tg, row, render_summary(lines, len(review)),
+                          summary_buttons(row.id) if lines else None)
         for idx, entry in enumerate(review):
             msg, buttons = review_message(row.id, idx, ExtractedItem.model_validate(entry["item"]), entry["reason"])
-            self.tg.send(row.reply_chat_id, msg, buttons)
+            self._best_effort(self.tg.send, row.reply_chat_id, msg, buttons)
+
+    @staticmethod
+    def _best_effort(fn, *args) -> None:
+        try:
+            fn(*args)
+        except Exception as e:  # noqa: BLE001 — telegram after commit must not trigger a retry
+            log.warning("telegram call failed after commit: %s", e)
 
     # ---------- steps ----------
 
@@ -91,7 +102,12 @@ class Pipeline:
             return None
         table = self.store.rates_on(it.occurred_on)
         if table is None:
-            table = self.fetch_rates()
+            try:
+                table = self.fetch_rates()
+            except FxError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                raise FxError(f"не удалось получить курс: {e}") from e
             self.store.save_rates(table)
         return convert(Decimal(str(it.amount)), it.currency, ctx.base_currency, table)
 
@@ -113,30 +129,40 @@ class Pipeline:
             forced = entry.get("forced_kind")
             if not forced or entry.get("resolved"):
                 continue
-            entry["resolved"] = True
-            if forced == "drop":
-                continue
-            it = localize(ExtractedItem.model_validate(entry["item"]).model_copy(update={"kind": forced}), ctx)
-            if check_item(it, ctx, self._known_currencies(ctx)):
-                fixed = [i for i, errs in self._extract_checked(it.source_text, ctx, forced)
-                         if not errs and i.kind == forced]
-                it = fixed[0] if fixed else None
-            if it is None:
-                entry["failed"] = True
-                warnings.append(f"⚠️ Не смог разобрать «{entry['item']['source_text']}» как "
-                                f"{KIND_LABELS[forced]}. Напиши подробнее отдельным сообщением.")
-                continue
             try:
-                saved.append(self._save(it, ctx, row.id))
+                self._review_entry_save(entry, forced, ctx, row.id, saved, warnings)
             except FxError as e:
                 entry["failed"] = True
-                warnings.append(f"⚠️ «{it.source_text}»: нет курса валюты ({e}).")
+                warnings.append(f"⚠️ «{entry['item'].get('source_text')}»: нет курса валюты ({e}).")
+            except Exception as e:  # noqa: BLE001
+                log.warning("review entry failed for %s: %s", row.id, e)
+                entry["failed"] = True
+                warnings.append(f"⚠️ Не смог разобрать «{entry['item'].get('source_text')}» как "
+                                f"{KIND_LABELS.get(forced, forced)}. Напиши подробнее отдельным сообщением.")
+            entry["resolved"] = True
 
         status = "needs_review" if any(not e.get("resolved") for e in pending) else "done"
         self.store.finish(row.id, status, {**row.result, "pending_review": pending})
         parts = ([render_summary(saved, 0)] if saved else []) + warnings
         if parts:
-            self.tg.send(row.reply_chat_id, "\n\n".join(parts), summary_buttons(row.id) if saved else None)
+            self._best_effort(self.tg.send, row.reply_chat_id, "\n\n".join(parts),
+                              summary_buttons(row.id) if saved else None)
+
+    def _review_entry_save(self, entry: dict, forced: str, ctx: UserContext, inbox_id: str,
+                           saved: list[str], warnings: list[str]) -> None:
+        if forced == "drop":
+            return
+        it = localize(ExtractedItem.model_validate(entry["item"]).model_copy(update={"kind": forced}), ctx)
+        if check_item(it, ctx, self._known_currencies(ctx)):
+            fixed = [i for i, errs in self._extract_checked(it.source_text, ctx, forced)
+                     if not errs and i.kind == forced]
+            it = fixed[0] if fixed else None
+        if it is None:
+            entry["failed"] = True
+            warnings.append(f"⚠️ Не смог разобрать «{entry['item']['source_text']}» как "
+                            f"{KIND_LABELS[forced]}. Напиши подробнее отдельным сообщением.")
+            return
+        saved.append(self._save(it, ctx, inbox_id))
 
 
 def reply(tg, row: InboxRow, text: str, buttons=None) -> None:
@@ -147,18 +173,19 @@ def reply(tg, row: InboxRow, text: str, buttons=None) -> None:
 
 
 def run_one(row: InboxRow, pipeline: Pipeline, store, tg) -> None:
+    original = copy.deepcopy(row.result)
     try:
         pipeline.process(row)
     except ExtractionError as e:
         log.warning("extraction failed for %s: %s", row.id, e)
-        store.finish(row.id, "failed", row.result, f"extraction: {e}", notified=True)
+        store.finish(row.id, "failed", original, f"extraction: {e}", notified=True)
         reply(tg, row, REPHRASE_TEXT)
     except Exception as e:  # noqa: BLE001 — любая другая ошибка: ретрай до 3 попыток
         log.exception("processing failed for %s (attempt %s)", row.id, row.attempts)
         if row.attempts < 3:
-            store.finish(row.id, "pending", row.result, str(e))
+            store.finish(row.id, "pending", original, str(e))
         else:
-            store.finish(row.id, "failed", row.result, str(e), notified=True)
+            store.finish(row.id, "failed", original, str(e), notified=True)
             reply(tg, row, FAILED_TEXT)
 
 

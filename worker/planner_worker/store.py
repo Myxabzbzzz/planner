@@ -70,3 +70,7 @@ class Store:
     def mark_notified(self, inbox_id: str) -> None:
         self.sb.table("inbox").update({"notified_at": datetime.now(timezone.utc).isoformat()}) \
             .eq("id", inbox_id).execute()
+
+    def clear_records(self, inbox_id: str) -> None:
+        for table in ("items", "transactions", "notes", "habit_logs"):
+            self.sb.table(table).delete().eq("inbox_id", inbox_id).execute()
