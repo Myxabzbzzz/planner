@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 from .schemas import Extraction, UserContext
 
 EXTRACTION_SCHEMA: dict = Extraction.model_json_schema()
 
+SHORT_DAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
 
 SYSTEM = """Ты — парсер личного планера. Раздели сообщение пользователя на отдельные записи и верни JSON строго по схеме.
@@ -19,6 +22,7 @@ SYSTEM = """Ты — парсер личного планера. Раздели 
 - title — коротко, по-русски, без даты и суммы: «Встреча с Андреем», «Такси», «Оплатить интернет». Для note и journal title — полный текст мысли.
 - source_text — дословный фрагмент сообщения, к которому относится запись.
 - Даты и время — локальные, формат YYYY-MM-DDTHH:MM:SS, без часового пояса. Относительные даты («завтра», «в пятницу») считай от текущего момента. «В 3» без уточнения — 15:00.
+- Для дней недели и относительных дат бери дату из строки «Календарь» — ближайший будущий такой день (сегодняшний день недели = сегодня).
 - Суммы: «40 000» → 40000, «22,4» → 22.4, «пятьсот» → 500, «2к» → 2000.
 - Ничего не выдумывай. Если записей нет — items: [].
 """
@@ -28,8 +32,15 @@ def build_extract_messages(
     text: str, ctx: UserContext, hint_kind: str | None = None, feedback: list[str] | None = None
 ) -> list[dict]:
     weekday = WEEKDAYS[ctx.now.weekday()]
+    today = ctx.now.date()
+    cal = []
+    for i in range(14):
+        d = today + timedelta(days=i)
+        label = "сегодня " if i == 0 else "завтра " if i == 1 else ""
+        cal.append(f"{label}{SHORT_DAYS[d.weekday()]} {d.isoformat()}")
     user = (
         f"Сейчас: {ctx.now:%Y-%m-%dT%H:%M} ({weekday}), часовой пояс {ctx.tz}.\n"
+        f"Календарь: {', '.join(cal)}.\n"
         f"Базовая валюта: {ctx.base_currency}.\n"
         f"Категории расходов: {', '.join(ctx.expense_categories)}.\n"
         f"Категории доходов: {', '.join(ctx.income_categories)}.\n"

@@ -70,3 +70,14 @@ def test_ollama_client_request_shape():
     assert seen["think"] is False
     assert seen["options"]["temperature"] == 0
     assert seen["format"] == EXTRACTION_SCHEMA
+
+
+def test_messages_contain_calendar(ctx):
+    import re
+
+    user = build_extract_messages("x", ctx)[1]["content"]
+    line = next(l for l in user.splitlines() if l.startswith("Календарь:"))
+    assert "сегодня чт 2026-10-01" in line
+    assert "завтра пт 2026-10-02" in line
+    assert "пн 2026-10-05" in line
+    assert len(re.findall(r"\d{4}-\d{2}-\d{2}", line)) == 14
