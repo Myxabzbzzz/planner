@@ -191,5 +191,8 @@ def run_one(row: InboxRow, pipeline: Pipeline, store, tg) -> None:
 
 def notify_failed(store, tg) -> None:
     for row in store.failed_unnotified():
-        reply(tg, row, FAILED_TEXT)
-        store.mark_notified(row.id)
+        try:
+            reply(tg, row, FAILED_TEXT)
+            store.mark_notified(row.id)
+        except Exception as e:
+            log.warning("notify_failed: row %s skipped: %s", row.id, e)

@@ -355,3 +355,19 @@ def test_run_one_persists_pre_process_result(ctx):
     _, status, result, _, _ = store.finished[-1]
     assert status == "pending"
     assert "resolved" not in result["pending_review"][0]
+
+
+def test_notify_failed_continues_after_reply_error(ctx):
+    store = FakeStore(ctx)
+    store.failed = [row(id="a", reply_message_id=None), row(id="b", reply_message_id=None)]
+
+    class FlakyTg(FakeTg):
+        def send(self, chat_id, text, buttons=None):
+            if not self.sent and not getattr(self, "tried", False):
+                self.tried = True
+                raise RuntimeError("telegram down")
+            return super().send(chat_id, text, buttons)
+
+    tg = FlakyTg()
+    notify_failed(store, tg)
+    assert store.notified == ["b"]
