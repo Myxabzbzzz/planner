@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from .fx import FxApplied
 from .schemas import ExtractedItem, UserContext
@@ -28,7 +28,7 @@ def to_row(item: ExtractedItem, ctx: UserContext, inbox_id: str, fx: FxApplied |
                     "currency_orig": fx.currency_orig, "fx_rate": str(fx.rate),
                     "fx_date": fx.rate_date.isoformat(), "fx_source": fx.source}
         else:
-            row["amount_base"] = str(Decimal(str(item.amount)).quantize(Decimal("0.01")))
+            row["amount_base"] = str(Decimal(str(item.amount)).quantize(Decimal("0.01"), ROUND_HALF_UP))
         return "transactions", row
     if k in ("note", "journal"):
         return "notes", {**base, "kind": "thought" if k == "note" else "journal", "text": item.title}

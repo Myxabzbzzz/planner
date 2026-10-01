@@ -92,3 +92,8 @@ def test_to_row_notes_and_habits(ctx):
         "habit_logs", {"user_id": "u1", "inbox_id": "i1", "habit_id": "h-gym", "date": "2026-10-01"})
     assert to_row(it(ctx, kind="habit_new", title=" Медитация "), ctx, "i1", None) == (
         "habits", {"user_id": "u1", "name": "Медитация"})
+
+
+def test_to_row_base_amount_rounds_half_up(ctx):
+    _, row = to_row(it(ctx, kind="expense", title="Мелочь", amount=0.125), ctx, "i1", None)
+    assert row["amount_base"] == "0.13"

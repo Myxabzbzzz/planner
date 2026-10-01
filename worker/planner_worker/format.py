@@ -1,5 +1,5 @@
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
 from .fx import FxApplied
@@ -20,7 +20,7 @@ REVIEW_ROWS = [["task", "event"], ["expense", "income"], ["note", "journal"], ["
 
 
 def fmt_number(x: Decimal) -> str:
-    s = f"{x.quantize(Decimal('0.01')):,.2f}".replace(",", " ").replace(".", ",")
+    s = f"{x.quantize(Decimal('0.01'), ROUND_HALF_UP):,.2f}".replace(",", " ").replace(".", ",")
     return s[:-3] if s.endswith(",00") else s
 
 
