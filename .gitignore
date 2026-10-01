@@ -10,3 +10,4 @@ supabase/.branches/
 supabase/functions/.env
 .env
 .superpowers/
+*.egg-info/
