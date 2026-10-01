@@ -12,3 +12,11 @@ Telegram-бот + Mini App «вся жизнь в одном месте» с л�
     supabase test db        # pgTAP
     deno test --allow-env --allow-net supabase/functions/
     cd worker && .venv/bin/pytest
+
+## Запуск воркера
+
+    cd worker
+    cp .env.example .env      # заполнить SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TELEGRAM_BOT_TOKEN
+    .venv/bin/python -m planner_worker.main
+
+Пока воркер не запущен, бот отвечает «⏳ Принял, разберу, когда ИИ проснётся» и копит очередь.
