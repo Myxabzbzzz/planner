@@ -45,3 +45,17 @@ def test_heartbeat_not_due_is_skipped():
     now = time.monotonic()
     assert m.tick(s, None, None, CFG, now) == now
     assert s.hb_calls == 0
+
+
+def test_main_silences_httpx_logging(monkeypatch):
+    import logging
+
+    monkeypatch.setattr(m, "load_config", lambda: (_ for _ in ()).throw(SystemExit))
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.INFO)
+    try:
+        m.main()
+    except SystemExit:
+        pass
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert logging.getLogger("httpcore").level == logging.WARNING

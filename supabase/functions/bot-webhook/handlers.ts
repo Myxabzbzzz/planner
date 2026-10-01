@@ -3,7 +3,9 @@ import type { Button, Tg } from "../_shared/telegram.ts";
 
 export type Deps = { db: Db; tg: Tg; adminTgId: number };
 
-export const CURRENCIES = ["UZS", "RUB", "USD", "KZT", "EUR"];
+import { CURRENCIES } from "./currencies.ts";
+
+export { CURRENCIES };
 
 export const KIND_LABELS: Record<string, string> = {
   task: "☑️ Задача",
@@ -167,7 +169,7 @@ async function handleCallback(cq: any, d: Deps) {
 
   if (action === "rv") {
     const [inboxId, idxStr, choice] = rest;
-    if (choice !== "drop" && !(choice in KIND_LABELS)) {
+    if (choice !== "drop" && !Object.hasOwn(KIND_LABELS, choice)) {
       await d.tg.answerCallback(cq.id);
       return;
     }
@@ -177,7 +179,7 @@ async function handleCallback(cq: any, d: Deps) {
       return;
     }
     await d.tg.answerCallback(cq.id);
-    await d.tg.editMessage(chatId, messageId, choice === "drop" ? "🗑 Пропущено." : `Принял: ${KIND_LABELS[choice]} ⏳`);
+    await d.tg.editMessage(chatId, messageId, choice === "drop" ? "🗑 Пропущено." : `Принял: ${KIND_LABELS[choice]}`);
     return;
   }
 

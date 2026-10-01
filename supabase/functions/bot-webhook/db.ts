@@ -1,3 +1,4 @@
+import { CURRENCIES } from "./currencies.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export type User = {
@@ -67,7 +68,7 @@ export function supabaseDb(sb: SupabaseClient): Db {
       const row = check(
         await sb.from("fx_rates").select("rates").order("date", { ascending: false }).limit(1).maybeSingle(),
       ) as { rates: Record<string, number> } | null;
-      return row ? code in row.rates : true;
+      return row ? Object.hasOwn(row.rates, code) : CURRENCIES.includes(code);
     },
     async workerOnline() {
       return check(await sb.rpc("worker_online")) === true;

@@ -49,3 +49,30 @@ def test_download_saves_file(tmp_path):
     p = client(handler).download("F1", tmp_path)
     assert p == tmp_path / "file_1.oga"
     assert p.read_bytes() == b"OGG"
+
+
+def test_download_http_error_does_not_leak_token(tmp_path):
+    def handler(req):
+        if "getFile" in str(req.url):
+            return httpx.Response(200, json={"ok": True, "result": {"file_path": "voice/a.oga"}})
+        return httpx.Response(404)
+
+    with pytest.raises(TelegramError) as ei:
+        client(handler).download("fid", tmp_path)
+    assert "TOKEN" not in str(ei.value)
+
+
+def test_connect_error_does_not_leak_token():
+    def handler(req):
+        raise httpx.ConnectError("boom", request=req)
+
+    with pytest.raises(TelegramError) as ei:
+        client(handler).send(5, "hi")
+    assert "TOKEN" not in str(ei.value)
+    assert ei.value.__cause__ is None
+
+
+def test_non_json_response_does_not_leak_token():
+    with pytest.raises(TelegramError) as ei:
+        client(lambda req: httpx.Response(502, text="<html>bad gateway</html>")).send(5, "hi")
+    assert "TOKEN" not in str(ei.value)

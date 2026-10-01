@@ -8,12 +8,18 @@ export interface Tg {
 
 export function telegramClient(token: string, fetchFn: typeof fetch = fetch): Tg {
   async function call(method: string, body: unknown) {
-    const res = await fetchFn(`https://api.telegram.org/bot${token}/${method}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const json = await res.json();
+    let json;
+    try {
+      const res = await fetchFn(`https://api.telegram.org/bot${token}/${method}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      json = await res.json();
+    } catch {
+      // the original error text contains the URL (and the bot token)
+      throw new Error(`telegram ${method}: network error`);
+    }
     if (!json.ok) throw new Error(`telegram ${method}: ${json.description}`);
     return json.result;
   }

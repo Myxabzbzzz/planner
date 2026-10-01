@@ -35,4 +35,4 @@ def to_row(item: ExtractedItem, ctx: UserContext, inbox_id: str, fx: FxApplied |
     if k == "habit_done":
         return "habit_logs", {**base, "habit_id": ctx.habits[item.habit.strip().lower()],
                               "date": ctx.now.date().isoformat()}
-    return "habits", {"user_id": ctx.user_id, "name": item.title.strip()}
+    return "habits", {"user_id": ctx.user_id, "name": item.title.strip(), "inbox_id": inbox_id}

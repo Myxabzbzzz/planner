@@ -183,3 +183,21 @@ Deno.test("review callback rejects unknown kind", async () => {
   }, deps);
   assertEquals(db.reviews.length, 0);
 });
+
+Deno.test("review callback rejects prototype keys as kind", async () => {
+  const { db, deps } = setup();
+  onboarded(db);
+  await handleUpdate({
+    callback_query: { id: "cb4", data: "rv:abc:0:toString", from: { id: ADMIN }, message: { chat: { id: ADMIN }, message_id: 9 } },
+  }, deps);
+  assertEquals(db.reviews.length, 0);
+});
+
+Deno.test("review ack has no hourglass", async () => {
+  const { db, tg, deps } = setup();
+  onboarded(db);
+  await handleUpdate({
+    callback_query: { id: "cb5", data: "rv:abc:0:expense", from: { id: ADMIN }, message: { chat: { id: ADMIN }, message_id: 9 } },
+  }, deps);
+  assert(!tg.edited[0].text.includes("⏳"));
+});

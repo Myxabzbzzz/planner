@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(16);
 
 insert into public.users (id, tg_id, name, is_allowed) values
   ('00000000-0000-0000-0000-00000000000a', 1, 'A', true),
@@ -30,6 +30,12 @@ select is(public.resolve_review('00000000-0000-0000-0000-00000000000a', '1000000
 select is((select result->'pending_review'->0->>'forced_kind' from public.inbox where id = '10000000-0000-0000-0000-000000000001'), 'expense', 'forced_kind stored');
 select is((select count(*)::int from public.corrections), 1, 'correction logged');
 select is(public.resolve_review('00000000-0000-0000-0000-00000000000b', '10000000-0000-0000-0000-000000000001', 0, 'task'), false, 'other user cannot resolve');
+
+-- delete_inbox_records removes habits created from the inbox row (when unused)
+insert into public.habits (id, user_id, name, inbox_id) values
+  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'Медитация', '10000000-0000-0000-0000-000000000001');
+select is(public.delete_inbox_records('00000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-000000000001'), 1, 'delete_inbox_records counts the habit');
+select is((select count(*)::int from public.habits where id = '20000000-0000-0000-0000-000000000001'), 0, 'habit from inbox deleted');
 
 -- RLS
 set local role authenticated;

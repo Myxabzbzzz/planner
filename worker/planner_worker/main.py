@@ -45,6 +45,8 @@ def tick(store, tg, pipeline, cfg, last_beat: float) -> float:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    for noisy in ("httpx", "httpcore"):  # their INFO logs contain the bot token in URLs
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     cfg = load_config()
     http = httpx.Client()
     store = Store(create_client(cfg.supabase_url, cfg.supabase_service_key))

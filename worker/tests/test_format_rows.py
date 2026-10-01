@@ -1,3 +1,4 @@
+import dataclasses
 from datetime import date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -91,9 +92,29 @@ def test_to_row_notes_and_habits(ctx):
     assert to_row(it(ctx, kind="habit_done", habit="Зарядка"), ctx, "i1", None) == (
         "habit_logs", {"user_id": "u1", "inbox_id": "i1", "habit_id": "h-gym", "date": "2026-10-01"})
     assert to_row(it(ctx, kind="habit_new", title=" Медитация "), ctx, "i1", None) == (
-        "habits", {"user_id": "u1", "name": "Медитация"})
+        "habits", {"user_id": "u1", "name": "Медитация", "inbox_id": "i1"})
 
 
 def test_to_row_base_amount_rounds_half_up(ctx):
     _, row = to_row(it(ctx, kind="expense", title="Мелочь", amount=0.125), ctx, "i1", None)
     assert row["amount_base"] == "0.13"
+
+
+def test_habit_new_row_carries_inbox_id(ctx):
+    _, row = to_row(it(ctx, kind="habit_new", title="Медитация"), ctx, "i1", None)
+    assert row["inbox_id"] == "i1"
+
+
+def test_small_rate_renders_inverse(ctx):
+    fx = FxApplied(Decimal("3.38"), Decimal("40000"), "UZS", Decimal("0.00008460"), date(2026, 10, 1), "x")
+    ctx = dataclasses.replace(ctx, base_currency="USD")
+    line = render_line(it(ctx, kind="expense", title="Кофе", amount=40000, currency="UZS"), fx, ctx)
+    assert "1 $ = 11 820,33 сум на 01.10.2026" in line
+    assert "по курсу 0" not in line
+
+
+def test_long_note_truncated_and_summary_capped(ctx):
+    line = render_line(it(ctx, kind="note", title="а" * 500), None, ctx)
+    assert len(line) <= 205 and line.endswith("…")
+    text = render_summary(["📅 x" * 100] * 100, 0)
+    assert len(text) <= 4000 and text.endswith("…")

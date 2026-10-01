@@ -166,7 +166,8 @@ class Pipeline:
 
 
 def reply(tg, row: InboxRow, text: str, buttons=None) -> None:
-    if row.reply_message_id:
+    # a review pass must not overwrite the main summary message
+    if row.reply_message_id and not row.result.get("pending_review"):
         tg.edit(row.reply_chat_id, row.reply_message_id, text, buttons)
     else:
         tg.send(row.reply_chat_id, text, buttons)

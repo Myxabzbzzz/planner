@@ -14,7 +14,10 @@ class TelegramClient:
         self.http = http
 
     def _call(self, method: str, payload: dict):
-        data = self.http.post(f"{self.base}/{method}", json=payload, timeout=30).json()
+        try:
+            data = self.http.post(f"{self.base}/{method}", json=payload, timeout=30).json()
+        except (httpx.HTTPError, ValueError) as e:  # URL (with token) must not leak into messages
+            raise TelegramError(f"{method}: {type(e).__name__}") from None
         if not data.get("ok"):
             raise TelegramError(f"{method}: {data.get('description')}")
         return data["result"]
@@ -36,8 +39,11 @@ class TelegramClient:
 
     def download(self, file_id: str, dest_dir: Path) -> Path:
         info = self._call("getFile", {"file_id": file_id})
-        r = self.http.get(f"{self.file_base}/{info['file_path']}", timeout=60)
-        r.raise_for_status()
+        try:
+            r = self.http.get(f"{self.file_base}/{info['file_path']}", timeout=60)
+            r.raise_for_status()
+        except httpx.HTTPError as e:
+            raise TelegramError(f"download: {type(e).__name__}") from None
         dest_dir.mkdir(parents=True, exist_ok=True)
         p = dest_dir / Path(info["file_path"]).name
         p.write_bytes(r.content)

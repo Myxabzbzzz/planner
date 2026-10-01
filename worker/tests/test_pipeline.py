@@ -371,3 +371,22 @@ def test_notify_failed_continues_after_reply_error(ctx):
     tg = FlakyTg()
     notify_failed(store, tg)
     assert store.notified == ["b"]
+
+
+def test_review_pass_failure_sends_instead_of_editing_summary(ctx):
+    pending = [{"item": item(kind="note", title="n", source_text="n").model_dump(mode="json"),
+                "reason": "laya", "laya": None, "forced_kind": "note"}]
+    r = row(attempts=3, result={"pending_review": pending})
+    p, store, tg = make(ctx, FakeExtractor(RuntimeError("x")), store=type("S", (FakeStore,), {
+        "load_context": lambda self, *a: (_ for _ in ()).throw(RuntimeError("db down"))})(ctx))
+    run_one(r, p, store, tg)
+    assert tg.edited == []
+    assert "Не получилось" in tg.sent[0][1]
+
+
+def test_notify_failed_review_row_sends(ctx):
+    store = FakeStore(ctx)
+    store.failed = [row(id="i9", result={"pending_review": [{"x": 1}]})]
+    tg = FakeTg()
+    notify_failed(store, tg)
+    assert tg.edited == [] and "Не получилось" in tg.sent[0][1]

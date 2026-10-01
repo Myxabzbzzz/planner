@@ -32,6 +32,10 @@ def _dt(v: datetime, ctx: UserContext) -> str:
     return v.astimezone(ZoneInfo(ctx.tz)).strftime("%d.%m %H:%M")
 
 
+def _clip(s: str, n: int = 200) -> str:
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
 def render_line(item: ExtractedItem, fx: FxApplied | None, ctx: UserContext) -> str:
     k = item.kind
     if k == "task":
@@ -46,13 +50,18 @@ def render_line(item: ExtractedItem, fx: FxApplied | None, ctx: UserContext) -> 
         base = fx.amount_base if fx else Decimal(str(item.amount))
         line = f"{icon} {item.title} — {fmt_amount(base, ctx.base_currency)}"
         if fx:
-            line += (f"\n      {fmt_amount(fx.amount_orig, fx.currency_orig)} по курсу "
-                     f"{fmt_number(fx.rate)} на {fx.rate_date:%d.%m.%Y}")
+            orig = fmt_amount(fx.amount_orig, fx.currency_orig)
+            if fx.rate >= 1:
+                line += f"\n      {orig} по курсу {fmt_number(fx.rate)} на {fx.rate_date:%d.%m.%Y}"
+            else:
+                line += (f"\n      {orig} по курсу 1 {SYMBOLS.get(ctx.base_currency, ctx.base_currency)} = "
+                         f"{fmt_number(1 / fx.rate)} {SYMBOLS.get(fx.currency_orig, fx.currency_orig)} "
+                         f"на {fx.rate_date:%d.%m.%Y}")
         return line
     if k == "note":
-        return f"💡 {item.title}"
+        return f"💡 {_clip(item.title)}"
     if k == "journal":
-        return f"📔 {item.title}"
+        return f"📔 {_clip(item.title)}"
     if k == "habit_done":
         return f"🔁 {item.habit} — отмечено"
     return f"➕ Новая привычка: {item.title.strip()}"
@@ -66,7 +75,7 @@ def render_summary(lines: list[str], review_count: int) -> str:
     text = "✅ Записал:\n" + "\n".join(lines)
     if review_count:
         text += f"\n\n❓ Уточни ещё {review_count} — ниже."
-    return text
+    return _clip(text, 4000)
 
 
 def summary_buttons(inbox_id: str) -> list[list[dict]]:
