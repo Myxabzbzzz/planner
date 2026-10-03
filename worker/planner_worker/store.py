@@ -84,3 +84,6 @@ class Store:
 
     def finish_job(self, job_id: str, status: str, error: str | None) -> None:
         self.sb.table("jobs").update({"status": status, "error": error}).eq("id", job_id).execute()
+
+    def ask(self, fn: str, **params) -> dict:
+        return self.sb.rpc(fn, params).execute().data

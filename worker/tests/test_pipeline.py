@@ -445,3 +445,65 @@ def test_review_pass_time_none_saves_task_on_that_day(ctx):
     p.process(row(result={"pending_review": [entry]}))
     table, r = store.inserted[0]
     assert (table, r["kind"], r["due_at"]) == ("items", "task", "2026-10-02T18:59:00+00:00")
+
+
+class FakeAnswerer:
+    def __init__(self, text="💸 Потрачено в октябре: 1 сум (1 операция)"):
+        self.text = text
+        self.calls = []
+
+    def answer(self, text, ctx):
+        self.calls.append(text)
+        return self.text, {"intent": "spent"}
+
+
+def make_q(ctx, answerer, stt=None):
+    store = FakeStore(ctx)
+    tg = FakeTg()
+    p = Pipeline(store, tg, stt or FakeStt(""), FakeExtractor(), None, lambda: RATES, 0.7,
+                 Path("/tmp/planner-test"), answerer=answerer)
+    return p, store, tg
+
+
+def test_question_is_answered_without_records(ctx):
+    ans = FakeAnswerer()
+    p, store, tg = make_q(ctx, ans)
+    p.process(row(text="Сколько потратил в октябре"))
+    assert ans.calls == ["Сколько потратил в октябре"]
+    assert store.inserted == [] and store.cleared == []
+    assert store.finished == [("i1", "done", {"text": "Сколько потратил в октябре", "question": {"intent": "spent"},
+                                              "answered": True}, None, False)]
+    assert tg.edited == [(5, 77, ans.text, None)]
+
+
+def test_voice_question_is_transcribed_first(ctx):
+    ans = FakeAnswerer()
+    p, _, tg = make_q(ctx, ans, stt=FakeStt("Когда встреча с Ахмедом?"))
+    p.process(row(text=None, source="voice", audio_ref="f1"))
+    assert ans.calls == ["Когда встреча с Ахмедом?"]
+
+
+def test_shortcut_question_gets_prefix(ctx):
+    p, _, tg = make_q(ctx, FakeAnswerer("ответ"))
+    p.process(row(text="сколько потратил", source="shortcut"))
+    assert tg.edited[0][2] == "📲 ответ"
+
+
+def test_record_text_still_goes_to_extraction(ctx):
+    ans = FakeAnswerer()
+    p, store, tg = make(ctx, FakeExtractor([TAXI]))
+    p.answerer = ans
+    p.process(row(text="30 000 на такси"))
+    assert ans.calls == []
+    assert store.inserted[0][0] == "transactions"
+
+
+def test_question_answer_telegram_failure_does_not_retry(ctx):
+    p, store, tg = make_q(ctx, FakeAnswerer())
+
+    def boom(*a, **kw):
+        raise RuntimeError("telegram down")
+
+    tg.edit = boom
+    p.process(row(text="сколько потратил"))
+    assert store.finished[0][1] == "done"

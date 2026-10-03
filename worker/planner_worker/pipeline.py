@@ -11,6 +11,7 @@ from .format import KIND_LABELS, render_line, render_summary, review_message, su
 from .fx import FxApplied, FxError, RateTable, convert
 from .llm import ExtractionError
 from .rows import to_row
+from .router import is_question
 from .schemas import ExtractedItem, InboxRow, UserContext
 from .validate import NO_TIME, check_item, localize
 
@@ -21,10 +22,11 @@ REPHRASE_TEXT = "😵 Не смог разобрать. Переформулир
 
 class Pipeline:
     def __init__(self, store, tg, stt, extractor, classifier, fetch_rates: Callable[[], RateTable],
-                 threshold: float, tmp_dir: Path):
+                 threshold: float, tmp_dir: Path, answerer=None):
         self.store, self.tg, self.stt = store, tg, stt
         self.extractor, self.classifier = extractor, classifier
         self.fetch_rates, self.threshold, self.tmp_dir = fetch_rates, threshold, tmp_dir
+        self.answerer = answerer
 
     # ---------- public ----------
 
@@ -41,6 +43,10 @@ class Pipeline:
                 self.store.finish(row.id, "failed", {"text": ""}, "empty_transcript", notified=True)
                 reply(self.tg, row, "🙉 Не расслышал. Повтори, пожалуйста.")
                 return
+
+        if self.answerer and is_question(text):
+            self._answer(row, text, ctx)
+            return
 
         lines: list[str] = []
         review: list[dict] = []
@@ -81,6 +87,13 @@ class Pipeline:
             log.warning("telegram call failed after commit: %s", e)
 
     # ---------- steps ----------
+
+    def _answer(self, row: InboxRow, text: str, ctx: UserContext) -> None:
+        answer, question = self.answerer.answer(text, ctx)
+        self.store.finish(row.id, "done", {"text": text, "question": question, "answered": True})
+        if row.source == "shortcut":
+            answer = "📲 " + answer
+        self._best_effort(reply, self.tg, row, answer)
 
     def _transcribe(self, row: InboxRow) -> str:
         path = self.tg.download(row.audio_ref, self.tmp_dir)

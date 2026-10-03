@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx
 from supabase import create_client
 
+from .answer import Answerer, QuestionParser
 from .classifier import LayaClassifier
 from .config import load_config
 from .fx import fetch_latest
@@ -61,15 +62,17 @@ def main() -> None:
     tg = TelegramClient(cfg.telegram_bot_token, http)
     classifier = LayaClassifier() if cfg.use_laya else None
     stt = Transcriber(cfg.whisper_model)
+    llm = OllamaClient(cfg.ollama_url, cfg.ollama_model, http)
     pipeline = Pipeline(
         store=store,
         tg=tg,
         stt=stt,
-        extractor=Extractor(OllamaClient(cfg.ollama_url, cfg.ollama_model, http)),
+        extractor=Extractor(llm),
         classifier=classifier,
         fetch_rates=lambda: fetch_latest(http),
         threshold=cfg.laya_threshold,
         tmp_dir=Path(__file__).resolve().parents[1] / "tmp",
+        answerer=Answerer(QuestionParser(llm), store),
     )
 
     log.info("warming up models (laya=%s, llm=%s)…", cfg.use_laya, cfg.ollama_model)
