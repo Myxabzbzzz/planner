@@ -8,12 +8,13 @@ CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 
 
 def localize(item: ExtractedItem, ctx: UserContext) -> ExtractedItem:
-    """Наивные даты от LLM — в часовом поясе пользователя; валюта — в верхнем регистре."""
+    """Время от LLM — всегда «настенное» время пользователя: смещение, если модель его
+    приписала, отбрасываем и ставим часовой пояс пользователя; валюта — в верхнем регистре."""
     tz = ZoneInfo(ctx.tz)
     upd: dict = {}
     for f in ("due_at", "starts_at"):
         v = getattr(item, f)
-        if v is not None and v.tzinfo is None:
+        if v is not None:
             upd[f] = v.replace(tzinfo=tz)
     if item.currency:
         upd["currency"] = item.currency.strip().upper()

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from planner_worker.schemas import ExtractedItem, InboxRow
 from planner_worker.validate import check_item, localize
@@ -11,6 +11,12 @@ def item(**kw) -> ExtractedItem:
 
 def test_localize_attaches_user_tz_to_naive_datetime(ctx):
     it = localize(item(kind="event", starts_at=datetime(2026, 10, 2, 15, 0)), ctx)
+    assert it.starts_at.astimezone(timezone.utc) == datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc)
+
+
+def test_localize_ignores_llm_offset_and_uses_user_tz(ctx):
+    llm_dt = datetime(2026, 10, 2, 15, 0, tzinfo=timezone(timedelta(hours=3)))
+    it = localize(item(kind="event", starts_at=llm_dt), ctx)
     assert it.starts_at.astimezone(timezone.utc) == datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc)
 
 
