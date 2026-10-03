@@ -17,7 +17,10 @@ export class FakeMenuDb implements MenuDb {
   habitsData: HabitsSummary = {
     habits: [{ id: HABIT_ID, name: "зарядка", week: [false, false, false, false, false, false, false], streak: 0, done_today: false }],
   };
-  settingsData: SettingsSummary = { tz: "Asia/Tashkent", base_currency: "UZS", limit: null, capture_token: "a".repeat(64) };
+  settingsData: SettingsSummary = {
+    tz: "Asia/Tashkent", base_currency: "UZS", limit: null, capture_token: "a".repeat(64),
+    notify_reminders: true, notify_daily: true, notify_weekly: true,
+  };
   completed: string[] = [];
   logged: string[] = [];
   tzSet: string[] = [];
@@ -35,5 +38,10 @@ export class FakeMenuDb implements MenuDb {
   async setTz(_u: string, tz: string) { this.tzSet.push(tz); return true; }
   async setLimit(_u: string, amount: number) { this.limits.push(amount); }
   async setPending(_u: string, action: "limit" | null) { this.pending.push(action); }
+  notifySet: Array<[string, boolean]> = [];
+  async setNotify(_u: string, kind: "reminders" | "daily" | "weekly", on: boolean) {
+    this.notifySet.push([kind, on]);
+    this.settingsData = { ...this.settingsData, [`notify_${kind}`]: on };
+  }
   async rotateToken() { this.rotated++; return "b".repeat(64); }
 }

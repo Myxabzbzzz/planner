@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
-  fmtAmount, fmtNumber, renderHabits, renderMoney, renderSettings, renderTapGuide, renderTasks, renderToday, tzChoice,
+  fmtAmount, fmtNumber, renderHabits, renderMoney, renderNotify, renderSettings, renderTapGuide, renderTasks, renderToday, tzChoice,
 } from "./views.ts";
 import { MENU_ROWS, menuKey } from "./keyboard.ts";
 
@@ -102,12 +102,14 @@ Deno.test("renderHabits", () => {
 });
 
 Deno.test("renderSettings and tzChoice", () => {
-  const v = renderSettings({ tz: "Asia/Tashkent", base_currency: "UZS", limit: null, capture_token: "t" });
+  const v = renderSettings({ tz: "Asia/Tashkent", base_currency: "UZS", limit: null, capture_token: "t",
+    notify_reminders: true, notify_daily: true, notify_weekly: false });
   assertEquals(v.text, "⚙️ Настройки\n\n🕐 Часовой пояс: Ташкент (Asia/Tashkent)\n💱 Базовая валюта: UZS\n💰 Лимит на месяц: не задан");
   assertEquals(v.buttons, [
     [{ text: "🕐 Часовой пояс", callback_data: "set:tz" }],
     [{ text: "💰 Лимит на месяц", callback_data: "set:limit" }],
     [{ text: "📲 Двойной тап", callback_data: "set:tap" }],
+    [{ text: "🔔 Уведомления", callback_data: "set:notify" }],
   ]);
   const t = tzChoice();
   assertEquals(t.buttons!.flat().map((b) => b.callback_data),
@@ -134,4 +136,15 @@ Deno.test("renderTasks header uses total and shows overflow", () => {
   const tasks = [{ id: T1, title: "a", due: null, overdue: false }];
   const v = renderTasks({ tasks, total: 35 });
   assertEquals(v.text, "☑️ Задачи (35)\n\n1. a\n…и ещё 34");
+});
+
+Deno.test("renderNotify shows toggles", () => {
+  const v = renderNotify({ tz: "Asia/Tashkent", base_currency: "UZS", limit: null, capture_token: "t",
+    notify_reminders: true, notify_daily: false, notify_weekly: true });
+  assertEquals(v.text, "🔔 Уведомления\n\nНажми, чтобы включить или выключить.");
+  assertEquals(v.buttons, [
+    [{ text: "🔔 Напоминания о встречах", callback_data: "nt:reminders" }],
+    [{ text: "🔕 Итоги дня в 21:30", callback_data: "nt:daily" }],
+    [{ text: "🔔 Итоги недели (вс, 21:30)", callback_data: "nt:weekly" }],
+  ]);
 });

@@ -3,7 +3,7 @@ import type { User } from "./db.ts";
 import type { MenuDb } from "./menu_db.ts";
 import { type MenuKey, TZ_OPTIONS } from "./keyboard.ts";
 import {
-  fmtAmount, renderHabits, renderMoney, renderSettings, renderTapGuide, renderTasks, renderToday, shortcutAck, tzChoice, type View,
+  fmtAmount, renderHabits, renderMoney, renderNotify, renderSettings, renderTapGuide, renderTasks, renderToday, shortcutAck, tzChoice, type View,
 } from "./views.ts";
 
 export type MenuDeps = { menu: MenuDb; tg: Tg; supabaseUrl: string; miniappUrl?: string };
@@ -107,6 +107,8 @@ export async function handleMenuCallback(user: User, cq: any, action: string, re
       else if (rest[0] === "limit") {
         await d.menu.setPending(user.id, "limit");
         await d.tg.sendMessage(chatId, `Пришли сумму в ${user.base_currency} на месяц. 0 — убрать лимит.`);
+      } else if (rest[0] === "notify") {
+        await edit(renderNotify(await d.menu.settings(user.id)));
       } else if (rest[0] === "tap") {
         await d.menu.requestShortcut(user.id, chatId);
         const v = shortcutAck(await d.menu.workerOnline());
@@ -122,6 +124,19 @@ export async function handleMenuCallback(user: User, cq: any, action: string, re
       }
       await d.tg.answerCallback(cq.id, `Часовой пояс: ${opt.label}`);
       await edit(renderSettings(await d.menu.settings(user.id)));
+      return true;
+    }
+    case "nt": {
+      const kind = rest[0] as "reminders" | "daily" | "weekly";
+      if (!["reminders", "daily", "weekly"].includes(kind)) {
+        await stale();
+        return true;
+      }
+      const s = await d.menu.settings(user.id);
+      const on = !s[`notify_${kind}` as "notify_reminders" | "notify_daily" | "notify_weekly"];
+      await d.menu.setNotify(user.id, kind, on);
+      await d.tg.answerCallback(cq.id, on ? "Включено" : "Выключено");
+      await edit(renderNotify(await d.menu.settings(user.id)));
       return true;
     }
     case "tap": {

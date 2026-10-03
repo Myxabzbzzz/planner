@@ -286,3 +286,14 @@ Deno.test("rt callback rejects bad choice and bad id", async () => {
   assertEquals(db.times, []);
 });
 
+
+Deno.test("set:notify shows toggles, nt:* flips and re-renders", async () => {
+  const { tg, menu, deps } = setup();
+  await handleUpdate(cb("set:notify"), deps);
+  assert(tg.edited[0].text.startsWith("🔔 Уведомления"));
+  await handleUpdate(cb("nt:daily"), deps);
+  assertEquals(menu.notifySet, [["daily", false]]);
+  assertEquals(tg.edited[1].buttons![1][0].text, "🔕 Итоги дня в 21:30");
+  await handleUpdate(cb("nt:bogus"), deps);
+  assertEquals(menu.notifySet.length, 1);
+});

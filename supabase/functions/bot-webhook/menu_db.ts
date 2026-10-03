@@ -22,7 +22,9 @@ export type MoneySummary = {
 export type HabitsSummary = {
   habits: { id: string; name: string; week: boolean[]; streak: number; done_today: boolean }[];
 };
-export type SettingsSummary = { tz: string; base_currency: string; limit: number | null; capture_token: string };
+export type SettingsSummary = { tz: string; base_currency: string; limit: number | null; capture_token: string;
+  notify_reminders: boolean; notify_daily: boolean; notify_weekly: boolean;
+};
 
 export interface MenuDb {
   workerOnline(): Promise<boolean>;
@@ -38,6 +40,7 @@ export interface MenuDb {
   setLimit(userId: string, amount: number): Promise<void>;
   setPending(userId: string, action: "limit" | null): Promise<void>;
   rotateToken(userId: string): Promise<string>;
+  setNotify(userId: string, kind: "reminders" | "daily" | "weekly", on: boolean): Promise<void>;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -68,5 +71,8 @@ export function supabaseMenuDb(sb: SupabaseClient): MenuDb {
       check(await sb.from("jobs").insert({ user_id: u, kind: "shortcut_file", chat_id: chatId }));
     },
     rotateToken: (u) => rpc<string>("rotate_capture_token", { p_user: u }),
+    setNotify: async (u, kind, on) => {
+      await rpc("set_notify", { p_user: u, p_kind: kind, p_on: on });
+    },
   };
 }

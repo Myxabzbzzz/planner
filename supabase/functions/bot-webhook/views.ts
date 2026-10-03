@@ -80,6 +80,19 @@ export function renderSettings(s: SettingsSummary): View {
       [{ text: "🕐 Часовой пояс", callback_data: "set:tz" }],
       [{ text: "💰 Лимит на месяц", callback_data: "set:limit" }],
       [{ text: "📲 Двойной тап", callback_data: "set:tap" }],
+      [{ text: "🔔 Уведомления", callback_data: "set:notify" }],
+    ],
+  };
+}
+
+export function renderNotify(s: SettingsSummary): View {
+  const t = (on: boolean, label: string, key: string) => [{ text: `${on ? "🔔" : "🔕"} ${label}`, callback_data: `nt:${key}` }];
+  return {
+    text: "🔔 Уведомления\n\nНажми, чтобы включить или выключить.",
+    buttons: [
+      t(s.notify_reminders, "Напоминания о встречах", "reminders"),
+      t(s.notify_daily, "Итоги дня в 21:30", "daily"),
+      t(s.notify_weekly, "Итоги недели (вс, 21:30)", "weekly"),
     ],
   };
 }
