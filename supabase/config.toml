@@ -419,3 +419,6 @@ verify_jwt = false
 
 [functions.fx-sync]
 verify_jwt = false
+
+[functions.capture]
+verify_jwt = false
