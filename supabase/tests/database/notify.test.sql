@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(35);
 
 insert into public.users (id, tg_id, name, is_allowed, tz) values
   ('00000000-0000-0000-0000-0000000000a7', 71, 'A', true, 'Asia/Tashkent'),
@@ -16,6 +16,7 @@ select is((select count(*)::int from public.due_digests('2026-10-04 16:40+00') w
 select is((select kind from public.due_digests('2026-10-04 16:40+00') where user_id = '00000000-0000-0000-0000-0000000000a7' limit 1), 'daily', 'daily first');
 select is((select count(*)::int from public.due_digests('2026-10-04 16:40+00') where user_id = '00000000-0000-0000-0000-0000000000b7'), 1, 'B: weekly only (daily off)');
 select is((select count(*)::int from public.due_digests('2026-10-03 16:40+00') where kind = 'weekly'), 0, 'no weekly on saturday');
+select is((select local_date from public.due_digests('2026-10-04 16:40+00') where user_id = '00000000-0000-0000-0000-0000000000a7' limit 1), '2026-10-04'::date, 'local date of the user');
 select public.mark_digest('00000000-0000-0000-0000-0000000000a7', 'daily', '2026-10-04');
 select is((select count(*)::int from public.due_digests('2026-10-04 16:45+00') where user_id = '00000000-0000-0000-0000-0000000000a7' and kind = 'daily'), 0, 'daily not repeated');
 select is((select count(*)::int from public.due_digests('2026-10-04 16:45+00') where user_id = '00000000-0000-0000-0000-0000000000a7' and kind = 'weekly'), 1, 'weekly still due');
@@ -59,8 +60,12 @@ select is((public.digest_weekly('00000000-0000-0000-0000-0000000000a7', '2026-10
 select is((public.digest_weekly('00000000-0000-0000-0000-0000000000a7', '2026-10-04 16:40+00')->>'next_events')::int, 1, 'events ahead');
 
 -- marks
-select is(public.set_item_done('00000000-0000-0000-0000-0000000000a7', '70000000-0000-0000-0000-000000000002', true), true, 'mark event done');
-select is(public.set_item_done('00000000-0000-0000-0000-0000000000b7', '70000000-0000-0000-0000-000000000002', false), false, 'cannot touch others');
+select is(public.set_item_done('00000000-0000-0000-0000-0000000000a7', '70000000-0000-0000-0000-000000000002', 'event', true), true, 'mark event done');
+select is(public.set_item_done('00000000-0000-0000-0000-0000000000b7', '70000000-0000-0000-0000-000000000002', 'event', false), false, 'cannot touch others');
+select is(public.set_item_done('00000000-0000-0000-0000-0000000000a7', '70000000-0000-0000-0000-000000000002', 'task', true), false, 'event id via kind task');
+select is(public.set_item_done('00000000-0000-0000-0000-0000000000a7', (select id from public.items where title = 'Не успел'), 'event', true), false, 'task id via kind event');
+select is(public.set_item_done('00000000-0000-0000-0000-0000000000a7', (select id from public.items where title = 'Не успел'), 'task', true), true, 'mark task done');
+select is(public.set_item_done('00000000-0000-0000-0000-0000000000a7', '70000000-0000-0000-0000-000000000002', 'bogus', true), false, 'bad kind');
 insert into public.habits (id, user_id, name) values ('80000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a7', 'зарядка');
 select is(public.set_habit_today('00000000-0000-0000-0000-0000000000a7', '80000000-0000-0000-0000-000000000001', true), true, 'habit on');
 select is((select count(*)::int from public.habit_logs where habit_id = '80000000-0000-0000-0000-000000000001'), 1, 'one log');

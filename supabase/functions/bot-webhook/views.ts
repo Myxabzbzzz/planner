@@ -15,7 +15,7 @@ function chunk<T>(xs: T[], size: number): T[][] {
 export function renderToday(s: TodaySummary): View {
   const blocks = ["📅 Сегодня"];
   if (!s.events.length && !s.tasks.length) blocks.push("Сегодня ничего не запланировано.");
-  if (s.events.length) blocks.push(["Встречи:", ...s.events.map((e) => `• ${e.time} ${e.title}`)].join("\n"));
+  if (s.events.length) blocks.push(["Встречи:", ...s.events.map((e) => (e.done ? `• ✓ ${e.time} ${e.title}` : `• ${e.time} ${e.title}`))].join("\n"));
   if (s.tasks.length) {
     const lines = s.tasks.map((t) => (t.overdue ? `• ⚠️ ${t.title} (просрочено)` : `• ${t.title}`));
     if (s.tasks_more > 0) lines.push(`• …и ещё ${s.tasks_more}`);

@@ -59,13 +59,14 @@ function route(path: string, q: URLSearchParams, userId: string): [string, unkno
 }
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const POST_ROUTES: [RegExp, string][] = [
-  [new RegExp(`^/(?:tasks|events)/(${UUID})/done$`, "i"), "set_item_done"],
-  [new RegExp(`^/habits/(${UUID})/today$`, "i"), "set_habit_today"],
+const POST_ROUTES: [RegExp, string, string | null][] = [
+  [new RegExp(`^/tasks/(${UUID})/done$`, "i"), "set_item_done", "task"],
+  [new RegExp(`^/events/(${UUID})/done$`, "i"), "set_item_done", "event"],
+  [new RegExp(`^/habits/(${UUID})/today$`, "i"), "set_habit_today", null],
 ];
 
 async function postRoute(path: string, req: Request, userId: string): Promise<[string, unknown[]] | null> {
-  for (const [re, fn] of POST_ROUTES) {
+  for (const [re, fn, kind] of POST_ROUTES) {
     const m = re.exec(path);
     if (!m) continue;
     let body: unknown;
@@ -76,7 +77,8 @@ async function postRoute(path: string, req: Request, userId: string): Promise<[s
     }
     const done = (body as { done?: unknown } | null)?.done;
     if (typeof done !== "boolean") throw new BadRequest();
-    return [fn, [userId, m[1].toLowerCase(), done]];
+    const id = m[1].toLowerCase();
+    return [fn, kind ? [userId, id, kind, done] : [userId, id, done]];
   }
   return null;
 }

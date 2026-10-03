@@ -1,20 +1,20 @@
-import { useState } from "react";
 import type { Api } from "../api";
 import { Check } from "../components/Check";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { fmtAmount, fmtDayTitle, todayIso } from "../format";
 import { useLoad } from "../load";
-import { optimisticToggle } from "../optimistic";
-import { hapticResult } from "../telegram";
+import { useToggles } from "../useToggles";
 import type { Me } from "../types";
 
 export function Today({ api, me }: { api: Api; me: Me }) {
   const { data, error, loading, reload } = useLoad(() => api.today(), [api]);
-  const [over, setOver] = useState<Record<string, boolean>>({});
-  const toggle = (key: string, cur: boolean, send: (v: boolean) => Promise<unknown>) =>
-    optimisticToggle(cur, (v) => setOver((m) => ({ ...m, [key]: v })), send, hapticResult);
+  const { over, toggle, reset } = useToggles();
+  const retry = () => {
+    reset();
+    reload();
+  };
   if (loading && !data) return <Loading />;
-  if (error || !data) return <ErrorCard onRetry={reload} />;
+  if (error || !data) return <ErrorCard onRetry={retry} />;
   const cur = data.base_currency;
   const left = data.limit !== null ? data.limit - data.month_spent : null;
   const used = data.limit ? Math.min(1, data.month_spent / data.limit) : 0;

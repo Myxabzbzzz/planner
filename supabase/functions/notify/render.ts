@@ -1,7 +1,7 @@
 import { fmtAmount, fmtNumber } from "../_shared/money.ts";
 
 export type Reminder = { item_id: string; chat_id: number; title: string; local_time: string; minutes_left: number };
-export type DueDigest = { user_id: string; chat_id: number; kind: "daily" | "weekly" };
+export type DueDigest = { user_id: string; chat_id: number; kind: "daily" | "weekly"; local_date: string };
 export type Daily = {
   date: string; base_currency: string; tasks_done: number; events_done: number;
   tasks_left: string[]; tasks_left_more: number; spent: number; month_spent: number; limit: number | null;
@@ -25,7 +25,7 @@ const ddmm = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
 const dayTitle = (iso: string) => `${Number(iso.slice(8, 10))} ${MONTHS_GEN[Number(iso.slice(5, 7)) - 1]}`;
 
 export function renderReminder(r: Reminder): string {
-  const when = r.minutes_left >= 25 ? "Через 30 минут" : `Через ${r.minutes_left} мин`;
+  const when = r.minutes_left >= 28 ? "Через 30 минут" : `Через ${r.minutes_left} мин`;
   return `⏰ ${when} — ${r.title} (${r.local_time})`;
 }
 
@@ -79,8 +79,10 @@ export function renderWeekly(w: Weekly): string {
   if (w.habits.length) {
     lines.push(`🔁 ${w.habits.map((h) => `${h.name} ${h.done_days}/7${h.streak > 0 ? ` 🔥${h.streak}` : ""}`).join(" · ")}`);
   }
-  lines.push(w.next_events === 0 && w.next_tasks === 0
-    ? "📅 Впереди пока пусто"
-    : `📅 Впереди: ${plural(w.next_events, "встреча", "встречи", "встреч")}, ${plural(w.next_tasks, "задача", "задачи", "задач")} со сроком`);
+  const ahead = [
+    w.next_events > 0 ? plural(w.next_events, "встреча", "встречи", "встреч") : "",
+    w.next_tasks > 0 ? `${plural(w.next_tasks, "задача", "задачи", "задач")} со сроком` : "",
+  ].filter(Boolean);
+  lines.push(ahead.length ? `📅 Впереди: ${ahead.join(", ")}` : "📅 Впереди пока пусто");
   return lines.join("\n");
 }

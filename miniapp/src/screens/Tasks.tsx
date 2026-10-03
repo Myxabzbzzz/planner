@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Api } from "../api";
 import { Check } from "../components/Check";
 import { Segmented } from "../components/Segmented";
@@ -6,8 +6,7 @@ import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { WeekStrip } from "../components/WeekStrip";
 import { fmtDayTitle, fmtShortDate, fmtTime, todayIso, weekDays } from "../format";
 import { useLoad } from "../load";
-import { optimisticToggle } from "../optimistic";
-import { hapticResult } from "../telegram";
+import { useToggles } from "../useToggles";
 import type { Me } from "../types";
 
 type Filter = "today" | "upcoming" | "nodue" | "done";
@@ -27,9 +26,8 @@ export function Tasks({ api, me }: { api: Api; me: Me }) {
   const [filter, setFilter] = useState<Filter>("today");
   const events = useLoad(() => api.events(days[0], days[6]), [api, days[0]]);
   const tasks = useLoad(() => api.tasks(filter), [api, filter]);
-  const [over, setOver] = useState<Record<string, boolean>>({});
-  const toggle = (key: string, cur: boolean, send: (v: boolean) => Promise<unknown>) =>
-    optimisticToggle(cur, (v) => setOver((m) => ({ ...m, [key]: v })), send, hapticResult);
+  const { over, toggle, reset } = useToggles();
+  useEffect(reset, [events.data, tasks.data, reset]);
   const marked = new Set((events.data?.days ?? []).map((d) => d.date));
   const dayEvents = events.data?.days.find((d) => d.date === day)?.events ?? [];
 

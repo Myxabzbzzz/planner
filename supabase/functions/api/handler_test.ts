@@ -118,9 +118,9 @@ Deno.test("POST marks map to rpc and return ok", async () => {
   const mk = () => { const db = new FakeApiDb(); db.call = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(true); }; return db; };
   let r = await run(await req(`/tasks/${ID}/done`, { method: "POST", body: { done: true } }), mk());
   assertEquals([r.status, r.body], [200, { ok: true }]);
-  assertEquals(r.db.calls, [["set_item_done", ["u1", ID, true]]]);
+  assertEquals(r.db.calls, [["set_item_done", ["u1", ID, "task", true]]]);
   r = await run(await req(`/events/${ID}/done`, { method: "POST", body: { done: false } }), mk());
-  assertEquals(r.db.calls, [["set_item_done", ["u1", ID, false]]]);
+  assertEquals(r.db.calls, [["set_item_done", ["u1", ID, "event", false]]]);
   r = await run(await req(`/habits/${ID}/today`, { method: "POST", body: { done: true } }), mk());
   assertEquals(r.db.calls, [["set_habit_today", ["u1", ID, true]]]);
 });

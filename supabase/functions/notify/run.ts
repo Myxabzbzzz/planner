@@ -39,15 +39,11 @@ export async function runNotify(d: { db: NotifyDb; tg: Tg; miniappUrl?: string }
     : undefined;
   for (const g of await d.db.dueDigests()) {
     try {
-      let text: string, on: string;
+      let text: string;
       if (g.kind === "daily") {
-        const daily = await d.db.daily(g.user_id);
-        text = renderDaily(daily);
-        on = daily.date;
+        text = renderDaily(await d.db.daily(g.user_id));
       } else {
-        const weekly = await d.db.weekly(g.user_id);
-        text = renderWeekly(weekly);
-        on = weekly.to;
+        text = renderWeekly(await d.db.weekly(g.user_id));
       }
       try {
         await d.tg.sendMessage(g.chat_id, text, buttons);
@@ -55,7 +51,7 @@ export async function runNotify(d: { db: NotifyDb; tg: Tg; miniappUrl?: string }
       } catch (e) {
         if (!GONE.test(errText(e))) throw e;
       }
-      await d.db.markDigest(g.user_id, g.kind, on);
+      await d.db.markDigest(g.user_id, g.kind, g.local_date);
     } catch (e) {
       console.error("digest failed:", g.kind, errText(e));
     }

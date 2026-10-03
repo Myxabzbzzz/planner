@@ -28,7 +28,10 @@ Deno.test("menu keyboard layout and lookup", () => {
 Deno.test("renderToday full", () => {
   const v = renderToday({
     base_currency: "UZS",
-    events: [{ title: "Встреча с Андреем", time: "15:00" }],
+    events: [
+      { id: "e1", title: "Встреча с Андреем", time: "15:00", done: false },
+      { id: "e2", title: "Созвон", time: "11:00", done: true },
+    ],
     tasks: [{ id: T1, title: "Оплатить интернет", overdue: false }, { id: T2, title: "Сдать отчёт", overdue: true }],
     spent_today: 30000,
     month_spent: 30000,
@@ -37,7 +40,7 @@ Deno.test("renderToday full", () => {
   });
   assertEquals(v.text, [
     "📅 Сегодня",
-    "Встречи:\n• 15:00 Встреча с Андреем",
+    "Встречи:\n• 15:00 Встреча с Андреем\n• ✓ 11:00 Созвон",
     "Задачи:\n• Оплатить интернет\n• ⚠️ Сдать отчёт (просрочено)",
     "💸 Потрачено сегодня: 30 000 сум\nЛимит на месяц: осталось 4 970 000 сум из 5 000 000 сум",
     "🔁 Привычки: ▫️ зарядка · ✅ чтение",

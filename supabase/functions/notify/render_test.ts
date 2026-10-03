@@ -18,6 +18,8 @@ Deno.test("plural", () => {
 Deno.test("reminder text", () => {
   assertEquals(renderReminder({ item_id: "i", chat_id: 1, title: "Встреча с Амиром", local_time: "15:00", minutes_left: 30 }),
     "⏰ Через 30 минут — Встреча с Амиром (15:00)");
+  assertEquals(renderReminder({ item_id: "i", chat_id: 1, title: "Созвон", local_time: "15:00", minutes_left: 26 }),
+    "⏰ Через 26 мин — Созвон (15:00)");
   assertEquals(renderReminder({ item_id: "i", chat_id: 1, title: "Созвон", local_time: "15:00", minutes_left: 12 }),
     "⏰ Через 12 мин — Созвон (15:00)");
 });
@@ -69,4 +71,11 @@ Deno.test("weekly digest without previous week and spending", () => {
     next_events: 0, next_tasks: 0 });
   assertEquals(t, ["📊 Неделя 28.09 – 04.10", "💸 Трат не было", "✅ Задач сделано: 12 · встреч: 5", "📅 Впереди пока пусто"].join("\n"));
   assertEquals(renderWeekly({ ...WEEKLY, prev_expense: 0 }).split("\n")[1], "💸 Расходы 1 200 000 сум · доходы 380 000 сум");
+});
+
+Deno.test("weekly digest omits zero parts of the look-ahead", () => {
+  const last = (w: Weekly) => renderWeekly(w).split("\n").pop();
+  assertEquals(last({ ...WEEKLY, next_events: 4, next_tasks: 0 }), "📅 Впереди: 4 встречи");
+  assertEquals(last({ ...WEEKLY, next_events: 0, next_tasks: 3 }), "📅 Впереди: 3 задачи со сроком");
+  assertEquals(last({ ...WEEKLY, next_events: 0, next_tasks: 0 }), "📅 Впереди пока пусто");
 });

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export type TodaySummary = {
   base_currency: string;
-  events: { title: string; time: string }[];
+  events: { id: string; title: string; time: string; done: boolean }[];
   tasks: { id: string; title: string; overdue: boolean }[];
   spent_today: number;
   month_spent: number;

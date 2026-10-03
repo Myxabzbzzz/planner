@@ -50,16 +50,16 @@ Deno.test("reminders: sent ones and blocked ones are marked, failed ones are not
 Deno.test("digests: daily then weekly, button, marked with local date; one failure doesn't stop others", async () => {
   const db = new FakeDb();
   db.digests = [
-    { user_id: "u1", chat_id: 1, kind: "daily" },
-    { user_id: "u1", chat_id: 1, kind: "weekly" },
-    { user_id: "u2", chat_id: 2, kind: "daily" },
-    { user_id: "u3", chat_id: 3, kind: "daily" },
+    { user_id: "u1", chat_id: 1, kind: "daily", local_date: "2026-10-05" },
+    { user_id: "u1", chat_id: 1, kind: "weekly", local_date: "2026-10-05" },
+    { user_id: "u2", chat_id: 2, kind: "daily", local_date: "2026-10-05" },
+    { user_id: "u3", chat_id: 3, kind: "daily", local_date: "2026-10-05" },
   ];
   const tg = new FakeTg();
   tg.failFor.set(2, "Bad Gateway");
   const r = await runNotify({ db, tg, miniappUrl: "https://m.app" });
   assertEquals(r.digests, 3);
-  assertEquals(db.marked, [["u1", "daily", "2026-10-04"], ["u1", "weekly", "2026-10-04"], ["u3", "daily", "2026-10-04"]]);
+  assertEquals(db.marked, [["u1", "daily", "2026-10-05"], ["u1", "weekly", "2026-10-05"], ["u3", "daily", "2026-10-05"]]);
   assertEquals(tg.sent[0].text.startsWith("🌙 Итоги дня"), true);
   assertEquals(tg.sent[1].text.startsWith("📊 Неделя"), true);
   assertEquals(tg.sent[0].buttons, [[{ text: "📱 Открыть планер", web_app: { url: "https://m.app" } }]]);
@@ -67,7 +67,7 @@ Deno.test("digests: daily then weekly, button, marked with local date; one failu
 
 Deno.test("no miniapp url → no button", async () => {
   const db = new FakeDb();
-  db.digests = [{ user_id: "u1", chat_id: 1, kind: "daily" }];
+  db.digests = [{ user_id: "u1", chat_id: 1, kind: "daily", local_date: "2026-10-05" }];
   const tg = new FakeTg();
   await runNotify({ db, tg });
   assertEquals(tg.sent[0].buttons, undefined);
