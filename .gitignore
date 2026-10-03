@@ -11,3 +11,4 @@ supabase/functions/.env
 .env
 .superpowers/
 *.egg-info/
+docs/superpowers/
