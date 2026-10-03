@@ -6,7 +6,7 @@ export type ApiDeps = { db: ApiDb; botToken: string; nowSec: () => number };
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "x-init-data, content-type",
-  "access-control-allow-methods": "GET, OPTIONS",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
 };
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "content-type": "application/json; charset=utf-8" } });
@@ -58,9 +58,32 @@ function route(path: string, q: URLSearchParams, userId: string): [string, unkno
   return null;
 }
 
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const POST_ROUTES: [RegExp, string][] = [
+  [new RegExp(`^/(?:tasks|events)/(${UUID})/done$`, "i"), "set_item_done"],
+  [new RegExp(`^/habits/(${UUID})/today$`, "i"), "set_habit_today"],
+];
+
+async function postRoute(path: string, req: Request, userId: string): Promise<[string, unknown[]] | null> {
+  for (const [re, fn] of POST_ROUTES) {
+    const m = re.exec(path);
+    if (!m) continue;
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      throw new BadRequest();
+    }
+    const done = (body as { done?: unknown } | null)?.done;
+    if (typeof done !== "boolean") throw new BadRequest();
+    return [fn, [userId, m[1].toLowerCase(), done]];
+  }
+  return null;
+}
+
 export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== "GET") return json(405, { error: "method_not_allowed" });
+  if (req.method !== "GET" && req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   const auth = await verifyInitData(req.headers.get("x-init-data") ?? "", d.botToken, d.nowSec());
   if (!auth) return json(401, { error: "unauthorized" });
@@ -70,6 +93,12 @@ export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
     if (!user || !user.is_allowed || !user.onboarded_at) return json(403, { error: "forbidden" });
     const url = new URL(req.url);
     const path = url.pathname.replace(/^(?:\/functions\/v1)?\/api(?=\/|$)/, "") || "/";
+    if (req.method === "POST") {
+      const pr = await postRoute(path, req, user.id);
+      if (!pr) return json(404, { error: "not_found" });
+      const ok = await d.db.call(pr[0], pr[1]);
+      return ok === true ? json(200, { ok: true }) : json(404, { error: "not_found" });
+    }
     const r = route(path, url.searchParams, user.id);
     if (!r) return json(404, { error: "not_found" });
     return json(200, await d.db.call(r[0], r[1]));

@@ -10,17 +10,21 @@ class FakeApiDb implements ApiDb {
   user: ApiUser | null = { id: "u1", is_allowed: true, onboarded_at: "2026-10-01T00:00:00Z" };
   calls: Array<[string, unknown[]]> = [];
   async userByTg(_tg: number) { return this.user; }
-  async call(fn: string, args: unknown[]) {
+  async call(fn: string, args: unknown[]): Promise<unknown> {
     this.calls.push([fn, args]);
     return { fn };
   }
 }
 
-async function req(path: string, opts: { init?: string; method?: string } = {}) {
+async function req(path: string, opts: { init?: string; method?: string; body?: unknown } = {}) {
   const init = opts.init ?? await signInitData({ auth_date: String(NOW - 10), user: JSON.stringify({ id: 7 }) }, TOKEN);
   return new Request(`https://x.supabase.co/functions/v1/api${path}`, {
     method: opts.method ?? "GET",
-    headers: init ? { "x-init-data": init } : {},
+    headers: {
+      ...(init ? { "x-init-data": init } : {}),
+      ...(opts.body !== undefined ? { "content-type": "application/json" } : {}),
+    },
+    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
   });
 }
 
@@ -73,7 +77,7 @@ Deno.test("auth: 401 without or with bad initData, 403 when not allowed or not o
 
 Deno.test("404 unknown route, 405 non-GET, 500 on db error", async () => {
   assertEquals((await run(await req("/nope"))).status, 404);
-  assertEquals((await run(await req("/today", { method: "POST" }))).status, 405);
+  assertEquals((await run(await req("/today", { method: "PUT" }))).status, 405);
   const db = new FakeApiDb();
   db.call = () => Promise.reject(new Error("boom"));
   const r = await run(await req("/today"), db);
@@ -106,4 +110,34 @@ Deno.test("db error is 500 and its message is logged", async () => {
   const text = logged.flat().join(" ");
   assertEquals(text.includes("relation boom"), true);
   assertEquals(text.includes("42P01"), true);
+});
+
+const ID = "20000000-0000-0000-0000-000000000001";
+
+Deno.test("POST marks map to rpc and return ok", async () => {
+  const mk = () => { const db = new FakeApiDb(); db.call = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(true); }; return db; };
+  let r = await run(await req(`/tasks/${ID}/done`, { method: "POST", body: { done: true } }), mk());
+  assertEquals([r.status, r.body], [200, { ok: true }]);
+  assertEquals(r.db.calls, [["set_item_done", ["u1", ID, true]]]);
+  r = await run(await req(`/events/${ID}/done`, { method: "POST", body: { done: false } }), mk());
+  assertEquals(r.db.calls, [["set_item_done", ["u1", ID, false]]]);
+  r = await run(await req(`/habits/${ID}/today`, { method: "POST", body: { done: true } }), mk());
+  assertEquals(r.db.calls, [["set_habit_today", ["u1", ID, true]]]);
+});
+
+Deno.test("POST errors: not found, bad body, bad id, wrong method, unauthenticated", async () => {
+  const db = new FakeApiDb();
+  db.call = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(false); };
+  assertEquals((await run(await req(`/tasks/${ID}/done`, { method: "POST", body: { done: true } }), db)).status, 404);
+  assertEquals((await run(await req(`/tasks/${ID}/done`, { method: "POST", body: { done: "yes" } }))).status, 400);
+  assertEquals((await run(await req(`/tasks/not-a-uuid/done`, { method: "POST", body: { done: true } }))).status, 404);
+  assertEquals((await run(await req(`/today`, { method: "POST", body: {} }))).status, 404);
+  assertEquals((await run(await req(`/today`, { method: "PUT" }))).status, 405);
+  assertEquals((await run(await req(`/tasks/${ID}/done`, { method: "POST", body: { done: true }, init: "" }))).status, 401);
+});
+
+Deno.test("CORS allows POST", async () => {
+  const res = await handleApi(new Request("https://x/functions/v1/api/today", { method: "OPTIONS" }),
+    { db: new FakeApiDb(), botToken: TOKEN, nowSec: () => NOW });
+  assertEquals(res.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
 });

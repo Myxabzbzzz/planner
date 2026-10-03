@@ -15,6 +15,8 @@ const ARG_NAMES: Record<string, string[]> = {
   api_money: ["p_user", "p_month"],
   api_habits: ["p_user", "p_weeks"],
   api_notes: ["p_user", "p_q", "p_before"],
+  set_item_done: ["p_user", "p_item", "p_done"],
+  set_habit_today: ["p_user", "p_habit", "p_done"],
 };
 
 export function supabaseApiDb(sb: SupabaseClient): ApiDb {
