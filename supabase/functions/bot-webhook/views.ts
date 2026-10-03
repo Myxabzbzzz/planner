@@ -1,18 +1,10 @@
 import type { Button } from "../_shared/telegram.ts";
 import { TZ_OPTIONS } from "./keyboard.ts";
 import type { HabitsSummary, MoneySummary, SettingsSummary, TasksSummary, TodaySummary } from "./menu_db.ts";
+import { fmtAmount, fmtNumber } from "../_shared/money.ts";
+export { fmtAmount, fmtNumber };
 
 export type View = { text: string; buttons?: Button[][] };
-
-const SYMBOLS: Record<string, string> = { RUB: "₽", USD: "$", EUR: "€", UZS: "сум", KZT: "₸" };
-
-export function fmtNumber(n: number): string {
-  const [int, frac] = (Math.round(n * 100) / 100).toFixed(2).split(".");
-  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  return frac === "00" ? grouped : `${grouped},${frac}`;
-}
-
-export const fmtAmount = (n: number, cur: string) => `${fmtNumber(n)} ${SYMBOLS[cur] ?? cur}`;
 
 function chunk<T>(xs: T[], size: number): T[][] {
   const out: T[][] = [];
