@@ -10,7 +10,15 @@ export function fmtNumber(n: number): string {
   return frac === "00" ? grouped : `${grouped},${frac}`;
 }
 
-export const fmtAmount = (n: number, cur: string) => `${fmtNumber(n)} ${SYMBOLS[cur] ?? cur}`;
+const sym = (c: string) => SYMBOLS[c] ?? c;
+export const fmtAmount = (n: number, cur: string) => `${fmtNumber(n)} ${sym(cur)}`;
+
+export function fmtRateNote(orig: { amount: number; currency: string; rate: number }, base: string): string {
+  const head = `${fmtAmount(orig.amount, orig.currency)} по курсу`;
+  return orig.rate >= 1
+    ? `${head} ${fmtNumber(orig.rate)}`
+    : `${head} 1 ${sym(base)} = ${fmtNumber(1 / orig.rate)} ${sym(orig.currency)}`;
+}
 export const fmtTime = (iso: string) => iso.slice(11, 16);
 export const fmtShortDate = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
 

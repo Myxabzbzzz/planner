@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtAmount, fmtDayTitle, fmtNumber, fmtShortDate, fmtTime, monthTitle, shiftMonth, weekDays } from "./format";
+import { fmtAmount, fmtDayTitle, fmtNumber, fmtRateNote, fmtShortDate, fmtTime, monthTitle, shiftMonth, weekDays } from "./format";
 
 describe("format", () => {
   it("money like the bot", () => {
@@ -22,5 +22,14 @@ describe("format", () => {
       "2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04",
     ]);
     expect(weekDays("2026-10-05")[0]).toBe("2026-10-05");
+  });
+});
+
+describe("fmtRateNote", () => {
+  it("shows rate when >= 1", () => {
+    expect(fmtRateNote({ amount: 22.4, currency: "USD", rate: 11818.674758 }, "UZS")).toBe("22,40 $ по курсу 11 818,67");
+  });
+  it("shows inverse when < 1", () => {
+    expect(fmtRateNote({ amount: 40000, currency: "UZS", rate: 0.0000846 }, "USD")).toBe("40 000 сум по курсу 1 $ = 11 820,33 сум");
   });
 });

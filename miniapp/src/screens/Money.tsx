@@ -4,7 +4,7 @@ import { Bars } from "../components/Bars";
 import { Donut } from "../components/Donut";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { barHeights, donutSlices } from "../charts";
-import { currentMonth, fmtAmount, fmtDayTitle, fmtNumber, monthTitle, shiftMonth, todayIso } from "../format";
+import { currentMonth, fmtAmount, fmtDayTitle, fmtRateNote, monthTitle, shiftMonth, todayIso } from "../format";
 import { useLoad } from "../load";
 import { haptic } from "../telegram";
 import type { Me, Operation } from "../types";
@@ -81,10 +81,10 @@ export function Money({ api, me }: { api: Api; me: Me }) {
                 {ops.map((o) => (
                   <div className="row" key={o.id}>
                     <div className="grow">
-                      <div className="ellipsis">{o.title}</div>
+                      <div className="ellipsis">{o.title || o.category}</div>
                       <div className="op-orig">
                         {o.category}
-                        {o.orig && ` · ${fmtAmount(o.orig.amount, o.orig.currency)} по курсу ${fmtNumber(o.orig.rate)}`}
+                        {o.orig && ` · ${fmtRateNote(o.orig, cur)}`}
                       </div>
                     </div>
                     <span className={o.type === "income" ? "income" : ""}>
