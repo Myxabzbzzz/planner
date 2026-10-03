@@ -129,3 +129,17 @@ def test_annotate_times():
 def test_messages_annotate_times(ctx):
     user = build_extract_messages("встреча со славиком в час", ctx)[1]["content"]
     assert user.endswith("встреча со славиком в час (13:00)")
+
+
+def test_annotate_times_half_hours():
+    from planner_worker.prompts import annotate_times
+    assert annotate_times("встреча с Амиром в полвторого") == "встреча с Амиром в полвторого (13:30)"
+    assert annotate_times("обед в полпервого") == "обед в полпервого (12:30)"
+    assert annotate_times("к полдесятого") == "к полдесятого (09:30)"
+    assert annotate_times("в полчетвёртого") == "в полчетвёртого (15:30)"
+
+
+def test_system_prompt_has_no_copyable_expense_example():
+    from planner_worker.prompts import SYSTEM
+    assert "Ерунда" not in SYSTEM
+    assert "«Трата»" in SYSTEM

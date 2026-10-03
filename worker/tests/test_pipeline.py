@@ -112,7 +112,7 @@ def make(ctx, extractor, classifier=None, stt=None, store=None, fetch=lambda: RA
     return p, store, tg
 
 
-EVENT = item(kind="event", title="Встреча с Андреем", source_text="завтра в 3 встреча с Андреем",
+EVENT = item(kind="event", title="Встреча с Андреем", source_text="завтра (2026-10-02) в 3 (15:00) встреча с Андреем",
              starts_at=datetime(2026, 10, 2, 15, 0))
 TAXI = item(kind="expense", title="Такси", source_text="30 000 на такси", amount=30000)
 
@@ -182,8 +182,8 @@ def test_rates_unavailable_sends_to_review(ctx):
 
 
 def test_validation_error_triggers_reextract_with_feedback(ctx):
-    bad = item(kind="event", title="Созвон", source_text="созвон")
-    good = item(kind="event", title="Созвон", source_text="созвон", starts_at=datetime(2026, 10, 5, 10, 0))
+    bad = item(kind="event", title="Созвон", source_text="созвон в пн (2026-10-05) в 10 (10:00)")
+    good = item(kind="event", title="Созвон", source_text="созвон в пн (2026-10-05) в 10 (10:00)", starts_at=datetime(2026, 10, 5, 10, 0))
     ex = FakeExtractor([bad], [good])
     p, store, _ = make(ctx, ex)
     p.process(row())

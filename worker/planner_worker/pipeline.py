@@ -90,14 +90,14 @@ class Pipeline:
         table = self.store.rates_on(ctx.now.date())
         return set(table.rates) if table else None
 
-    def _extract_checked(self, text: str, ctx: UserContext, hint_kind: str | None = None):
+    def _extract_checked(self, text: str, ctx: UserContext, hint_kind: str | None = None, strict: bool = True):
         known = self._known_currencies(ctx)
-        items = [localize(i, ctx) for i in self.extractor.extract(text, ctx, hint_kind)]
-        checked = [(i, check_item(i, ctx, known)) for i in items]
+        items = [localize(i, ctx, strict) for i in self.extractor.extract(text, ctx, hint_kind)]
+        checked = [(i, check_item(i, ctx, known, strict)) for i in items]
         feedback = [f"«{i.source_text}»: {e}" for i, errs in checked for e in errs]
         if feedback:
-            items = [localize(i, ctx) for i in self.extractor.extract(text, ctx, hint_kind, feedback)]
-            checked = [(i, check_item(i, ctx, known)) for i in items]
+            items = [localize(i, ctx, strict) for i in self.extractor.extract(text, ctx, hint_kind, feedback)]
+            checked = [(i, check_item(i, ctx, known, strict)) for i in items]
         return checked
 
     def _fx(self, it: ExtractedItem, ctx: UserContext) -> FxApplied | None:
@@ -155,9 +155,10 @@ class Pipeline:
                            saved: list[str], warnings: list[str]) -> None:
         if forced == "drop":
             return
-        it = localize(ExtractedItem.model_validate(entry["item"]).model_copy(update={"kind": forced}), ctx)
-        if check_item(it, ctx, self._known_currencies(ctx)):
-            fixed = [i for i, errs in self._extract_checked(it.source_text, ctx, forced)
+        # пользователь сам выбрал тип — не переделываем встречу в задачу и не требуем времени
+        it = localize(ExtractedItem.model_validate(entry["item"]).model_copy(update={"kind": forced}), ctx, strict=False)
+        if check_item(it, ctx, self._known_currencies(ctx), strict=False):
+            fixed = [i for i, errs in self._extract_checked(it.source_text, ctx, forced, strict=False)
                      if not errs and i.kind == forced]
             it = fixed[0] if fixed else None
         if it is None:

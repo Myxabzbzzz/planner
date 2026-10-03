@@ -10,13 +10,13 @@ def item(**kw) -> ExtractedItem:
 
 
 def test_localize_attaches_user_tz_to_naive_datetime(ctx):
-    it = localize(item(kind="event", starts_at=datetime(2026, 10, 2, 15, 0)), ctx)
+    it = localize(item(kind="event", source_text="завтра (2026-10-02) в 3 (15:00) встреча", starts_at=datetime(2026, 10, 2, 15, 0)), ctx)
     assert it.starts_at.astimezone(timezone.utc) == datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc)
 
 
 def test_localize_ignores_llm_offset_and_uses_user_tz(ctx):
     llm_dt = datetime(2026, 10, 2, 15, 0, tzinfo=timezone(timedelta(hours=3)))
-    it = localize(item(kind="event", starts_at=llm_dt), ctx)
+    it = localize(item(kind="event", source_text="завтра (2026-10-02) в 3 (15:00) встреча", starts_at=llm_dt), ctx)
     assert it.starts_at.astimezone(timezone.utc) == datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc)
 
 
@@ -27,7 +27,7 @@ def test_localize_uppercases_currency_and_defaults_date(ctx):
 
 
 def test_event_without_time_is_error(ctx):
-    errs = check_item(localize(item(kind="event"), ctx), ctx, None)
+    errs = check_item(localize(item(kind="event", source_text="завтра (2026-10-02) встреча"), ctx), ctx, None)
     assert any("starts_at" in e for e in errs)
 
 
@@ -104,3 +104,32 @@ def test_task_without_time_in_text_is_due_end_of_day(ctx):
 def test_task_with_time_in_text_keeps_time(ctx):
     it = localize(item(kind="task", source_text="позвонить в 4 (16:00)", due_at=datetime(2026, 10, 1, 16, 0)), ctx)
     assert (it.due_at.hour, it.due_at.minute) == (16, 0)
+
+
+def test_event_without_date_and_time_becomes_task(ctx):
+    it = localize(item(kind="event", title="Встреча с Амиром", source_text="Встреча с Амиром",
+                       starts_at=datetime(2026, 10, 1, 10, 0)), ctx)
+    assert it.kind == "task"
+    assert it.starts_at is None and it.due_at is None
+    assert check_item(it, ctx, None) == []
+
+
+def test_event_with_date_but_no_time_needs_review(ctx):
+    it = localize(item(kind="event", title="Встреча с Амиром", source_text="завтра (2026-10-02) встреча с Амиром",
+                       starts_at=datetime(2026, 10, 2, 10, 0)), ctx)
+    assert it.kind == "event"
+    assert any("время" in e for e in check_item(it, ctx, None))
+
+
+def test_event_with_month_date_but_no_time_needs_review(ctx):
+    it = localize(item(kind="event", title="Встреча", source_text="встреча 5 октября",
+                       starts_at=datetime(2026, 10, 5, 10, 0)), ctx)
+    assert it.kind == "event"
+    assert any("время" in e for e in check_item(it, ctx, None))
+
+
+def test_event_with_time_ok(ctx):
+    it = localize(item(kind="event", title="Встреча", source_text="встреча в полвторого (13:30)",
+                       starts_at=datetime(2026, 10, 1, 13, 30)), ctx)
+    assert it.kind == "event"
+    assert check_item(it, ctx, None) == []

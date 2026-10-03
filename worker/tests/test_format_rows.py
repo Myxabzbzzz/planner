@@ -26,7 +26,7 @@ def test_fmt_amount():
 
 
 def test_render_lines(ctx):
-    assert render_line(it(ctx, kind="event", title="Встреча с Андреем", starts_at=datetime(2026, 10, 2, 15, 0)),
+    assert render_line(it(ctx, kind="event", title="Встреча с Андреем", source_text="в 3 (15:00)", starts_at=datetime(2026, 10, 2, 15, 0)),
                        None, ctx) == "📅 Встреча с Андреем — 02.10 15:00"
     assert render_line(it(ctx, kind="task", title="Оплатить интернет"), None, ctx) == "☑️ Оплатить интернет"
     assert render_line(it(ctx, kind="expense", title="Кофе", amount=40000), None, ctx) == "💸 Кофе — 40 000 сум"
@@ -54,7 +54,7 @@ def test_buttons_fit_callback_limit(ctx):
 
 
 def test_to_row_event_in_utc(ctx):
-    table, row = to_row(it(ctx, kind="event", title="Встреча", starts_at=datetime(2026, 10, 2, 15, 0),
+    table, row = to_row(it(ctx, kind="event", title="Встреча", source_text="в 3 (15:00)", starts_at=datetime(2026, 10, 2, 15, 0),
                            with_whom="Андрей"), ctx, "i1", None)
     assert table == "items"
     assert row["starts_at"] == "2026-10-02T10:00:00+00:00"

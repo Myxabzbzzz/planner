@@ -13,6 +13,11 @@ _AMOUNT_RE = re.compile(
     re.IGNORECASE,
 )
 _CENT = Decimal("0.005")
+_DATE_IN_TEXT_RE = re.compile(
+    r"\(\d{4}-\d{2}-\d{2}\)|\b\d{1,2}\.\d{1,2}(?:\.\d{2,4})?\b|\b\d{1,2}\s+(?:январ|феврал|март|апрел|ма[яй]|июн|июл|август"
+    r"|сентябр|октябр|ноябр|декабр)",
+    re.IGNORECASE,
+)
 
 
 def amounts_in(text: str) -> list[Decimal]:
@@ -34,7 +39,7 @@ def _amount_in(amount: float, nums: list[Decimal]) -> bool:
     return any(abs(a - n) < _CENT for n in nums)
 
 
-def localize(item: ExtractedItem, ctx: UserContext) -> ExtractedItem:
+def localize(item: ExtractedItem, ctx: UserContext, strict: bool = True) -> ExtractedItem:
     """Время от LLM — всегда «настенное» время пользователя: смещение, если модель его
     приписала, отбрасываем и ставим часовой пояс пользователя; валюта — в верхнем регистре."""
     tz = ZoneInfo(ctx.tz)
@@ -54,14 +59,23 @@ def localize(item: ExtractedItem, ctx: UserContext) -> ExtractedItem:
             upd["amount"] = float(nums[0])
     if item.kind == "task" and "due_at" in upd and not _has_clock(item.source_text):
         upd["due_at"] = upd["due_at"].replace(hour=23, minute=59, second=0, microsecond=0)
+    if strict and item.kind == "event" and not _has_clock(item.source_text) and not _has_date(item.source_text):
+        # ни даты, ни времени — модель выдумала бы «сейчас»; сохраняем как задачу без срока
+        upd.update(kind="task", starts_at=None, due_at=None, duration_min=None)
     return item.model_copy(update=upd)
+
+
+def _has_date(text: str) -> bool:
+    return bool(_DATE_IN_TEXT_RE.search(text))
 
 
 def _has_clock(text: str) -> bool:
     return bool(_CLOCK_RE.search(text))
 
 
-def check_item(item: ExtractedItem, ctx: UserContext, known_currencies: set[str] | None) -> list[str]:
+def check_item(
+    item: ExtractedItem, ctx: UserContext, known_currencies: set[str] | None, strict: bool = True
+) -> list[str]:
     errs: list[str] = []
     if not item.title.strip():
         errs.append("title пустой")
@@ -72,6 +86,8 @@ def check_item(item: ExtractedItem, ctx: UserContext, known_currencies: set[str]
             errs.append(f"{f} вне разумного диапазона: {v.isoformat()}")
     if item.kind == "event" and item.starts_at is None:
         errs.append("у встречи (event) нет starts_at")
+    elif strict and item.kind == "event" and not _has_clock(item.source_text):
+        errs.append("у встречи не названо время")
     if item.kind in ("expense", "income"):
         if item.amount is None or item.amount <= 0:
             errs.append("у операции нет суммы больше нуля")
