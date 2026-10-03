@@ -143,3 +143,38 @@ def test_system_prompt_has_no_copyable_expense_example():
     from planner_worker.prompts import SYSTEM
     assert "Ерунда" not in SYSTEM
     assert "«Трата»" in SYSTEM
+
+
+def test_annotate_relative_dates():
+    from datetime import date
+    from planner_worker.prompts import annotate_dates
+    d = date(2026, 10, 3)
+    assert annotate_dates("через две недели встреча", d) == "через две недели (2026-10-17) встреча"
+    assert annotate_dates("через неделю", d) == "через неделю (2026-10-10)"
+    assert annotate_dates("через 3 дня", d) == "через 3 дня (2026-10-06)"
+    assert annotate_dates("через пару дней", d) == "через пару дней (2026-10-05)"
+    assert annotate_dates("через месяц", d) == "через месяц (2026-11-03)"
+    assert annotate_dates("через два месяца", d) == "через два месяца (2026-12-03)"
+    once = annotate_dates("через неделю", d)
+    assert annotate_dates(once, d) == once
+
+
+def test_annotate_times_without_preposition():
+    from planner_worker.prompts import annotate_times
+    assert annotate_times("через две недели час дня встреча") == "через две недели час дня (13:00) встреча"
+    assert annotate_times("в 3 часа дня") == "в 3 часа дня (15:00)"
+    assert annotate_times("созвон 5 вечера") == "созвон 5 вечера (17:00)"
+    assert annotate_times("в 2 часа ночи") == "в 2 часа ночи (02:00)"
+    assert annotate_times("час ночи") == "час ночи (01:00)"
+    assert annotate_times("в 5 вечера") == "в 5 вечера (17:00)"
+
+
+def test_system_prompt_title_and_category_hints():
+    from planner_worker.prompts import SYSTEM
+    assert "«Claude»" in SYSTEM and "«Продажа футболки»" in SYSTEM
+    assert "подписки" in SYSTEM
+
+
+def test_system_prompt_money_direction_rule():
+    from planner_worker.prompts import SYSTEM
+    assert "скинул" in SYSTEM and "expense с title «Маме»" in SYSTEM

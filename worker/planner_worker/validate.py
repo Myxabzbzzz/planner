@@ -57,6 +57,8 @@ def localize(item: ExtractedItem, ctx: UserContext, strict: bool = True) -> Extr
         nums = amounts_in(item.source_text)
         if len(nums) == 1 and not _amount_in(item.amount, nums):
             upd["amount"] = float(nums[0])
+    if item.kind == "habit_done" and not (item.habit or "").strip() and item.title.strip().lower() in ctx.habits:
+        upd["habit"] = item.title.strip().lower()  # модель часто кладёт привычку в title
     if item.kind == "task" and "due_at" in upd and not _has_clock(item.source_text):
         upd["due_at"] = upd["due_at"].replace(hour=23, minute=59, second=0, microsecond=0)
     if strict and item.kind == "event" and not _has_clock(item.source_text) and not _has_date(item.source_text):

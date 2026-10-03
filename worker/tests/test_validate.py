@@ -133,3 +133,9 @@ def test_event_with_time_ok(ctx):
                        starts_at=datetime(2026, 10, 1, 13, 30)), ctx)
     assert it.kind == "event"
     assert check_item(it, ctx, None) == []
+
+
+def test_habit_done_takes_habit_from_title_when_missing(ctx):
+    it = localize(item(kind="habit_done", title="Чтение", source_text="прочитал 20 страниц"), ctx)
+    assert it.habit == "чтение"
+    assert check_item(it, ctx, None) == []
