@@ -25,3 +25,14 @@ Deno.test("wrong token, expired, missing hash or user are rejected", async () =>
   assertEquals(await verifyInitData(noUser, TOKEN, NOW), null);
   assertEquals(await verifyInitData("", TOKEN, NOW), null);
 });
+
+Deno.test("empty or missing bot token is rejected (no fail-open)", async () => {
+  const init = await signInitData({ auth_date: String(NOW - 60), user: JSON.stringify({ id: 1 }) }, "");
+  assertEquals(await verifyInitData(init, "", NOW), null);
+  assertEquals(await verifyInitData(init, undefined as unknown as string, NOW), null);
+});
+
+Deno.test("future auth_date is rejected", async () => {
+  const init = await signInitData({ auth_date: String(NOW + 3600), user: JSON.stringify({ id: 1 }) }, TOKEN);
+  assertEquals(await verifyInitData(init, TOKEN, NOW), null);
+});

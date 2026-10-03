@@ -33,13 +33,13 @@ export async function verifyInitData(
   nowSec: number,
   maxAgeSec = 86400,
 ): Promise<{ tgId: number } | null> {
-  if (!initData) return null;
+  if (!initData || !botToken) return null;
   const params = new URLSearchParams(initData);
   const hash = params.get("hash");
   if (!hash) return null;
   if (!safeEqual(await signature(params, botToken), hash.toLowerCase())) return null;
   const authDate = Number(params.get("auth_date"));
-  if (!Number.isFinite(authDate) || authDate <= 0 || nowSec - authDate > maxAgeSec) return null;
+  if (!Number.isFinite(authDate) || authDate <= 0 || nowSec - authDate > maxAgeSec || authDate > nowSec + 300) return null;
   try {
     const user = JSON.parse(params.get("user") ?? "null");
     return typeof user?.id === "number" ? { tgId: user.id } : null;

@@ -79,3 +79,14 @@ Deno.test("404 unknown route, 405 non-GET, 500 on db error", async () => {
   const r = await run(await req("/today"), db);
   assertEquals([r.status, r.body], [500, { error: "server" }]);
 });
+
+Deno.test("path parsing strips only the first /api segment", async () => {
+  assertEquals((await run(await req("/today").then((r) => new Request(r.url.replace("/functions/v1/api", "/api"), r)))).db.calls,
+    [["summary_today", ["u1"]]]);
+  assertEquals((await run(await req("/x/api/today"))).status, 404);
+});
+
+Deno.test("impossible calendar dates are 400", async () => {
+  assertEquals((await run(await req("/events?from=2026-02-31&to=2026-03-02"))).status, 400);
+  assertEquals((await run(await req("/events?from=2026-03-01&to=2026-04-31"))).status, 400);
+});

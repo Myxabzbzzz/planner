@@ -15,6 +15,7 @@ const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const CURSOR = /^[^~]{1,64}~[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FILTERS = ["today", "upcoming", "nodue", "done"];
+const realDate = (d: string) => DATE.test(d) && new Date(d + "T00:00:00Z").toISOString().slice(0, 10) === d;
 const DAY_MS = 86_400_000;
 
 class BadRequest extends Error {}
@@ -32,7 +33,7 @@ function route(path: string, q: URLSearchParams, userId: string): [string, unkno
     }
     case "/events": {
       const from = q.get("from") ?? "", to = q.get("to") ?? "";
-      if (!DATE.test(from) || !DATE.test(to)) throw new BadRequest();
+      if (!realDate(from) || !realDate(to)) throw new BadRequest();
       const span = (Date.parse(to) - Date.parse(from)) / DAY_MS;
       if (!(span >= 0 && span <= 31)) throw new BadRequest();
       return ["api_events", [userId, from, to]];
@@ -68,7 +69,7 @@ export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
     const user = await d.db.userByTg(auth.tgId);
     if (!user || !user.is_allowed || !user.onboarded_at) return json(403, { error: "forbidden" });
     const url = new URL(req.url);
-    const path = url.pathname.replace(/^.*\/api(?=\/|$)/, "") || "/";
+    const path = url.pathname.replace(/^(?:\/functions\/v1)?\/api(?=\/|$)/, "") || "/";
     const r = route(path, url.searchParams, user.id);
     if (!r) return json(404, { error: "not_found" });
     return json(200, await d.db.call(r[0], r[1]));
