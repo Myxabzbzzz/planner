@@ -144,10 +144,12 @@ def annotate_in_time(text: str, now: datetime) -> str:
 
 
 _LIST_COMMA_RE = re.compile(r"(?<=\d)\s+,\s*(?=\d)|(?<=\d),\s+(?=\d)")
+_COMMA_CHAIN_RE = re.compile(r"(?<![\d.,])\d+(?:,\d+){2,}(?![\d,])")
 
 
 def split_number_lists(text: str) -> str:
-    """«290 ,60» и «200, 300» — перечисление, а не дробь: «290 и 60». «22,4» не трогаем."""
+    """«290 ,60», «200, 300» и цепочки «290,60,80» — перечисление: «290 и 60 и 80». «22,4» не трогаем."""
+    text = _COMMA_CHAIN_RE.sub(lambda m: m.group(0).replace(",", " и "), text)
     return _LIST_COMMA_RE.sub(" и ", text)
 
 
@@ -225,6 +227,9 @@ def annotate_times(text: str) -> str:
     return _BARE_TIME_RE.sub(rep, _TIME_RE.sub(rep, text))
 
 
+_ONLY_NUMBERS_RE = re.compile(r"[\d\s.,]*\d[\d\s.,]*")
+
+
 def build_extract_messages(
     text: str, ctx: UserContext, hint_kind: str | None = None, feedback: list[str] | None = None
 ) -> list[dict]:
@@ -245,6 +250,8 @@ def build_extract_messages(
     )
     if hint_kind:
         user += f"Пользователь уточнил: это запись типа {hint_kind}. Верни ровно одну запись этого типа.\n"
+    if _ONLY_NUMBERS_RE.fullmatch(text.strip()):
+        user += "Сообщение состоит только из чисел — это траты (expense), по одной записи на каждое число, title «Трата».\n"
     if feedback:
         user += "Прошлый разбор содержал ошибки, исправь их:\n- " + "\n- ".join(feedback) + "\n"
     text = annotate_in_time(split_number_lists(text), ctx.now)

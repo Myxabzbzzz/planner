@@ -60,10 +60,11 @@ def main() -> None:
     store = Store(create_client(cfg.supabase_url, cfg.supabase_service_key))
     tg = TelegramClient(cfg.telegram_bot_token, http)
     classifier = LayaClassifier() if cfg.use_laya else None
+    stt = Transcriber(cfg.whisper_model)
     pipeline = Pipeline(
         store=store,
         tg=tg,
-        stt=Transcriber(cfg.whisper_model),
+        stt=stt,
         extractor=Extractor(OllamaClient(cfg.ollama_url, cfg.ollama_model, http)),
         classifier=classifier,
         fetch_rates=lambda: fetch_latest(http),
@@ -72,6 +73,10 @@ def main() -> None:
     )
 
     log.info("warming up models (laya=%s, llm=%s)…", cfg.use_laya, cfg.ollama_model)
+    try:
+        stt.warm_up()
+    except Exception as e:  # без сети на старте — модель подгрузится при первом голосовом
+        log.warning("whisper warm-up failed: %s", type(e).__name__)
     if classifier:
         classifier.warm_up()
     http.post(f"{cfg.ollama_url}/api/generate", json={"model": cfg.ollama_model, "keep_alive": "30m"}, timeout=180).raise_for_status()

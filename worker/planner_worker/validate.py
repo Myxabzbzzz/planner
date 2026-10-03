@@ -56,7 +56,7 @@ def localize(item: ExtractedItem, ctx: UserContext, strict: bool = True) -> Extr
     if item.kind in ("expense", "income") and item.amount is not None:
         # модель иногда портит числа — единственному числу из текста верим больше
         nums = amounts_in(item.source_text)
-        if len(nums) == 1 and not _amount_in(item.amount, nums):
+        if len(nums) == 1 and not _amount_in(item.amount, nums) and not _plain_number_in(item.amount, item.source_text):
             upd["amount"] = float(nums[0])
     if item.kind == "habit_done" and not (item.habit or "").strip() and item.title.strip().lower() in ctx.habits:
         upd["habit"] = item.title.strip().lower()  # модель часто кладёт привычку в title
@@ -66,6 +66,11 @@ def localize(item: ExtractedItem, ctx: UserContext, strict: bool = True) -> Extr
         # ни даты, ни времени — модель выдумала бы «сейчас»; сохраняем как задачу без срока
         upd.update(kind="task", starts_at=None, due_at=None, duration_min=None)
     return item.model_copy(update=upd)
+
+
+def _plain_number_in(amount: float, text: str) -> bool:
+    """Сумма записана в тексте отдельным числом («290,60,80» → 60) — значит модель её не выдумала."""
+    return any(Decimal(t) == Decimal(str(amount)) for t in re.findall(r"(?<![\d.])\d+(?![\d.])", text))
 
 
 def _has_date(text: str) -> bool:

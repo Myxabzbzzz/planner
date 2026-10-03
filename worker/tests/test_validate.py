@@ -139,3 +139,9 @@ def test_habit_done_takes_habit_from_title_when_missing(ctx):
     it = localize(item(kind="habit_done", title="Чтение", source_text="прочитал 20 страниц"), ctx)
     assert it.habit == "чтение"
     assert check_item(it, ctx, None) == []
+
+
+def test_localize_keeps_amount_written_as_its_own_number(ctx):
+    # «290,60,80» — модель разбила на три траты; 60 есть в тексте отдельным числом — не трогаем
+    it = localize(item(kind="expense", amount=60, source_text="Я потратил 290,60,80."), ctx)
+    assert it.amount == 60

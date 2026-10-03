@@ -237,3 +237,15 @@ def test_messages_apply_new_annotations(ctx):
     assert "290 и 60" in user
     user = build_extract_messages("созвон через 30 минут", ctx)[1]["content"]
     assert re.search(r"через 30 минут \(\d{4}-\d{2}-\d{2}\) \(\d{2}:\d{2}\)", user)
+
+
+def test_split_comma_chains():
+    from planner_worker.prompts import split_number_lists
+    assert split_number_lists("Я потратил 290,60,80.") == "Я потратил 290 и 60 и 80."
+    assert split_number_lists("50,30,20 и 10") == "50 и 30 и 20 и 10"
+    assert split_number_lists("курс 1,5") == "курс 1,5"
+
+
+def test_numbers_only_hint(ctx):
+    assert "только из чисел" in build_extract_messages("50 80", ctx)[1]["content"]
+    assert "только из чисел" not in build_extract_messages("кофе 40 000", ctx)[1]["content"]
