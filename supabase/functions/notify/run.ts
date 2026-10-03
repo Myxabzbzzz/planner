@@ -26,7 +26,13 @@ export async function runNotify(d: { db: NotifyDb; tg: Tg; miniappUrl?: string }
       else console.error("reminder failed:", errText(e));
     }
   }
-  if (mark.length) await d.db.markReminded(mark);
+  if (mark.length) {
+    try {
+      await d.db.markReminded(mark);
+    } catch (e) {
+      console.error("mark reminded failed:", errText(e));
+    }
+  }
 
   const buttons: Button[][] | undefined = d.miniappUrl
     ? [[{ text: "📱 Открыть планер", web_app: { url: d.miniappUrl } }]]
