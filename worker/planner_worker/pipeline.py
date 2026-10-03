@@ -61,7 +61,10 @@ class Pipeline:
 
         status = "needs_review" if review else "done"
         self.store.finish(row.id, status, {"text": text, "saved": len(lines), "pending_review": review})
-        self._best_effort(reply, self.tg, row, render_summary(lines, len(review)),
+        summary = render_summary(lines, len(review))
+        if row.source == "shortcut":
+            summary = "📲 " + summary
+        self._best_effort(reply, self.tg, row, summary,
                           summary_buttons(row.id) if lines else None)
         for idx, entry in enumerate(review):
             msg, buttons = review_message(row.id, idx, ExtractedItem.model_validate(entry["item"]), entry["reason"])

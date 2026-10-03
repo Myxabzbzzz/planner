@@ -390,3 +390,10 @@ def test_notify_failed_review_row_sends(ctx):
     tg = FakeTg()
     notify_failed(store, tg)
     assert tg.edited == [] and "Не получилось" in tg.sent[0][1]
+
+
+def test_shortcut_summary_has_phone_prefix_and_is_sent_as_new_message(ctx):
+    p, store, tg = make(ctx, FakeExtractor([TAXI]))
+    p.process(row(source="shortcut", reply_message_id=None))
+    assert tg.edited == []
+    assert tg.sent[0][1].startswith("📲 ✅ Записал:")
