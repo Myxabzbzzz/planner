@@ -32,6 +32,11 @@ def _dt(v: datetime, ctx: UserContext) -> str:
     return v.astimezone(ZoneInfo(ctx.tz)).strftime("%d.%m %H:%M")
 
 
+def _due(v: datetime, ctx: UserContext) -> str:
+    local = v.astimezone(ZoneInfo(ctx.tz))
+    return local.strftime("%d.%m") if (local.hour, local.minute) == (23, 59) else local.strftime("%d.%m %H:%M")
+
+
 def _clip(s: str, n: int = 200) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
@@ -39,7 +44,7 @@ def _clip(s: str, n: int = 200) -> str:
 def render_line(item: ExtractedItem, fx: FxApplied | None, ctx: UserContext) -> str:
     k = item.kind
     if k == "task":
-        return f"☑️ {item.title}" + (f" — до {_dt(item.due_at, ctx)}" if item.due_at else "")
+        return f"☑️ {item.title}" + (f" — до {_due(item.due_at, ctx)}" if item.due_at else "")
     if k == "event":
         line = f"📅 {item.title} — {_dt(item.starts_at, ctx)}"
         if item.with_whom and item.with_whom.lower() not in item.title.lower():

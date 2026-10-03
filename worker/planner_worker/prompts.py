@@ -20,11 +20,12 @@ SYSTEM = """Ты — парсер личного планера. Раздели 
 - habit_new — пользователь хочет начать отслеживать новую привычку; title — её короткое название.
 
 Правила:
-- title — коротко, по-русски, без даты и суммы: «Встреча с Андреем», «Такси», «Оплатить интернет». Для note и journal title — полный текст мысли.
+- title — коротко, по-русски, без даты, суммы и слов «потратил/купил/надо»: «Встреча с Андреем», «Такси», «Оплатить интернет»; «потратил 200$ на ерунду» → «Ерунда». Для note и journal title — полный текст мысли.
 - source_text — дословный фрагмент сообщения, к которому относится запись.
-- Даты и время — локальные, формат YYYY-MM-DDTHH:MM:SS, без часового пояса. Относительные даты («завтра», «в пятницу») считай от текущего момента. «В 3» без уточнения — 15:00.
+- Даты и время — локальные, формат YYYY-MM-DDTHH:MM:SS, без часового пояса. Относительные даты («завтра», «в пятницу») считай от текущего момента.
 - Для дней недели и относительных дат бери дату из строки «Календарь» — ближайший будущий такой день (сегодняшний день недели = сегодня).
 - Если после слова стоит дата в скобках (YYYY-MM-DD) — используй именно её.
+- Если после времени стоит время в скобках (ЧЧ:ММ) — используй именно его. Если время не названо — не придумывай его.
 - Суммы: «40 000» → 40000, «22,4» → 22.4, «пятьсот» → 500, «2к» → 2000.
 - Ничего не выдумывай. Если записей нет — items: [].
 """
@@ -60,6 +61,40 @@ def annotate_dates(text: str, today: date) -> str:
     return _DATE_RE.sub(lambda m: f"{m.group(1)} ({resolve(m.group(1)).isoformat()})", text)
 
 
+_TIME_RE = re.compile(
+    r"(?<!\w)(?:в|к)\s+(?:(?P<word>час|полдень|полночь)"
+    r"|(?P<h>\d{1,2})(?:[:.](?P<m>\d{2}))?(?:\s+час(?:а|ов)?)?(?:\s+(?P<suf>утра|дня|вечера|ночи))?)"
+    r"(?!\w)(?![:.]\d)(?!\s*\(\d{2}:\d{2}\))",
+    re.IGNORECASE,
+)
+_TIME_WORDS = {"час": (13, 0), "полдень": (12, 0), "полночь": (0, 0)}
+
+
+def _clock(m: re.Match) -> tuple[int, int] | None:
+    if m.group("word"):
+        return _TIME_WORDS[m.group("word").lower()]
+    h, mi = int(m.group("h")), int(m.group("m") or 0)
+    if h > 23 or mi > 59:
+        return None
+    suf = (m.group("suf") or "").lower()
+    if suf in ("утра", "ночи"):
+        h = 0 if h == 12 else h
+    elif suf in ("дня", "вечера"):
+        h = h + 12 if h < 12 else h
+    elif 1 <= h <= 7:
+        h += 12  # «в 3» без уточнения — день
+    return h, mi
+
+
+def annotate_times(text: str) -> str:
+    """«в час» → «в час (13:00)»: время считает код, модель только переписывает его."""
+    def rep(m: re.Match) -> str:
+        hm = _clock(m)
+        return m.group(0) if hm is None else f"{m.group(0)} ({hm[0]:02d}:{hm[1]:02d})"
+
+    return _TIME_RE.sub(rep, text)
+
+
 def build_extract_messages(
     text: str, ctx: UserContext, hint_kind: str | None = None, feedback: list[str] | None = None
 ) -> list[dict]:
@@ -82,5 +117,5 @@ def build_extract_messages(
         user += f"Пользователь уточнил: это запись типа {hint_kind}. Верни ровно одну запись этого типа.\n"
     if feedback:
         user += "Прошлый разбор содержал ошибки, исправь их:\n- " + "\n- ".join(feedback) + "\n"
-    user += f"\nСообщение:\n{annotate_dates(text, today)}"
+    user += f"\nСообщение:\n{annotate_times(annotate_dates(text, today))}"
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]

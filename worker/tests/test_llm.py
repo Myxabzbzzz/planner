@@ -105,3 +105,27 @@ def test_annotate_dates():
 def test_message_text_is_annotated(ctx):
     user = build_extract_messages("в субботу футбол", ctx)[1]["content"]
     assert user.endswith("в субботу (2026-10-03) футбол")
+
+
+def test_annotate_times():
+    from planner_worker.prompts import annotate_times
+    assert annotate_times("встреча со славиком в час") == "встреча со славиком в час (13:00)"
+    assert annotate_times("встреча в 3") == "встреча в 3 (15:00)"
+    assert annotate_times("созвон в 10") == "созвон в 10 (10:00)"
+    assert annotate_times("ужин в 19:30") == "ужин в 19:30 (19:30)"
+    assert annotate_times("в 9 утра зал") == "в 9 утра (09:00) зал"
+    assert annotate_times("в 7 вечера кино") == "в 7 вечера (19:00) кино"
+    assert annotate_times("к 9 отвезти машину") == "к 9 (09:00) отвезти машину"
+    assert annotate_times("обед в полдень") == "обед в полдень (12:00)"
+    assert annotate_times("в 3 часа созвон") == "в 3 часа (15:00) созвон"
+    assert annotate_times("в 12 ночи") == "в 12 ночи (00:00)"
+    assert annotate_times("потратил 200$ на кофе") == "потратил 200$ на кофе"
+    assert annotate_times("в 2026 году") == "в 2026 году"
+    once = annotate_times("Встреча в час")
+    assert once == "Встреча в час (13:00)"
+    assert annotate_times(once) == once
+
+
+def test_messages_annotate_times(ctx):
+    user = build_extract_messages("встреча со славиком в час", ctx)[1]["content"]
+    assert user.endswith("встреча со славиком в час (13:00)")

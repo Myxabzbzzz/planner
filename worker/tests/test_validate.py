@@ -65,3 +65,42 @@ def test_inbox_row_from_db_defaults_result():
                             "status": "processing"})
     assert row.result == {}
     assert row.reply_message_id == 6
+
+
+def test_amounts_in():
+    from decimal import Decimal
+    from planner_worker.validate import amounts_in
+    assert amounts_in("потратил 200$ на ерунду") == [Decimal("200")]
+    assert amounts_in("кофе 40 000 сум") == [Decimal("40000")]
+    assert amounts_in("1 500 000 зарплата") == [Decimal("1500000")]
+    assert amounts_in("подписка 22,4 доллара") == [Decimal("22.4")]
+    assert amounts_in("такси 300к") == [Decimal("300000")]
+    assert amounts_in("получил 12 миллионов") == [Decimal("12000000")]
+    assert amounts_in("заплатил пятьсот рублей") == []
+    assert amounts_in("сегодня (2026-10-03) в 15:30 (15:30) кофе 5 000") == [Decimal("5000")]
+
+
+def test_localize_fixes_llm_amount_from_single_number_in_text(ctx):
+    it = localize(item(kind="expense", amount=20000, currency="USD", source_text="потратил 200$ на ерунду"), ctx)
+    assert it.amount == 200
+
+
+def test_mismatched_amount_with_several_numbers_is_error(ctx):
+    it = localize(item(kind="expense", amount=999, source_text="такси 25 тысяч и обед 60 000"), ctx)
+    assert any("не совпадает" in e for e in check_item(it, ctx, None))
+
+
+def test_matching_amount_among_several_numbers_ok(ctx):
+    it = localize(item(kind="expense", amount=60000, source_text="такси 25 тысяч и обед 60 000"), ctx)
+    assert check_item(it, ctx, None) == []
+
+
+def test_task_without_time_in_text_is_due_end_of_day(ctx):
+    it = localize(item(kind="task", source_text="надо сегодня (2026-10-01) оплатить подписку",
+                       due_at=datetime(2026, 10, 1, 10, 0)), ctx)
+    assert (it.due_at.hour, it.due_at.minute) == (23, 59)
+
+
+def test_task_with_time_in_text_keeps_time(ctx):
+    it = localize(item(kind="task", source_text="позвонить в 4 (16:00)", due_at=datetime(2026, 10, 1, 16, 0)), ctx)
+    assert (it.due_at.hour, it.due_at.minute) == (16, 0)

@@ -118,3 +118,9 @@ def test_long_note_truncated_and_summary_capped(ctx):
     assert len(line) <= 205 and line.endswith("…")
     text = render_summary(["📅 x" * 100] * 100, 0)
     assert len(text) <= 4000 and text.endswith("…")
+
+
+def test_task_due_end_of_day_shows_date_only(ctx):
+    line = render_line(it(ctx, kind="task", title="Оплатить подписку", source_text="сегодня оплатить",
+                          due_at=datetime(2026, 10, 3, 23, 59)), None, ctx)
+    assert line == "☑️ Оплатить подписку — до 03.10"

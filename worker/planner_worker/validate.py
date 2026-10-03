@@ -1,10 +1,37 @@
 import re
 from datetime import timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from .schemas import ExtractedItem, UserContext
 
 CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
+_ANNOTATION_RE = re.compile(r"\((?:\d{4}-\d{2}-\d{2}|\d{2}:\d{2})\)")
+_CLOCK_RE = re.compile(r"(?<!\d)\d{1,2}:\d{2}(?!\d)")
+_AMOUNT_RE = re.compile(
+    r"(?<![\d.,])(\d{1,3}(?:[ \u00a0]\d{3})+|\d+)(?:[.,](\d{1,2}))?(?!\d)\s*(к|k|тыс\w*|млн|миллион\w*)?(?!\w)",
+    re.IGNORECASE,
+)
+_CENT = Decimal("0.005")
+
+
+def amounts_in(text: str) -> list[Decimal]:
+    """Числа-суммы из текста пользователя («200$», «40 000», «22,4», «300к», «12 миллионов»).
+    Аннотации дат/времени и время «15:30» не считаются."""
+    clean = _CLOCK_RE.sub(" ", _ANNOTATION_RE.sub(" ", text))
+    out = []
+    for m in _AMOUNT_RE.finditer(clean):
+        n = Decimal(re.sub(r"[ \u00a0]", "", m.group(1)) + (f".{m.group(2)}" if m.group(2) else ""))
+        suf = (m.group(3) or "").lower()
+        if suf:
+            n *= 1000 if suf[0] in "кkт" else 1_000_000
+        out.append(n)
+    return out
+
+
+def _amount_in(amount: float, nums: list[Decimal]) -> bool:
+    a = Decimal(str(amount))
+    return any(abs(a - n) < _CENT for n in nums)
 
 
 def localize(item: ExtractedItem, ctx: UserContext) -> ExtractedItem:
@@ -20,7 +47,18 @@ def localize(item: ExtractedItem, ctx: UserContext) -> ExtractedItem:
         upd["currency"] = item.currency.strip().upper()
     if item.kind in ("expense", "income") and item.occurred_on is None:
         upd["occurred_on"] = ctx.now.date()
+    if item.kind in ("expense", "income") and item.amount is not None:
+        # модель иногда портит числа — единственному числу из текста верим больше
+        nums = amounts_in(item.source_text)
+        if len(nums) == 1 and not _amount_in(item.amount, nums):
+            upd["amount"] = float(nums[0])
+    if item.kind == "task" and "due_at" in upd and not _has_clock(item.source_text):
+        upd["due_at"] = upd["due_at"].replace(hour=23, minute=59, second=0, microsecond=0)
     return item.model_copy(update=upd)
+
+
+def _has_clock(text: str) -> bool:
+    return bool(_CLOCK_RE.search(text))
 
 
 def check_item(item: ExtractedItem, ctx: UserContext, known_currencies: set[str] | None) -> list[str]:
@@ -37,6 +75,10 @@ def check_item(item: ExtractedItem, ctx: UserContext, known_currencies: set[str]
     if item.kind in ("expense", "income"):
         if item.amount is None or item.amount <= 0:
             errs.append("у операции нет суммы больше нуля")
+        else:
+            nums = amounts_in(item.source_text)
+            if nums and not _amount_in(item.amount, nums):
+                errs.append(f"сумма {item.amount} не совпадает с числами в тексте «{item.source_text}»")
         if item.currency is not None and (
             not CURRENCY_RE.match(item.currency)
             or (known_currencies is not None and item.currency not in known_currencies)
