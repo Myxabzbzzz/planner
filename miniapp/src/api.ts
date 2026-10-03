@@ -1,4 +1,5 @@
-import type { EventsResp, HabitsResp, Me, MoneyResp, NotesResp, TasksResp, Today } from "./types";
+import type { OpPatch } from "./opEdit";
+import type { Categories, EventsResp, HabitsResp, Me, MoneyResp, NotesResp, TasksResp, Today } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number) {
@@ -33,6 +34,9 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     setTaskDone: (id: string, done: boolean) => post(`/tasks/${id}/done`, { done }),
     setEventDone: (id: string, done: boolean) => post(`/events/${id}/done`, { done }),
     setHabitToday: (id: string, done: boolean) => post(`/habits/${id}/today`, { done }),
+    categories: () => get<Categories>("/categories"),
+    updateTransaction: (id: string, patch: OpPatch) => post(`/transactions/${id}`, patch),
+    deleteTransaction: (id: string) => post(`/transactions/${id}/delete`, {}),
     notes: (q?: string, before?: string) => get<NotesResp>("/notes", { q, before }),
   };
 }

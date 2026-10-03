@@ -48,6 +48,8 @@ function route(path: string, q: URLSearchParams, userId: string): [string, unkno
       if (!Number.isInteger(weeks) || weeks < 1 || weeks > 12) throw new BadRequest();
       return ["api_habits", [userId, weeks]];
     }
+    case "/categories":
+      return ["api_categories", [userId]];
     case "/notes": {
       const query = (q.get("q") ?? "").slice(0, 100);
       const before = q.get("before");
@@ -59,14 +61,38 @@ function route(path: string, q: URLSearchParams, userId: string): [string, unkno
 }
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const POST_ROUTES: [RegExp, string, string | null][] = [
-  [new RegExp(`^/tasks/(${UUID})/done$`, "i"), "set_item_done", "task"],
-  [new RegExp(`^/events/(${UUID})/done$`, "i"), "set_item_done", "event"],
-  [new RegExp(`^/habits/(${UUID})/today$`, "i"), "set_habit_today", null],
+type BodyParser = (body: Record<string, unknown>, userId: string, id: string) => unknown[];
+
+const doneArg = (b: Record<string, unknown>) => {
+  if (typeof b.done !== "boolean") throw new BadRequest();
+  return b.done;
+};
+
+function txPatch(b: Record<string, unknown>, userId: string, id: string): unknown[] {
+  const { amount, title, category } = b;
+  if (amount === undefined && title === undefined && category === undefined) throw new BadRequest();
+  if (amount !== undefined && !(typeof amount === "number" && Number.isFinite(amount) && amount > 0 && amount < 1e13)) {
+    throw new BadRequest();
+  }
+  if (title !== undefined && !(typeof title === "string" && title.trim() !== "" && title.trim().length <= 200)) {
+    throw new BadRequest();
+  }
+  if (category !== undefined && !(typeof category === "string" && category !== "" && category.length <= 50)) {
+    throw new BadRequest();
+  }
+  return [userId, id, amount ?? null, typeof title === "string" ? title.trim() : null, category ?? null];
+}
+
+const POST_ROUTES: [RegExp, string, BodyParser][] = [
+  [new RegExp(`^/tasks/(${UUID})/done$`, "i"), "set_item_done", (b, u, id) => [u, id, "task", doneArg(b)]],
+  [new RegExp(`^/events/(${UUID})/done$`, "i"), "set_item_done", (b, u, id) => [u, id, "event", doneArg(b)]],
+  [new RegExp(`^/habits/(${UUID})/today$`, "i"), "set_habit_today", (b, u, id) => [u, id, doneArg(b)]],
+  [new RegExp(`^/transactions/(${UUID})$`, "i"), "update_transaction", txPatch],
+  [new RegExp(`^/transactions/(${UUID})/delete$`, "i"), "delete_transaction", (_b, u, id) => [u, id]],
 ];
 
 async function postRoute(path: string, req: Request, userId: string): Promise<[string, unknown[]] | null> {
-  for (const [re, fn, kind] of POST_ROUTES) {
+  for (const [re, fn, parse] of POST_ROUTES) {
     const m = re.exec(path);
     if (!m) continue;
     let body: unknown;
@@ -75,10 +101,8 @@ async function postRoute(path: string, req: Request, userId: string): Promise<[s
     } catch {
       throw new BadRequest();
     }
-    const done = (body as { done?: unknown } | null)?.done;
-    if (typeof done !== "boolean") throw new BadRequest();
-    const id = m[1].toLowerCase();
-    return [fn, kind ? [userId, id, kind, done] : [userId, id, done]];
+    if (body === null || typeof body !== "object" || Array.isArray(body)) throw new BadRequest();
+    return [fn, parse(body as Record<string, unknown>, userId, m[1].toLowerCase())];
   }
   return null;
 }
@@ -106,6 +130,7 @@ export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
     return json(200, await d.db.call(r[0], r[1]));
   } catch (e) {
     if (e instanceof BadRequest) return json(400, { error: "bad_request" });
+    if ((e as { code?: string })?.code === "P0001") return json(400, { error: "bad_request" }); // проверка в SQL
     const err = e as { name?: string; message?: string; code?: string };
     console.error("api failed:", err?.name ?? "unknown", err?.message ?? String(e), ...(err?.code ? [`code=${err.code}`] : []));
     return json(500, { error: "server" });

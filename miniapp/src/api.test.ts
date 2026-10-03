@@ -35,4 +35,21 @@ describe("api client", () => {
     expect((seen[0].init.headers as Record<string, string>)["X-Init-Data"]).toBe("INIT");
     expect(seen[1].url).toBe("https://x/api/habits/h1/today");
   });
+
+  it("edits and deletes transactions and loads categories", async () => {
+    const seen: { url: string; init?: RequestInit }[] = [];
+    const fetchFn = (async (url: URL, init?: RequestInit) => {
+      seen.push({ url: String(url), init });
+      return new Response(JSON.stringify({ ok: true, expense: [], income: [] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const api = makeApi("https://x/api", "INIT", fetchFn);
+    await api.updateTransaction("t1", { amount: 200 });
+    await api.deleteTransaction("t1");
+    await api.categories();
+    expect(seen.map((s) => [s.url, s.init?.method ?? "GET", s.init?.body])).toEqual([
+      ["https://x/api/transactions/t1", "POST", JSON.stringify({ amount: 200 })],
+      ["https://x/api/transactions/t1/delete", "POST", "{}"],
+      ["https://x/api/categories", "GET", undefined],
+    ]);
+  });
 });

@@ -141,3 +141,30 @@ Deno.test("CORS allows POST", async () => {
     { db: new FakeApiDb(), botToken: TOKEN, nowSec: () => NOW });
   assertEquals(res.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
 });
+
+Deno.test("transactions: edit, delete and categories", async () => {
+  const mk = () => { const db = new FakeApiDb(); db.call = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(true); }; return db; };
+  let r = await run(await req(`/transactions/${ID}`, { method: "POST", body: { amount: 200 } }), mk());
+  assertEquals([r.status, r.body], [200, { ok: true }]);
+  assertEquals(r.db.calls, [["update_transaction", ["u1", ID, 200, null, null]]]);
+  r = await run(await req(`/transactions/${ID}`, { method: "POST", body: { title: "Латте", category: "кафе" } }), mk());
+  assertEquals(r.db.calls, [["update_transaction", ["u1", ID, null, "Латте", "кафе"]]]);
+  r = await run(await req(`/transactions/${ID}/delete`, { method: "POST", body: {} }), mk());
+  assertEquals(r.db.calls, [["delete_transaction", ["u1", ID]]]);
+  r = await run(await req(`/categories`));
+  assertEquals(r.db.calls, [["api_categories", ["u1"]]]);
+});
+
+Deno.test("transactions: bad bodies are 400, missing row 404, db validation error 400", async () => {
+  for (const body of [{}, { amount: 0 }, { amount: -5 }, { amount: "200" }, { amount: 1e14 }, { title: "  " },
+    { title: "x".repeat(201) }, { category: 5 }, { category: "" }, null]) {
+    assertEquals((await run(await req(`/transactions/${ID}`, { method: "POST", body }))).status, 400, JSON.stringify(body));
+  }
+  const missing = new FakeApiDb();
+  missing.call = () => Promise.resolve(false);
+  assertEquals((await run(await req(`/transactions/${ID}`, { method: "POST", body: { amount: 1 } }), missing)).status, 404);
+  assertEquals((await run(await req(`/transactions/${ID}/delete`, { method: "POST", body: {} }), missing)).status, 404);
+  const bad = new FakeApiDb();
+  bad.call = () => Promise.reject({ code: "P0001", message: "bad category" });
+  assertEquals((await run(await req(`/transactions/${ID}`, { method: "POST", body: { category: "нет такой" } }), bad)).status, 400);
+});

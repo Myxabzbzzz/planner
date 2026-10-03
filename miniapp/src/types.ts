@@ -27,3 +27,4 @@ export type HabitDay = { date: string; done: boolean };
 export type HabitsResp = { habits: { id: string; name: string; days: HabitDay[]; streak: number; done_today: boolean }[] };
 export type Note = { id: string; kind: "thought" | "journal"; text: string; created_at: string };
 export type NotesResp = { notes: Note[]; next_before: string | null };
+export type Categories = { expense: string[]; income: string[] };

@@ -9,6 +9,7 @@ type WebApp = {
   setBackgroundColor?(c: string): void;
   disableVerticalSwipes?(): void;
   HapticFeedback?: { selectionChanged(): void; notificationOccurred?(t: "success" | "error" | "warning"): void };
+  showConfirm?(message: string, cb: (ok: boolean) => void): void;
   BackButton?: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
 };
 
@@ -37,4 +38,9 @@ export function useBackButton(onBack: (() => void) | null) {
       bb.hide();
     };
   }, [onBack]);
+}
+
+export function confirmDialog(message: string): Promise<boolean> {
+  if (tg?.showConfirm) return new Promise((resolve) => tg!.showConfirm!(message, resolve));
+  return Promise.resolve(window.confirm(message));
 }

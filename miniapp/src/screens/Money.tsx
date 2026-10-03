@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Api } from "../api";
 import { Bars } from "../components/Bars";
 import { Donut } from "../components/Donut";
+import { OpSheet } from "../components/OpSheet";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { barHeights, donutSlices } from "../charts";
 import { currentMonth, fmtAmount, fmtDayTitle, fmtRateNote, monthTitle, shiftMonth, todayIso } from "../format";
@@ -19,6 +20,7 @@ export function Money({ api, me }: { api: Api; me: Me }) {
   const thisMonth = currentMonth(me.tz);
   const [month, setMonth] = useState(thisMonth);
   const { data, error, loading, reload } = useLoad(() => api.money(month), [api, month]);
+  const [editing, setEditing] = useState<Operation | null>(null);
   const go = (d: number) => { haptic(); setMonth((m) => shiftMonth(m, d)); };
 
   const header = (
@@ -79,7 +81,7 @@ export function Money({ api, me }: { api: Api; me: Me }) {
               <div key={date}>
                 <div className="day-head">{fmtDayTitle(date)}</div>
                 {ops.map((o) => (
-                  <div className="row" key={o.id}>
+                  <button type="button" className="row op-row" key={o.id} onClick={() => { haptic(); setEditing(o); }}>
                     <div className="grow">
                       <div className="ellipsis">{o.title || o.category}</div>
                       <div className="op-orig">
@@ -90,12 +92,16 @@ export function Money({ api, me }: { api: Api; me: Me }) {
                     <span className={o.type === "income" ? "income" : ""}>
                       {o.type === "income" ? "+" : "−"}{fmtAmount(o.amount, cur)}
                     </span>
-                  </div>
+                  </button>
                 ))}
               </div>
             ))}
           </Card>
         </>
+      )}
+      {editing && (
+        <OpSheet api={api} op={editing} base={cur} onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); reload(); }} />
       )}
     </>
   );

@@ -89,3 +89,18 @@ h2 { font-size: 20px; margin: 0 0 8px; }
 .check.on { background: var(--accent); border-color: var(--accent); }
 .done-text { color: var(--hint); text-decoration: line-through; }
 button.pill { cursor: pointer; }
+.op-row { width: 100%; text-align: left; font: inherit; color: inherit; background: none; cursor: pointer; }
+.op-row:active { opacity: .6; }
+.sheet-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .4); display: flex; align-items: flex-end; justify-content: center; }
+.sheet { width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto; background: var(--bg); border-radius: 18px 18px 0 0;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); animation: sheet-up .2s ease-out; }
+@keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.sheet-close { width: 32px; height: 32px; border-radius: 50%; background: var(--bg2); color: var(--hint); }
+.field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 4px; font-size: 13px; color: var(--hint); }
+.field input { font: inherit; font-size: 17px; color: var(--text); background: var(--bg2); border: none; border-radius: 10px; padding: 11px 12px; outline: none; }
+.field input:focus { box-shadow: 0 0 0 2px var(--accent); }
+.chips { display: flex; flex-wrap: wrap; }
+.button.wide { display: block; width: 100%; margin-top: 12px; }
+.button:disabled { opacity: .45; }
+.button.ghost-danger { background: none; color: var(--danger); }
