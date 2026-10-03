@@ -1,36 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { fmtShortDate, fmtTime } from "../format";
-import type { Note } from "../types";
+import { makeNotesLoader, type NotesState } from "../notesFeed";
 
 export function Notes({ api }: { api: Api }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [next, setNext] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [state, setState] = useState<NotesState>({ notes: [], next: null, loading: true, error: false });
+  const loader = useMemo(() => makeNotesLoader((qq, before) => api.notes(qq, before), setState), [api]);
+  const { notes, next, loading, error } = state;
 
   useEffect(() => {
     const t = setTimeout(() => setQuery(q.trim()), 300);
     return () => clearTimeout(t);
   }, [q]);
 
-  const load = (before?: string) => {
-    setLoading(true);
-    setError(false);
-    api.notes(query, before)
-      .then((r) => { setNotes((prev) => (before ? [...prev, ...r.notes] : r.notes)); setNext(r.next_before); })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  };
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [api, query]);
+  useEffect(() => { loader.search(query); }, [loader, query]);
 
   return (
     <>
       <input className="search" placeholder="Поиск" value={q} onChange={(e) => setQ(e.target.value)} />
-      {error && notes.length === 0 ? <ErrorCard onRetry={() => load()} />
+      {error && notes.length === 0 ? <ErrorCard onRetry={() => loader.search(query)} />
         : loading && notes.length === 0 ? <Loading />
         : notes.length === 0 ? <Empty title={query ? "Ничего не нашлось" : "Мыслей пока нет"} hint={query ? undefined : "Скажи боту «идея: …»"} />
         : (
@@ -41,7 +32,8 @@ export function Notes({ api }: { api: Api }) {
                 <div className="note-text">{n.text}</div>
               </Card>
             ))}
-            {next && <button className="button wide" disabled={loading} onClick={() => load(next)}>{loading ? "Загрузка…" : "Показать ещё"}</button>}
+            {error && <div className="sub">Не удалось загрузить ещё — нажми ещё раз</div>}
+            {next && <button type="button" className="button wide" disabled={loading} onClick={() => loader.more()}>{loading ? "Загрузка…" : "Показать ещё"}</button>}
           </>
         )}
     </>
