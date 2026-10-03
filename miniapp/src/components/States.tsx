@@ -25,9 +25,10 @@ export const Empty = ({ title, hint }: { title: string; hint?: string }) => (
   </Card>
 );
 
-export const FullScreenMessage = ({ title, hint }: { title: string; hint?: string }) => (
+export const FullScreenMessage = ({ title, hint, action }: { title: string; hint?: string; action?: { label: string; onClick: () => void } }) => (
   <div className="fullscreen">
     <h2>{title}</h2>
     {hint && <p className="hint">{hint}</p>}
+    {action && <button className="button" onClick={action.onClick}>{action.label}</button>}
   </div>
 );

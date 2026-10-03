@@ -30,7 +30,7 @@ export default function App() {
   if (screen === "outside") return <FullScreenMessage title="Открой планер из Telegram" hint="Кнопка «📱 Приложение» в боте" />;
   if (screen === "relaunch") return <FullScreenMessage title="Перезапусти миниапп" hint="Сессия устарела" />;
   if (screen === "noaccess") return <FullScreenMessage title="Нет доступа" hint="Напиши боту /start" />;
-  if (screen === "network") return <FullScreenMessage title="Нет связи" hint="Проверь интернет и открой снова" />;
+  if (screen === "network") return <FullScreenMessage title="Нет связи" hint="Проверь интернет и открой снова" action={{ label: "Повторить", onClick: me.reload }} />;
   if (me.loading || !me.data) return <main className="page"><Loading /></main>;
 
   return (

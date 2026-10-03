@@ -90,3 +90,20 @@ Deno.test("impossible calendar dates are 400", async () => {
   assertEquals((await run(await req("/events?from=2026-02-31&to=2026-03-02"))).status, 400);
   assertEquals((await run(await req("/events?from=2026-03-01&to=2026-04-31"))).status, 400);
 });
+
+Deno.test("db error is 500 and its message is logged", async () => {
+  const db = new FakeApiDb();
+  db.call = () => Promise.reject(Object.assign(new Error("relation boom"), { code: "42P01" }));
+  const orig = console.error;
+  const logged: unknown[][] = [];
+  console.error = (...a: unknown[]) => { logged.push(a); };
+  try {
+    const r = await run(await req("/today"), db);
+    assertEquals(r.status, 500);
+  } finally {
+    console.error = orig;
+  }
+  const text = logged.flat().join(" ");
+  assertEquals(text.includes("relation boom"), true);
+  assertEquals(text.includes("42P01"), true);
+});

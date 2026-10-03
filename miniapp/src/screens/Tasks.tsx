@@ -33,6 +33,7 @@ export function Tasks({ api, me }: { api: Api; me: Me }) {
       <Card className="timeline">
         <h3>{fmtDayTitle(day)}</h3>
         {events.error ? <button className="button" onClick={events.reload}>Повторить</button>
+          : events.loading && !events.data ? <div className="muted">Загрузка…</div>
           : dayEvents.length === 0 ? <div className="muted">Встреч нет</div>
           : dayEvents.map((e) => (
             <div className="row" key={e.id}>

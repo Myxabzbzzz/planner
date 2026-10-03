@@ -75,7 +75,8 @@ export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
     return json(200, await d.db.call(r[0], r[1]));
   } catch (e) {
     if (e instanceof BadRequest) return json(400, { error: "bad_request" });
-    console.error("api failed:", e instanceof Error ? e.name : "unknown");
+    const err = e as { name?: string; message?: string; code?: string };
+    console.error("api failed:", err?.name ?? "unknown", err?.message ?? String(e), ...(err?.code ? [`code=${err.code}`] : []));
     return json(500, { error: "server" });
   }
 }
