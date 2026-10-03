@@ -59,3 +59,17 @@ h2 { font-size: 20px; margin: 0 0 8px; }
 .wd-dot.on { background: var(--accent); }
 .wd.sel .wd-dot.on { background: var(--accent-text); }
 .timeline .row .time { width: 52px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.donut { position: relative; flex: none; }
+.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; color: var(--hint); }
+.donut-wrap { display: flex; align-items: center; gap: 16px; }
+.legend { flex: 1; min-width: 0; }
+.legend .row { padding: 6px 0; font-size: 14px; }
+.bars { display: flex; align-items: flex-end; gap: 2px; height: 96px; margin-top: 4px; }
+.bar-col { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.bar { width: 100%; border-radius: 3px 3px 0 0; background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.bar.now { background: var(--accent); }
+.month-switch { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.month-switch button { font-size: 24px; padding: 4px 12px; color: var(--accent); }
+.op-orig { font-size: 12px; color: var(--hint); }
+.day-head { font-size: 13px; color: var(--hint); margin: 14px 0 4px; }
+.income { color: #27AE60; }
