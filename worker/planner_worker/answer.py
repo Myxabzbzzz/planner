@@ -9,6 +9,13 @@ from .prompts import QUESTION_SCHEMA, build_question_messages
 from .schemas import Question, UserContext
 
 
+def _drop_unsaid_today(q: Question, text: str) -> Question:
+    """Qwen ставит today на «трачу» без периода; «сегодня» должно прозвучать."""
+    if "сегодня" in text.lower():
+        return q
+    return q.model_copy(update={f: None for f in ("period", "period2") if getattr(q, f) == "today"})
+
+
 class QuestionParser:
     def __init__(self, llm):
         self.llm = llm
@@ -18,7 +25,7 @@ class QuestionParser:
         for _ in range(2):
             raw = self.llm.chat_json(messages, QUESTION_SCHEMA)
             try:
-                return Question.model_validate_json(raw)
+                return _drop_unsaid_today(Question.model_validate_json(raw), text)
             except ValidationError as e:
                 messages = messages + [
                     {"role": "assistant", "content": raw},

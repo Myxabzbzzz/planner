@@ -75,3 +75,14 @@ def test_find_event_requires_query():
     with pytest.raises(ValidationError):
         Question(intent="find_event", query="  ")
     assert Question(intent="find_event", query="Ахмед").query == "Ахмед"
+
+
+def test_today_without_the_word_is_dropped(ctx):
+    llm = ScriptedLLM([q(intent="top_categories", period="today")])
+    assert QuestionParser(llm).parse("На что больше всего трачу", ctx).period is None
+
+
+def test_today_with_the_word_is_kept(ctx):
+    llm = ScriptedLLM([q(intent="agenda", period="today"), q(intent="spent", period2="today", period="yesterday")])
+    assert QuestionParser(llm).parse("Что у меня на СЕГОДНЯ?", ctx).period == "today"
+    assert QuestionParser(llm).parse("сравни вчера и сегодня", ctx).period2 == "today"
