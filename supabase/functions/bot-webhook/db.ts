@@ -9,6 +9,7 @@ export type User = {
   is_admin: boolean;
   onboarded_at: string | null;
   base_currency: string | null;
+  pending_action?: string | null;
 };
 
 export type NewInbox = {
@@ -34,7 +35,7 @@ export interface Db {
   resolveReview(userId: string, inboxId: string, idx: number, kind: string): Promise<boolean>;
 }
 
-const USER_COLS = "id,tg_id,tg_username,is_allowed,is_admin,onboarded_at,base_currency";
+const USER_COLS = "id,tg_id,tg_username,is_allowed,is_admin,onboarded_at,base_currency,pending_action";
 
 // deno-lint-ignore no-explicit-any
 function check<T>(r: { data: T; error: any }): T {

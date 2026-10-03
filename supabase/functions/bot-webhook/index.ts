@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { handleUpdate } from "./handlers.ts";
 import { supabaseDb } from "./db.ts";
+import { supabaseMenuDb } from "./menu_db.ts";
 import { telegramClient } from "../_shared/telegram.ts";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -8,6 +9,8 @@ const deps = {
   db: supabaseDb(sb),
   tg: telegramClient(Deno.env.get("TELEGRAM_BOT_TOKEN")!),
   adminTgId: Number(Deno.env.get("ADMIN_TG_ID")),
+  menu: supabaseMenuDb(sb),
+  supabaseUrl: Deno.env.get("SUPABASE_URL")!,
 };
 const secret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET")!;
 

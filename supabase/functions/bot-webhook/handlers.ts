@@ -1,7 +1,13 @@
 import type { Db, User } from "./db.ts";
 import type { Button, Tg } from "../_shared/telegram.ts";
 
-export type Deps = { db: Db; tg: Tg; adminTgId: number };
+import type { MenuDb } from "./menu_db.ts";
+import { MENU_ROWS, menuKey } from "./keyboard.ts";
+import { handleMenuButton, handleMenuCallback, handlePendingInput } from "./menu.ts";
+
+export type Deps = { db: Db; tg: Tg; adminTgId: number; menu: MenuDb; supabaseUrl: string };
+
+const MENU_HINT = "Меню — внизу 👇";
 
 import { CURRENCIES } from "./currencies.ts";
 
@@ -71,7 +77,7 @@ async function handleMessage(msg: any, d: Deps) {
     if (code && /^[A-Z]{3}$/.test(code)) {
       if (await d.db.knownCurrency(code)) {
         await d.db.onboard(user.id, code);
-        await d.tg.sendMessage(chatId, onboardedText(code));
+        await d.tg.sendMessage(chatId, onboardedText(code), undefined, { replyKeyboard: MENU_ROWS });
       } else {
         await d.tg.sendMessage(
           chatId,
@@ -90,9 +96,16 @@ async function handleMessage(msg: any, d: Deps) {
   }
 
   if (text === "/start") {
-    await d.tg.sendMessage(chatId, onboardedText(user.base_currency!));
+    await d.tg.sendMessage(chatId, onboardedText(user.base_currency!), undefined, { replyKeyboard: MENU_ROWS });
     return;
   }
+  if (text === "/menu") {
+    await d.tg.sendMessage(chatId, MENU_HINT, undefined, { replyKeyboard: MENU_ROWS });
+    return;
+  }
+  const key = menuKey(text);
+  if (key) return await handleMenuButton(user, chatId, key, d);
+  if (text && !text.startsWith("/") && await handlePendingInput(user, chatId, text, d)) return;
 
   let payload: { source: "text" | "voice"; text?: string; audio_ref?: string };
   if (msg.voice) payload = { source: "voice", audio_ref: msg.voice.file_id };
@@ -157,6 +170,7 @@ async function handleCallback(cq: any, d: Deps) {
     if (!CURRENCIES.includes(code)) return;
     await d.db.onboard(user.id, code);
     await d.tg.editMessage(chatId, messageId, onboardedText(code));
+    await d.tg.sendMessage(chatId, MENU_HINT, undefined, { replyKeyboard: MENU_ROWS });
     return;
   }
 
@@ -183,5 +197,6 @@ async function handleCallback(cq: any, d: Deps) {
     return;
   }
 
+  if (await handleMenuCallback(user, cq, action, rest, d)) return;
   await d.tg.answerCallback(cq.id);
 }

@@ -2,6 +2,7 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 import { handleUpdate } from "./handlers.ts";
 import type { Db, NewInbox, User } from "./db.ts";
 import type { Button, Tg } from "../_shared/telegram.ts";
+import { FakeMenuDb } from "./testing.ts";
 
 const ADMIN = 100;
 
@@ -54,7 +55,7 @@ class FakeTg implements Tg {
 function setup() {
   const db = new FakeDb();
   const tg = new FakeTg();
-  return { db, tg, deps: { db, tg, adminTgId: ADMIN } };
+  return { db, tg, deps: { db, tg, adminTgId: ADMIN, menu: new FakeMenuDb(), supabaseUrl: "https://x.supabase.co" } };
 }
 
 const msg = (fromId: number, extra: Record<string, unknown>, username = "friend") => ({
