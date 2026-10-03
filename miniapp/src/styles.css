@@ -73,3 +73,12 @@ h2 { font-size: 20px; margin: 0 0 8px; }
 .op-orig { font-size: 12px; color: var(--hint); }
 .day-head { font-size: 13px; color: var(--hint); margin: 14px 0 4px; }
 .income { color: #27AE60; }
+
+.hgrid { display: flex; gap: 4px; margin: 6px 0 8px; }
+.hcol { display: flex; flex-direction: column; gap: 4px; }
+.hcell { width: 18px; height: 18px; border-radius: 4px; background: color-mix(in srgb, var(--hint) 20%, transparent); }
+.hcell.on { background: var(--accent); }
+.search { width: 100%; padding: 10px 14px; border-radius: 10px; border: 0; background: var(--bg); color: var(--text); font: inherit; margin-bottom: 12px; outline: none; }
+.note-meta { font-size: 12px; color: var(--hint); margin-bottom: 4px; }
+.note-text { white-space: pre-wrap; word-wrap: break-word; }
+.button.wide { width: 100%; }

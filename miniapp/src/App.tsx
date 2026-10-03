@@ -4,7 +4,9 @@ import { IconHabits, IconMoney, IconNotes, IconTasks, IconToday } from "./compon
 import { FullScreenMessage, Loading } from "./components/States";
 import { TabBar } from "./components/TabBar";
 import { useLoad } from "./load";
+import { Habits } from "./screens/Habits";
 import { Money } from "./screens/Money";
+import { Notes } from "./screens/Notes";
 import { Tasks } from "./screens/Tasks";
 import { Today } from "./screens/Today";
 import { screenForState } from "./state";
@@ -38,6 +40,8 @@ export default function App() {
         {tab === "today" && <Today api={api} me={me.data} />}
         {tab === "tasks" && <Tasks api={api} me={me.data} />}
         {tab === "money" && <Money api={api} me={me.data} />}
+        {tab === "habits" && <Habits api={api} />}
+        {tab === "notes" && <Notes api={api} />}
       </main>
       <TabBar tabs={TABS} active={tab} onChange={setTab} />
     </>
