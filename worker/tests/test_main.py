@@ -8,6 +8,7 @@ class Store:
     def __init__(self, hb_error=False, claim_error=False):
         self.hb_error, self.claim_error = hb_error, claim_error
         self.hb_calls = self.claim_calls = 0
+        self.jobs = []
 
     def heartbeat(self, worker_id):
         self.hb_calls += 1
@@ -19,6 +20,9 @@ class Store:
         if self.claim_error:
             raise RuntimeError("db down")
         return None
+
+    def claim_job(self):
+        return self.jobs.pop(0) if self.jobs else None
 
     def failed_unnotified(self):
         return []
@@ -59,3 +63,11 @@ def test_main_silences_httpx_logging(monkeypatch):
         pass
     assert logging.getLogger("httpx").level == logging.WARNING
     assert logging.getLogger("httpcore").level == logging.WARNING
+
+
+def test_idle_tick_runs_pending_job():
+    s = Store()
+    s.jobs = [{"id": "j1"}]
+    ran = []
+    m.tick(s, None, None, CFG, time.monotonic(), job_runner=ran.append)
+    assert ran == [{"id": "j1"}]

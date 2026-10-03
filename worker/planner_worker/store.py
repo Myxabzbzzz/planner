@@ -74,3 +74,13 @@ class Store:
     def clear_records(self, inbox_id: str) -> None:
         for table in ("items", "transactions", "notes", "habit_logs"):
             self.sb.table(table).delete().eq("inbox_id", inbox_id).execute()
+
+    def claim_job(self) -> dict | None:
+        data = self.sb.rpc("claim_job").execute().data
+        return data[0] if data else None
+
+    def capture_token(self, user_id: str) -> str:
+        return self.sb.table("users").select("capture_token").eq("id", user_id).single().execute().data["capture_token"]
+
+    def finish_job(self, job_id: str, status: str, error: str | None) -> None:
+        self.sb.table("jobs").update({"status": status, "error": error}).eq("id", job_id).execute()

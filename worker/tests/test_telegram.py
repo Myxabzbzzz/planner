@@ -76,3 +76,25 @@ def test_non_json_response_does_not_leak_token():
     with pytest.raises(TelegramError) as ei:
         client(lambda req: httpx.Response(502, text="<html>bad gateway</html>")).send(5, "hi")
     assert "TOKEN" not in str(ei.value)
+
+
+def test_send_document_multipart():
+    seen = {}
+
+    def handler(req):
+        seen["url"] = str(req.url)
+        seen["body"] = req.content
+        return httpx.Response(200, json={"ok": True, "result": {}})
+
+    client(handler).send_document(5, "Планер.shortcut", b"DATA", "подпись")
+    assert seen["url"] == "https://api.telegram.org/botTOKEN/sendDocument"
+    assert b"DATA" in seen["body"] and "подпись".encode() in seen["body"]
+
+
+def test_send_document_hides_token_on_network_error():
+    def handler(req):
+        raise httpx.ConnectError("boom https://api.telegram.org/botTOKEN/sendDocument")
+
+    with pytest.raises(TelegramError) as e:
+        client(handler).send_document(5, "f", b"x", "c")
+    assert "TOKEN" not in str(e.value)

@@ -8,8 +8,10 @@ from supabase import create_client
 from .classifier import LayaClassifier
 from .config import load_config
 from .fx import fetch_latest
+from .jobs import run_job
 from .llm import Extractor, OllamaClient
 from .pipeline import Pipeline, notify_failed, run_one
+from .shortcut import ShortcutSigner
 from .store import Store
 from .stt import Transcriber
 from .telegram import TelegramClient
@@ -18,7 +20,7 @@ HEARTBEAT_EVERY = 30.0
 log = logging.getLogger("planner_worker")
 
 
-def tick(store, tg, pipeline, cfg, last_beat: float) -> float:
+def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None) -> float:
     """One loop iteration; never raises on transient errors. Returns new last_beat."""
     if time.monotonic() - last_beat >= HEARTBEAT_EVERY:
         last_beat = time.monotonic()
@@ -33,6 +35,11 @@ def tick(store, tg, pipeline, cfg, last_beat: float) -> float:
     try:
         row = store.claim()
         if row is None:
+            job = store.claim_job() if job_runner else None
+            if job:
+                log.info("job %s (%s, attempt %s)", job.get("id"), job.get("kind"), job.get("attempts"))
+                job_runner(job)
+                return last_beat
             time.sleep(cfg.poll_interval)
             return last_beat
         log.info("processing %s (%s, attempt %s)", row.id, row.source, row.attempts)
@@ -69,9 +76,13 @@ def main() -> None:
     http.post(f"{cfg.ollama_url}/api/generate", json={"model": cfg.ollama_model, "keep_alive": "30m"}, timeout=180).raise_for_status()
     log.info("ready")
 
+    tmp_dir = Path(__file__).resolve().parents[1] / "tmp"
+    signer = ShortcutSigner()
+    job_runner = lambda job: run_job(job, store, tg, signer, cfg.supabase_url, tmp_dir)  # noqa: E731
+
     last_beat = 0.0
     while True:
-        last_beat = tick(store, tg, pipeline, cfg, last_beat)
+        last_beat = tick(store, tg, pipeline, cfg, last_beat, job_runner=job_runner)
 
 
 if __name__ == "__main__":

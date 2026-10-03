@@ -48,3 +48,13 @@ class TelegramClient:
         p = dest_dir / Path(info["file_path"]).name
         p.write_bytes(r.content)
         return p
+
+    def send_document(self, chat_id: int, filename: str, data: bytes, caption: str) -> None:
+        try:
+            body = self.http.post(f"{self.base}/sendDocument", data={"chat_id": str(chat_id), "caption": caption},
+                                  files={"document": (filename, data, "application/octet-stream")},
+                                  timeout=60).json()
+        except (httpx.HTTPError, ValueError) as e:  # URL (with token) must not leak into messages
+            raise TelegramError(f"sendDocument: {type(e).__name__}") from None
+        if not body.get("ok"):
+            raise TelegramError(f"sendDocument: {body.get('description')}")
