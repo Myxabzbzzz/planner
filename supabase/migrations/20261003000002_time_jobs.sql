@@ -69,7 +69,8 @@ language sql security definer set search_path = public as $$
     returning 1),
   j as (
     update public.jobs
-       set status = case when attempts >= 3 then 'failed' else 'pending' end
+       set status = case when attempts >= 3 then 'failed' else 'pending' end,
+           error  = case when attempts >= 3 then 'stuck: too many attempts' else error end
      where status = 'processing' and claimed_at < now() - interval '5 minutes'
     returning 1)
   select ((select count(*) from r) + (select count(*) from j))::int;

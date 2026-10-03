@@ -12,16 +12,12 @@ from .fx import FxApplied, FxError, RateTable, convert
 from .llm import ExtractionError
 from .rows import to_row
 from .schemas import ExtractedItem, InboxRow, UserContext
-from .validate import check_item, localize
+from .validate import NO_TIME, check_item, localize
 
 log = logging.getLogger(__name__)
 
 FAILED_TEXT = "😵 Не получилось разобрать запись. Попробуй отправить ещё раз."
 REPHRASE_TEXT = "😵 Не смог разобрать. Переформулируй, пожалуйста."
-
-
-NO_TIME = "у встречи не названо время"
-
 
 class Pipeline:
     def __init__(self, store, tg, stt, extractor, classifier, fetch_rates: Callable[[], RateTable],

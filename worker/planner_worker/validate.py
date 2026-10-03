@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 from .schemas import ExtractedItem, UserContext
 
+NO_TIME = "у встречи не названо время"
 CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 _ANNOTATION_RE = re.compile(r"\((?:\d{4}-\d{2}-\d{2}|\d{2}:\d{2})\)")
 _CLOCK_RE = re.compile(r"(?<!\d)\d{1,2}:\d{2}(?!\d)")
@@ -89,7 +90,7 @@ def check_item(
     if item.kind == "event" and item.starts_at is None:
         errs.append("у встречи (event) нет starts_at")
     elif strict and item.kind == "event" and not _has_clock(item.source_text):
-        errs.append("у встречи не названо время")
+        errs.append(NO_TIME)
     if item.kind in ("expense", "income"):
         if item.amount is None or item.amount <= 0:
             errs.append("у операции нет суммы больше нуля")

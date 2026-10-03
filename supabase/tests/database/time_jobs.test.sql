@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(17);
 
 insert into public.users (id, tg_id, name, is_allowed) values
   ('00000000-0000-0000-0000-0000000000c1', 21, 'C', true),
@@ -32,6 +32,9 @@ select is((select count(*)::int from public.claim_job()), 0, 'nothing left to cl
 update public.jobs set claimed_at = now() - interval '10 minutes' where id = '50000000-0000-0000-0000-000000000001';
 select public.reclaim_stuck();
 select is((select status from public.jobs where id = '50000000-0000-0000-0000-000000000001'), 'pending', 'stuck job reclaimed');
+update public.jobs set status = 'processing', attempts = 3, claimed_at = now() - interval '10 minutes' where id = '50000000-0000-0000-0000-000000000001';
+select public.reclaim_stuck();
+select is((select status || '/' || error from public.jobs where id = '50000000-0000-0000-0000-000000000001'), 'failed/stuck: too many attempts', 'stuck job at max attempts fails with error');
 
 select is(has_function_privilege('authenticated', 'public.resolve_time(uuid, uuid, int, text)', 'execute')
           or has_function_privilege('anon', 'public.claim_job()', 'execute'), false, 'no client access');

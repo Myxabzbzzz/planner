@@ -8,7 +8,7 @@ from supabase import create_client
 from .classifier import LayaClassifier
 from .config import load_config
 from .fx import fetch_latest
-from .jobs import run_job
+from .jobs import cleanup_tmp, run_job
 from .llm import Extractor, OllamaClient
 from .pipeline import Pipeline, notify_failed, run_one
 from .shortcut import ShortcutSigner
@@ -38,7 +38,8 @@ def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None) -> float:
             job = store.claim_job() if job_runner else None
             if job:
                 log.info("job %s (%s, attempt %s)", job.get("id"), job.get("kind"), job.get("attempts"))
-                job_runner(job)
+                if not job_runner(job):
+                    time.sleep(cfg.poll_interval * 5)
                 return last_beat
             time.sleep(cfg.poll_interval)
             return last_beat
@@ -77,6 +78,7 @@ def main() -> None:
     log.info("ready")
 
     tmp_dir = Path(__file__).resolve().parents[1] / "tmp"
+    log.info("removed %s leftover shortcut files", cleanup_tmp(tmp_dir))
     signer = ShortcutSigner()
     job_runner = lambda job: run_job(job, store, tg, signer, cfg.supabase_url, tmp_dir)  # noqa: E731
 

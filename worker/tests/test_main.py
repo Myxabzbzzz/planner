@@ -65,9 +65,22 @@ def test_main_silences_httpx_logging(monkeypatch):
     assert logging.getLogger("httpcore").level == logging.WARNING
 
 
-def test_idle_tick_runs_pending_job():
+def test_idle_tick_runs_pending_job(monkeypatch):
     s = Store()
     s.jobs = [{"id": "j1"}]
     ran = []
-    m.tick(s, None, None, CFG, time.monotonic(), job_runner=ran.append)
+    sleeps = []
+    monkeypatch.setattr(m.time, "sleep", sleeps.append)
+    m.tick(s, None, None, CFG, time.monotonic(), job_runner=lambda j: ran.append(j) or True)
     assert ran == [{"id": "j1"}]
+    assert sleeps == []
+
+
+def test_failed_job_backs_off(monkeypatch):
+    s = Store()
+    s.jobs = [{"id": "j1"}]
+    sleeps = []
+    monkeypatch.setattr(m.time, "sleep", sleeps.append)
+    cfg = SimpleNamespace(worker_id="w", poll_interval=2)
+    m.tick(s, None, None, cfg, time.monotonic(), job_runner=lambda j: False)
+    assert sleeps == [10]
