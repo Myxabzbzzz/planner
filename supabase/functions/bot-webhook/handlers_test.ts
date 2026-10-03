@@ -203,3 +203,23 @@ Deno.test("review ack has no hourglass", async () => {
   }, deps);
   assert(!tg.edited[0].text.includes("⏳"));
 });
+
+Deno.test("open access: stranger gets in and is asked for currency", async () => {
+  const { db, tg, deps } = setup();
+  await handleUpdate(msg(7, { text: "/start" }, "stranger"), { ...deps, openAccess: true });
+  assertEquals(db.users.length, 1);
+  assertEquals(db.users[0].is_allowed, true);
+  assertEquals(db.users[0].is_admin, false);
+  assert(tg.sent[0].text.includes("базовую валюту"));
+});
+
+Deno.test("open access: a denied user stays denied", async () => {
+  const { db, tg, deps } = setup();
+  db.users.push({
+    id: "u-x", tg_id: 7, tg_username: "stranger", is_allowed: false, is_admin: false,
+    onboarded_at: "2026-10-01T00:00:00Z", base_currency: "UZS",
+  });
+  await handleUpdate(msg(7, { text: "кофе 40 000" }, "stranger"), { ...deps, openAccess: true });
+  assert(tg.sent[0].text.includes("Доступ по приглашению"));
+  assertEquals(db.inbox.length, 0);
+});

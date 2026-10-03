@@ -9,6 +9,7 @@ const deps = {
   db: supabaseDb(sb),
   tg: telegramClient(Deno.env.get("TELEGRAM_BOT_TOKEN")!),
   adminTgId: Number(Deno.env.get("ADMIN_TG_ID")),
+  openAccess: Deno.env.get("OPEN_ACCESS") === "true",
   menu: supabaseMenuDb(sb),
   supabaseUrl: Deno.env.get("SUPABASE_URL")!,
 };

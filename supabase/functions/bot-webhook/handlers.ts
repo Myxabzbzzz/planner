@@ -5,7 +5,15 @@ import type { MenuDb } from "./menu_db.ts";
 import { MENU_ROWS, menuKey } from "./keyboard.ts";
 import { handleMenuButton, handleMenuCallback, handlePendingInput } from "./menu.ts";
 
-export type Deps = { db: Db; tg: Tg; adminTgId: number; menu: MenuDb; supabaseUrl: string };
+export type Deps = {
+  db: Db;
+  tg: Tg;
+  adminTgId: number;
+  menu: MenuDb;
+  supabaseUrl: string;
+  miniappUrl?: string;
+  openAccess?: boolean; // любой, кто нажал /start, получает доступ (кроме закрытых через /deny)
+};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -53,7 +61,7 @@ async function handleMessage(msg: any, d: Deps) {
   let user = await d.db.findUser(msg.from.id);
   if (!user) {
     const isAdmin = msg.from.id === d.adminTgId;
-    const allowed = isAdmin || (username !== null && await d.db.isInvited(username));
+    const allowed = isAdmin || d.openAccess === true || (username !== null && await d.db.isInvited(username));
     if (!allowed) {
       await d.tg.sendMessage(chatId, NO_ACCESS);
       return;
