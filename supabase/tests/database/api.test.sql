@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(32);
 
 insert into public.users (id, tg_id, name, is_allowed, tz) values
   ('00000000-0000-0000-0000-0000000000e1', 31, 'Муха', true, 'Asia/Tashkent'),
@@ -72,6 +72,26 @@ insert into public.notes (user_id, kind, text) values
   ('00000000-0000-0000-0000-0000000000e1', 'thought', 'просто мысль');
 select is(jsonb_array_length(public.api_notes('00000000-0000-0000-0000-0000000000e1', '50%', null)->'notes'), 1, 'literal percent');
 select is(jsonb_array_length(public.api_notes('00000000-0000-0000-0000-0000000000e1', '%', null)->'notes'), 1, 'percent is not wildcard');
+
+insert into public.notes (user_id, kind, text) values
+  ('00000000-0000-0000-0000-0000000000e1', 'thought', 'a_b'),
+  ('00000000-0000-0000-0000-0000000000e1', 'thought', 'ab');
+select is(jsonb_array_length(public.api_notes('00000000-0000-0000-0000-0000000000e1', '_', null)->'notes'), 1, 'underscore is literal');
+
+-- keyset pagination with equal created_at
+insert into public.notes (user_id, kind, text, created_at)
+  select '00000000-0000-0000-0000-0000000000f1', 'thought', 'n' || g, '2026-10-01 10:00:00+00' from generate_series(1, 31) g;
+select is(jsonb_array_length(public.api_notes('00000000-0000-0000-0000-0000000000f1', null, null)->'notes'), 30, 'page 1 has 30');
+select isnt(public.api_notes('00000000-0000-0000-0000-0000000000f1', null, null)->>'next_before', null, 'page 1 has cursor');
+select is(jsonb_array_length(public.api_notes('00000000-0000-0000-0000-0000000000f1', null,
+            public.api_notes('00000000-0000-0000-0000-0000000000f1', null, null)->>'next_before')->'notes'), 1, 'page 2 has 1');
+select is(public.api_notes('00000000-0000-0000-0000-0000000000f1', null,
+            public.api_notes('00000000-0000-0000-0000-0000000000f1', null, null)->>'next_before')->>'next_before', null, 'page 2 no cursor');
+select is((select count(*)::int from jsonb_array_elements(public.api_notes('00000000-0000-0000-0000-0000000000f1', null,
+            public.api_notes('00000000-0000-0000-0000-0000000000f1', null, null)->>'next_before')->'notes') a
+          where a->>'id' in (select b->>'id' from jsonb_array_elements(public.api_notes('00000000-0000-0000-0000-0000000000f1', null, null)->'notes') b)),
+          0, 'page 2 disjoint from page 1');
+select throws_ok($$select public.api_notes('00000000-0000-0000-0000-0000000000e1', null, 'garbage')$$, 'P0001', null, 'bad cursor');
 
 select is(has_function_privilege('authenticated', 'public.api_money(uuid, text)', 'execute'), false, 'no client access');
 

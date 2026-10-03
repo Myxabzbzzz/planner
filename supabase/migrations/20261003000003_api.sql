@@ -141,36 +141,49 @@ begin
      where h.user_id = p_user and h.archived_at is null), '[]'::jsonb));
 end $$;
 
-create function public.api_notes(p_user uuid, p_q text, p_before timestamptz) returns jsonb
+create function public.api_notes(p_user uuid, p_q text, p_before text) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare
   v_tz text;
   v_pat text;
+  v_ts timestamptz;
+  v_id uuid;
   v_rows jsonb;
-  v_last timestamptz;
-  v_count int;
+  v_next text;
 begin
   select tz into v_tz from public.users where id = p_user;
   if not found then return null; end if;
   if p_q is not null and length(p_q) > 0 then
     v_pat := '%' || replace(replace(replace(left(p_q, 100), '\', '\\'), '%', '\%'), '_', '\_') || '%';
   end if;
-  select jsonb_agg(jsonb_build_object('id', n.id, 'kind', n.kind, 'text', n.text,
-                                      'created_at', to_char(n.created_at at time zone v_tz, 'YYYY-MM-DD"T"HH24:MI'))
-                   order by n.created_at desc),
-         min(n.created_at), count(*)
-    into v_rows, v_last, v_count
-    from (select * from public.notes
-           where user_id = p_user
-             and (v_pat is null or text ilike v_pat)
-             and (p_before is null or created_at < p_before)
-           order by created_at desc
-           limit 30) n;
-  return jsonb_build_object('notes', coalesce(v_rows, '[]'::jsonb),
-                            'next_before', case when v_count = 30 then v_last else null end);
+  if p_before is not null and length(p_before) > 0 then
+    begin
+      v_ts := split_part(p_before, '~', 1)::timestamptz;
+      v_id := split_part(p_before, '~', 2)::uuid;
+    exception when others then
+      raise exception 'bad cursor';
+    end;
+  end if;
+  with page as (
+    select n.*, row_number() over (order by n.created_at desc, n.id desc) as rn
+      from (select * from public.notes
+             where user_id = p_user
+               and (v_pat is null or text ilike v_pat)
+               and (v_ts is null or (created_at, id) < (v_ts, v_id))
+             order by created_at desc, id desc
+             limit 31) n
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('id', id, 'kind', kind, 'text', text,
+                                      'created_at', to_char(created_at at time zone v_tz, 'YYYY-MM-DD"T"HH24:MI'))
+                   order by rn) filter (where rn <= 30), '[]'::jsonb),
+         (select created_at::text || '~' || id::text from page where rn = 30
+            and exists (select 1 from page where rn = 31))
+    into v_rows, v_next
+    from page;
+  return jsonb_build_object('notes', v_rows, 'next_before', v_next);
 end $$;
 
 revoke execute on function
   public.api_me(uuid), public.api_tasks(uuid, text), public.api_events(uuid, date, date),
-  public.api_money(uuid, text), public.api_habits(uuid, int), public.api_notes(uuid, text, timestamptz)
+  public.api_money(uuid, text), public.api_habits(uuid, int), public.api_notes(uuid, text, text)
   from public, anon, authenticated;
