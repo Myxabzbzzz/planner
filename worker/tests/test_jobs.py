@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from planner_worker.jobs import CAPTION, FAILED_TEXT, MANUAL_BUTTONS, run_job
+from planner_worker.jobs import CAPTION, FAILED_TEXT, MANUAL_BUTTONS, cleanup_tmp, run_job
 
 TOKEN = "f" * 64
 
