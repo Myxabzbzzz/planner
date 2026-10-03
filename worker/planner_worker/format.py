@@ -95,3 +95,15 @@ def review_message(inbox_id: str, idx: int, item: ExtractedItem, reason: str) ->
                for row in REVIEW_ROWS]
     buttons.append([{"text": "🗑 Пропустить", "callback_data": f"rv:{inbox_id}:{idx}:drop"}])
     return text, buttons
+
+
+TIME_CHOICES = ["0900", "1200", "1500", "1800", "2000"]
+
+
+def time_message(inbox_id: str, idx: int, item: ExtractedItem, ctx: UserContext) -> tuple[str, list[list[dict]]]:
+    day = f" {item.starts_at.astimezone(ZoneInfo(ctx.tz)):%d.%m}" if item.starts_at else ""
+    text = f"🕐 Во сколько «{item.title}»{day}?"
+    times = [{"text": f"{c[:2]}:{c[2:]}", "callback_data": f"rt:{inbox_id}:{idx}:{c}"} for c in TIME_CHOICES]
+    tail = [{"text": "Без времени", "callback_data": f"rt:{inbox_id}:{idx}:none"},
+            {"text": "🗑 Пропустить", "callback_data": f"rt:{inbox_id}:{idx}:drop"}]
+    return text, [times[:3], times[3:], tail]

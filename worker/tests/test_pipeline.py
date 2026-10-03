@@ -413,3 +413,35 @@ def test_notify_failed_shortcut_row_is_prefixed_and_quotes_text(ctx):
     tg = FakeTg()
     notify_failed(store, tg)
     assert tg.sent[0][1] == "📲 😵 Не получилось разобрать запись. Попробуй отправить ещё раз.\n«купить молоко»"
+
+
+NO_TIME = item(kind="event", title="Встреча с Амиром", source_text="завтра (2026-10-02) встреча с Амиром",
+               starts_at=datetime(2026, 10, 2, 16, 24))
+
+
+def test_event_with_date_but_no_time_asks_what_time(ctx):
+    p, store, tg = make(ctx, FakeExtractor([NO_TIME], [NO_TIME]))
+    p.process(row())
+    assert store.inserted == []
+    _, status, result, _, _ = store.finished[-1]
+    assert status == "needs_review" and result["pending_review"][0]["reason"] == "time"
+    assert tg.sent[0][1] == "🕐 Во сколько «Встреча с Амиром» 02.10?"
+    assert tg.sent[0][2][0][2]["callback_data"] == "rt:i1:0:1500"
+
+
+def test_review_pass_applies_forced_time(ctx):
+    entry = {"item": NO_TIME.model_dump(mode="json"), "reason": "time", "laya": None,
+             "forced_kind": "event", "forced_time": "15:00"}
+    p, store, tg = make(ctx, FakeExtractor())
+    p.process(row(result={"pending_review": [entry]}))
+    table, r = store.inserted[0]
+    assert (table, r["kind"], r["starts_at"]) == ("items", "event", "2026-10-02T10:00:00+00:00")
+    assert store.finished[-1][1] == "done"
+
+
+def test_review_pass_time_none_saves_task_on_that_day(ctx):
+    entry = {"item": NO_TIME.model_dump(mode="json"), "reason": "time", "laya": None, "forced_kind": "task"}
+    p, store, tg = make(ctx, FakeExtractor())
+    p.process(row(result={"pending_review": [entry]}))
+    table, r = store.inserted[0]
+    assert (table, r["kind"], r["due_at"]) == ("items", "task", "2026-10-02T18:59:00+00:00")

@@ -124,3 +124,15 @@ def test_task_due_end_of_day_shows_date_only(ctx):
     line = render_line(it(ctx, kind="task", title="Оплатить подписку", source_text="сегодня оплатить",
                           due_at=datetime(2026, 10, 3, 23, 59)), None, ctx)
     assert line == "☑️ Оплатить подписку — до 03.10"
+
+
+def test_time_message(ctx):
+    from planner_worker.format import time_message
+    item = localize(ExtractedItem(kind="event", title="Встреча с Амиром", source_text="завтра (2026-10-02) встреча",
+                                  starts_at=datetime(2026, 10, 2, 10, 0)), ctx, strict=False)
+    text, buttons = time_message("i1", 0, item, ctx)
+    assert text == "🕐 Во сколько «Встреча с Амиром» 02.10?"
+    assert [b["text"] for b in buttons[0]] == ["09:00", "12:00", "15:00"]
+    assert [b["text"] for b in buttons[1]] == ["18:00", "20:00"]
+    assert buttons[0][2]["callback_data"] == "rt:i1:0:1500"
+    assert [b["callback_data"] for b in buttons[2]] == ["rt:i1:0:none", "rt:i1:0:drop"]

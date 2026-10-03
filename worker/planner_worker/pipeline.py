@@ -4,9 +4,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 from .classifier import decide
-from .format import KIND_LABELS, render_line, render_summary, review_message, summary_buttons
+from .format import KIND_LABELS, render_line, render_summary, review_message, summary_buttons, time_message
 from .fx import FxApplied, FxError, RateTable, convert
 from .llm import ExtractionError
 from .rows import to_row
@@ -17,6 +18,9 @@ log = logging.getLogger(__name__)
 
 FAILED_TEXT = "😵 Не получилось разобрать запись. Попробуй отправить ещё раз."
 REPHRASE_TEXT = "😵 Не смог разобрать. Переформулируй, пожалуйста."
+
+
+NO_TIME = "у встречи не названо время"
 
 
 class Pipeline:
@@ -48,7 +52,8 @@ class Pipeline:
         self.store.clear_records(row.id)  # retried main pass must not duplicate records
         for it, errs in checked:
             if errs:
-                review.append(self._review_entry(it, "; ".join(errs), None))
+                reason = "time" if errs == [NO_TIME] else "; ".join(errs)
+                review.append(self._review_entry(it, reason, None))
                 continue
             cls = self.classifier.classify(it.source_text) if self.classifier else None
             if not decide(it, cls, self.threshold):
@@ -67,7 +72,9 @@ class Pipeline:
         self._best_effort(reply, self.tg, row, summary,
                           summary_buttons(row.id) if lines else None)
         for idx, entry in enumerate(review):
-            msg, buttons = review_message(row.id, idx, ExtractedItem.model_validate(entry["item"]), entry["reason"])
+            it = ExtractedItem.model_validate(entry["item"])
+            msg, buttons = (time_message(row.id, idx, it, ctx) if entry["reason"] == "time"
+                            else review_message(row.id, idx, it, entry["reason"]))
             self._best_effort(self.tg.send, row.reply_chat_id, msg, buttons)
 
     @staticmethod
@@ -151,9 +158,23 @@ class Pipeline:
             self._best_effort(self.tg.send, row.reply_chat_id, "\n\n".join(parts),
                               summary_buttons(row.id) if saved else None)
 
+    @staticmethod
+    def _apply_time_choice(entry: dict, forced: str, ctx: UserContext) -> ExtractedItem:
+        tz = ZoneInfo(ctx.tz)
+        it = localize(ExtractedItem.model_validate(entry["item"]), ctx, strict=False)
+        day = it.starts_at.astimezone(tz).date() if it.starts_at else ctx.now.date()
+        if forced == "event" and entry.get("forced_time"):
+            hh, mm = map(int, entry["forced_time"].split(":"))
+            return it.model_copy(update={"kind": "event", "starts_at": datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz)})
+        return it.model_copy(update={"kind": "task", "starts_at": None,
+                                     "due_at": datetime(day.year, day.month, day.day, 23, 59, tzinfo=tz)})
+
     def _review_entry_save(self, entry: dict, forced: str, ctx: UserContext, inbox_id: str,
                            saved: list[str], warnings: list[str]) -> None:
         if forced == "drop":
+            return
+        if entry.get("reason") == "time" and forced in ("event", "task"):
+            saved.append(self._save(self._apply_time_choice(entry, forced, ctx), ctx, inbox_id))
             return
         # пользователь сам выбрал тип — не переделываем встречу в задачу и не требуем времени
         it = localize(ExtractedItem.model_validate(entry["item"]).model_copy(update={"kind": forced}), ctx, strict=False)
