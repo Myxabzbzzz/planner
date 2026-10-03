@@ -1,5 +1,5 @@
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from .schemas import Extraction, UserContext
 
@@ -29,6 +29,7 @@ SYSTEM = """Ты — парсер личного планера. Раздели 
 - Для дней недели и относительных дат бери дату из строки «Календарь» — ближайший будущий такой день (сегодняшний день недели = сегодня).
 - Если после слова стоит дата в скобках (YYYY-MM-DD) — используй именно её.
 - Если после времени стоит время в скобках (ЧЧ:ММ) — используй именно его. Если время не названо — не придумывай его.
+- Несколько сумм подряд («потратил 290 и 60 и ещё 100») — отдельная запись на каждую сумму; суммы никогда не складывай.
 - Суммы: «40 000» → 40000, «22,4» → 22.4, «пятьсот» → 500, «2к» → 2000.
 - Ничего не выдумывай. Если записей нет — items: [].
 """
@@ -76,6 +77,80 @@ def _in_date(m: re.Match, today: date) -> date:
     return _add_months(today, n)
 
 
+_MONTHS_GEN = ["январ", "феврал", "март", "апрел", "ма[яй]", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр"]
+_NUMERIC_DATE_RE = re.compile(
+    r"(?<![\w.,:])(?<!в )(?<!к )(?P<d>\d{1,2})\.(?P<m>\d{2})(?:\.(?P<y>\d{4}|\d{2}))?(?![\d.,])"
+    r"(?!\s*(?:\$|€|₽|[a-zа-яё]*(?:долл|сум|руб|евр|тенге|тыс|usd|eur|rub|uzs|kzt)))"
+    r"(?!\s*\(\d{4}-\d{2}-\d{2}\))",
+    re.IGNORECASE,
+)
+_WORD_DATE_RE = re.compile(
+    r"(?<![\w.,])(?P<d>\d{1,2})\s+(?P<mon>" + "|".join(_MONTHS_GEN) + r")[а-яё]*(?:\s+(?P<y>\d{4}))?(?!\w)"
+    r"(?!\s*\(\d{4}-\d{2}-\d{2}\))",
+    re.IGNORECASE,
+)
+
+
+def _explicit_date(day: int, month: int, year: int | None, today: date) -> date | None:
+    try:
+        if year is not None:
+            return date(year + 2000 if year < 100 else year, month, day)
+        d = date(today.year, month, day)
+    except ValueError:
+        return None
+    # без года — ближайшая такая дата: ±полгода от сегодня
+    if (d - today).days < -183:
+        d = d.replace(year=d.year + 1)
+    elif (d - today).days > 183:
+        d = d.replace(year=d.year - 1)
+    return d
+
+
+def _annotate_explicit(text: str, today: date) -> str:
+    def num(m: re.Match) -> str:
+        y = m.group("y")
+        d = _explicit_date(int(m.group("d")), int(m.group("m")), int(y) if y else None, today)
+        return m.group(0) if d is None else f"{m.group(0)} ({d.isoformat()})"
+
+    def word(m: re.Match) -> str:
+        mon = next(i for i, p in enumerate(_MONTHS_GEN) if re.match(p, m.group("mon"), re.IGNORECASE)) + 1
+        y = m.group("y")
+        d = _explicit_date(int(m.group("d")), mon, int(y) if y else None, today)
+        return m.group(0) if d is None else f"{m.group(0)} ({d.isoformat()})"
+
+    return _WORD_DATE_RE.sub(word, _NUMERIC_DATE_RE.sub(num, text))
+
+
+_IN_TIME_RE = re.compile(
+    r"(?<!\w)через\s+(?:(?P<half>полчаса)|(?:(?P<n>\d{1,3}|полтора|" + "|".join(_NUM_WORDS) + r")\s+)?"
+    r"(?P<u>минут[уы]?|мин|час(?:а|ов)?))(?!\w)(?!\s*\(\d{4}-\d{2}-\d{2}\))",
+    re.IGNORECASE,
+)
+
+
+def annotate_in_time(text: str, now: datetime) -> str:
+    """«через 35 минут» → «через 35 минут (2026-10-03) (19:50)»: точный момент считает код."""
+    def rep(m: re.Match) -> str:
+        if m.group("half"):
+            delta = timedelta(minutes=30)
+        else:
+            raw = (m.group("n") or "1").lower()
+            n = 1.5 if raw == "полтора" else int(raw) if raw.isdigit() else _NUM_WORDS[raw]
+            delta = timedelta(minutes=n) if m.group("u").lower().startswith("мин") else timedelta(hours=n)
+        at = (now + delta).replace(second=0, microsecond=0)
+        return f"{m.group(0)} ({at.date().isoformat()}) ({at:%H:%M})"
+
+    return _IN_TIME_RE.sub(rep, text)
+
+
+_LIST_COMMA_RE = re.compile(r"(?<=\d)\s+,\s*(?=\d)|(?<=\d),\s+(?=\d)")
+
+
+def split_number_lists(text: str) -> str:
+    """«290 ,60» и «200, 300» — перечисление, а не дробь: «290 и 60». «22,4» не трогаем."""
+    return _LIST_COMMA_RE.sub(" и ", text)
+
+
 def annotate_dates(text: str, today: date) -> str:
     def resolve(word: str) -> date:
         w = word.lower()
@@ -91,7 +166,16 @@ def annotate_dates(text: str, today: date) -> str:
         raise ValueError(word)
 
     text = _IN_RE.sub(lambda m: f"{m.group(0)} ({_in_date(m, today).isoformat()})", text)
-    return _DATE_RE.sub(lambda m: f"{m.group(1)} ({resolve(m.group(1)).isoformat()})", text)
+    text = _annotate_explicit(text, today)
+
+    def rep(m: re.Match) -> str:
+        w = m.group(1)
+        is_weekday = w.lower() not in ("сегодня", "завтра", "послезавтра")
+        if is_weekday and re.search(r"\(\d{4}-\d{2}-\d{2}\)", text[m.end():m.end() + 40]):
+            return w  # «в воскресенье следующее 11.10» — явная дата важнее дня недели
+        return f"{w} ({resolve(w).isoformat()})"
+
+    return _DATE_RE.sub(rep, text)
 
 
 _TIME_RE = re.compile(
@@ -163,5 +247,6 @@ def build_extract_messages(
         user += f"Пользователь уточнил: это запись типа {hint_kind}. Верни ровно одну запись этого типа.\n"
     if feedback:
         user += "Прошлый разбор содержал ошибки, исправь их:\n- " + "\n- ".join(feedback) + "\n"
+    text = annotate_in_time(split_number_lists(text), ctx.now)
     user += f"\nСообщение:\n{annotate_times(annotate_dates(text, today))}"
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]

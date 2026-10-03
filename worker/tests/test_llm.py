@@ -178,3 +178,62 @@ def test_system_prompt_title_and_category_hints():
 def test_system_prompt_money_direction_rule():
     from planner_worker.prompts import SYSTEM
     assert "скинул" in SYSTEM and "expense с title «Маме»" in SYSTEM
+
+
+def test_annotate_in_minutes_and_hours():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from planner_worker.prompts import annotate_in_time
+    now = datetime(2026, 10, 3, 19, 15, 40, tzinfo=ZoneInfo("Asia/Tashkent"))
+    assert annotate_in_time("встреча с MacBook через 35 минут", now) == "встреча с MacBook через 35 минут (2026-10-03) (19:50)"
+    assert annotate_in_time("через 2 часа созвон", now) == "через 2 часа (2026-10-03) (21:15) созвон"
+    assert annotate_in_time("через час", now) == "через час (2026-10-03) (20:15)"
+    assert annotate_in_time("через полчаса", now) == "через полчаса (2026-10-03) (19:45)"
+    assert annotate_in_time("через полтора часа", now) == "через полтора часа (2026-10-03) (20:45)"
+    assert annotate_in_time("через пять часов", now) == "через пять часов (2026-10-04) (00:15)"
+    assert annotate_in_time("через 10 мин", now) == "через 10 мин (2026-10-03) (19:25)"
+    assert annotate_in_time("через неделю", now) == "через неделю"
+    once = annotate_in_time("через 35 минут", now)
+    assert annotate_in_time(once, now) == once
+
+
+def test_annotate_explicit_dates():
+    from datetime import date
+    from planner_worker.prompts import annotate_dates
+    d = date(2026, 10, 3)
+    assert annotate_dates("поездка 11.10", d) == "поездка 11.10 (2026-10-11)"
+    assert annotate_dates("сдать до 05.01", d) == "сдать до 05.01 (2027-01-05)"
+    assert annotate_dates("потратил 28.09 на такси", d) == "потратил 28.09 (2026-09-28) на такси"
+    assert annotate_dates("встреча 1.11.2026", d) == "встреча 1.11.2026 (2026-11-01)"
+    assert annotate_dates("день рождения 15 октября", d) == "день рождения 15 октября (2026-10-15)"
+    assert annotate_dates("в 12.30 обед", d) == "в 12.30 обед"
+    assert annotate_dates("потратил 10.50 $", d) == "потратил 10.50 $"
+    assert annotate_dates("потратил 12.10 долларов", d) == "потратил 12.10 долларов"
+    assert annotate_dates("31.02 что-то", d) == "31.02 что-то"
+    once = annotate_dates("поездка 11.10", d)
+    assert annotate_dates(once, d) == once
+
+
+def test_explicit_date_beats_weekday():
+    from datetime import date
+    from planner_worker.prompts import annotate_dates
+    d = date(2026, 10, 3)
+    out = annotate_dates("Надо решить на счет поездки в воскресенье следующее 11.10", d)
+    assert out == "Надо решить на счет поездки в воскресенье следующее 11.10 (2026-10-11)"
+    assert annotate_dates("в воскресенье футбол", d) == "в воскресенье (2026-10-04) футбол"
+
+
+def test_split_number_lists():
+    from planner_worker.prompts import split_number_lists
+    assert split_number_lists("Сегодня 290 ,60 и 70 потратил и еще 100") == "Сегодня 290 и 60 и 70 потратил и еще 100"
+    assert split_number_lists("потратил 200, 300") == "потратил 200 и 300"
+    assert split_number_lists("200 000, 50 000 на такси") == "200 000 и 50 000 на такси"
+    assert split_number_lists("подписка 22,4 доллара") == "подписка 22,4 доллара"
+
+
+def test_messages_apply_new_annotations(ctx):
+    import re
+    user = build_extract_messages("Сегодня 290 ,60 потратил", ctx)[1]["content"]
+    assert "290 и 60" in user
+    user = build_extract_messages("созвон через 30 минут", ctx)[1]["content"]
+    assert re.search(r"через 30 минут \(\d{4}-\d{2}-\d{2}\) \(\d{2}:\d{2}\)", user)
