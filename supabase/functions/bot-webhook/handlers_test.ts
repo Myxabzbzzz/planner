@@ -34,6 +34,7 @@ class FakeDb implements Db {
   async workerOnline() { return this.online; }
   async createInbox(row: NewInbox) { this.inbox.push(row); return `i${this.inbox.length}`; }
   async deleteRecords(_u: string, _i: string) { return 2; }
+  async resolveTime() { return true; }
   async resolveReview(u: string, i: string, idx: number, kind: string) {
     this.reviews.push([u, i, idx, kind]);
     return true;

@@ -7,6 +7,8 @@ import { handleMenuButton, handleMenuCallback, handlePendingInput } from "./menu
 
 export type Deps = { db: Db; tg: Tg; adminTgId: number; menu: MenuDb; supabaseUrl: string };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const MENU_HINT = "Меню — внизу 👇";
 
 import { CURRENCIES } from "./currencies.ts";
@@ -195,6 +197,27 @@ async function handleCallback(cq: any, d: Deps) {
     }
     await d.tg.answerCallback(cq.id);
     await d.tg.editMessage(chatId, messageId, choice === "drop" ? "🗑 Пропущено." : `Принял: ${KIND_LABELS[choice]}`);
+    return;
+  }
+
+  if (action === "rt") {
+    const [inboxId = "", idxStr, choice = ""] = rest;
+    if (!UUID_RE.test(inboxId) || !/^(([01]\d|2[0-3])[0-5]\d|none|drop)$/.test(choice)) {
+      await d.tg.answerCallback(cq.id);
+      return;
+    }
+    const ok = await d.db.resolveTime(user.id, inboxId, Number(idxStr), choice);
+    if (!ok) {
+      await d.tg.answerCallback(cq.id, "Уже обработано или идёт разбор — попробуй через пару секунд");
+      return;
+    }
+    await d.tg.answerCallback(cq.id);
+    const label = choice === "drop"
+      ? "🗑 Пропущено."
+      : choice === "none"
+      ? "Принял: ☑️ без времени"
+      : `Принял: 📅 ${choice.slice(0, 2)}:${choice.slice(2)}`;
+    await d.tg.editMessage(chatId, messageId, label);
     return;
   }
 

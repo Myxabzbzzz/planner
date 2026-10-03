@@ -25,6 +25,8 @@ export type HabitsSummary = {
 export type SettingsSummary = { tz: string; base_currency: string; limit: number | null; capture_token: string };
 
 export interface MenuDb {
+  workerOnline(): Promise<boolean>;
+  requestShortcut(userId: string, chatId: number): Promise<void>;
   today(userId: string): Promise<TodaySummary>;
   tasks(userId: string): Promise<TasksSummary>;
   money(userId: string): Promise<MoneySummary>;
@@ -60,6 +62,10 @@ export function supabaseMenuDb(sb: SupabaseClient): MenuDb {
     },
     setPending: async (u, action) => {
       check(await sb.from("users").update({ pending_action: action }).eq("id", u));
+    },
+    workerOnline: async () => (await rpc<boolean>("worker_online", {})) === true,
+    requestShortcut: async (u, chatId) => {
+      check(await sb.from("jobs").insert({ user_id: u, kind: "shortcut_file", chat_id: chatId }));
     },
     rotateToken: (u) => rpc<string>("rotate_capture_token", { p_user: u }),
   };

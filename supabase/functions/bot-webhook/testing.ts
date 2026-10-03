@@ -4,6 +4,10 @@ export const TASK_ID = "20000000-0000-0000-0000-000000000001";
 export const HABIT_ID = "30000000-0000-0000-0000-000000000001";
 
 export class FakeMenuDb implements MenuDb {
+  online = true;
+  jobs: number[] = [];
+  async workerOnline() { return this.online; }
+  async requestShortcut(_u: string, chatId: number) { this.jobs.push(chatId); }
   todayData: TodaySummary = {
     base_currency: "UZS", events: [], tasks: [], spent_today: 0, month_spent: 0, limit: null, tasks_more: 0,
     habits: [{ id: HABIT_ID, name: "зарядка", done: false }],

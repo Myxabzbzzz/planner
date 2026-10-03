@@ -14,6 +14,8 @@ class MiniDb implements Db {
     onboarded_at: "2026-10-01T00:00:00Z", base_currency: "UZS", pending_action: null,
   };
   inbox: NewInbox[] = [];
+  times: Array<[string, string, number, string]> = [];
+  async resolveTime(u: string, i: string, idx: number, choice: string) { this.times.push([u, i, idx, choice]); return true; }
   async findUser(tgId: number) { return tgId === ME ? this.user : null; }
   async createUser(): Promise<User> { throw new Error("unused"); }
   async isInvited() { return false; }
@@ -229,18 +231,51 @@ Deno.test("tz callback sets known zone, rejects unknown", async () => {
   assertEquals(tg.answered.at(-1), ["cb", "Уже неактуально"]);
 });
 
-Deno.test("set:tap sends html guide with token", async () => {
-  const { tg, deps } = setup();
+Deno.test("set:tap queues shortcut file job", async () => {
+  const { tg, menu, deps } = setup();
   await handleUpdate(cb("set:tap"), deps);
+  assertEquals(menu.jobs, [ME]);
+  assert(tg.sent[0].text.startsWith("⏳ Собираю команду"));
+  assertEquals(tg.sent[0].buttons!.flat().map((b) => b.callback_data), ["tap:new", "tap:manual"]);
+});
+
+Deno.test("set:tap when worker offline warns", async () => {
+  const { tg, menu, deps } = setup();
+  menu.online = false;
+  await handleUpdate(cb("set:tap"), deps);
+  assert(tg.sent[0].text.includes("когда Mac проснётся"));
+});
+
+Deno.test("tap:new rotates token and queues a new file", async () => {
+  const { tg, menu, deps } = setup();
+  await handleUpdate(cb("tap:new"), deps);
+  assertEquals(menu.rotated, 1);
+  assertEquals(menu.jobs, [ME]);
+  assert(tg.edited[0].text.startsWith("⏳ Собираю команду"));
+});
+
+Deno.test("tap:manual sends html guide with token", async () => {
+  const { tg, deps } = setup();
+  await handleUpdate(cb("tap:manual"), deps);
   assertEquals(tg.sent[0].opts?.html, true);
   assert(tg.sent[0].text.includes("https://x.supabase.co/functions/v1/capture"));
   assert(tg.sent[0].text.includes("a".repeat(64)));
 });
 
-Deno.test("tap:new rotates token and edits guide", async () => {
-  const { tg, menu, deps } = setup();
-  await handleUpdate(cb("tap:new"), deps);
-  assertEquals(menu.rotated, 1);
-  assert(tg.edited[0].text.includes("b".repeat(64)));
-  assertEquals(tg.edited[0].opts?.html, true);
+Deno.test("rt callback resolves time and edits message", async () => {
+  const { db, tg, deps } = setup();
+  const id = "40000000-0000-0000-0000-000000000001";
+  await handleUpdate(cb(`rt:${id}:0:1500`), deps);
+  assertEquals(db.times, [["u1", id, 0, "1500"]]);
+  assertEquals(tg.edited[0].text, "Принял: 📅 15:00");
+  await handleUpdate(cb(`rt:${id}:1:none`), deps);
+  assertEquals(tg.edited[1].text, "Принял: ☑️ без времени");
 });
+
+Deno.test("rt callback rejects bad choice and bad id", async () => {
+  const { db, deps } = setup();
+  await handleUpdate(cb("rt:40000000-0000-0000-0000-000000000001:0:2599"), deps);
+  await handleUpdate(cb("rt:not-a-uuid:0:1500"), deps);
+  assertEquals(db.times, []);
+});
+

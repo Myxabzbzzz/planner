@@ -116,3 +116,15 @@ export function renderTapGuide(supabaseUrl: string, token: string): View {
   ].join("\n\n");
   return { text, buttons: [[{ text: "🔄 Перевыпустить токен", callback_data: "tap:new" }]] };
 }
+
+export function shortcutAck(online: boolean): View {
+  return {
+    text: online
+      ? "⏳ Собираю команду «Планер» — пришлю файлом через пару секунд."
+      : "⏳ Пришлю файл команды, когда Mac проснётся.",
+    buttons: [
+      [{ text: "🔄 Перевыпустить токен", callback_data: "tap:new" }],
+      [{ text: "📝 Настроить вручную", callback_data: "tap:manual" }],
+    ],
+  };
+}

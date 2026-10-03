@@ -3,7 +3,7 @@ import type { User } from "./db.ts";
 import type { MenuDb } from "./menu_db.ts";
 import { type MenuKey, TZ_OPTIONS } from "./keyboard.ts";
 import {
-  fmtAmount, renderHabits, renderMoney, renderSettings, renderTapGuide, renderTasks, renderToday, tzChoice, type View,
+  fmtAmount, renderHabits, renderMoney, renderSettings, renderTapGuide, renderTasks, renderToday, shortcutAck, tzChoice, type View,
 } from "./views.ts";
 
 export type MenuDeps = { menu: MenuDb; tg: Tg; supabaseUrl: string };
@@ -104,9 +104,9 @@ export async function handleMenuCallback(user: User, cq: any, action: string, re
         await d.menu.setPending(user.id, "limit");
         await d.tg.sendMessage(chatId, `Пришли сумму в ${user.base_currency} на месяц. 0 — убрать лимит.`);
       } else if (rest[0] === "tap") {
-        const s = await d.menu.settings(user.id);
-        const v = renderTapGuide(d.supabaseUrl, s.capture_token);
-        await d.tg.sendMessage(chatId, v.text, v.buttons, { html: true });
+        await d.menu.requestShortcut(user.id, chatId);
+        const v = shortcutAck(await d.menu.workerOnline());
+        await d.tg.sendMessage(chatId, v.text, v.buttons);
       }
       return true;
     }
@@ -121,13 +121,22 @@ export async function handleMenuCallback(user: User, cq: any, action: string, re
       return true;
     }
     case "tap": {
-      if (rest[0] !== "new") {
-        await stale();
+      if (rest[0] === "new") {
+        await d.menu.rotateToken(user.id);
+        await d.menu.requestShortcut(user.id, chatId);
+        await d.tg.answerCallback(cq.id, "Новый токен готов");
+        const v = shortcutAck(await d.menu.workerOnline());
+        await edit(v);
         return true;
       }
-      const token = await d.menu.rotateToken(user.id);
-      await d.tg.answerCallback(cq.id, "Новый токен готов");
-      await edit(renderTapGuide(d.supabaseUrl, token), true);
+      if (rest[0] === "manual") {
+        await d.tg.answerCallback(cq.id);
+        const s = await d.menu.settings(user.id);
+        const v = renderTapGuide(d.supabaseUrl, s.capture_token);
+        await d.tg.sendMessage(chatId, v.text, v.buttons, { html: true });
+        return true;
+      }
+      await stale();
       return true;
     }
   }

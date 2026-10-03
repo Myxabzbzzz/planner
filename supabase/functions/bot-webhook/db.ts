@@ -22,6 +22,7 @@ export type NewInbox = {
 };
 
 export interface Db {
+  resolveTime(userId: string, inboxId: string, idx: number, choice: string): Promise<boolean>;
   findUser(tgId: number): Promise<User | null>;
   createUser(u: Omit<User, "id" | "onboarded_at" | "base_currency"> & { name?: string }): Promise<User>;
   isInvited(username: string): Promise<boolean>;
@@ -45,6 +46,11 @@ function check<T>(r: { data: T; error: any }): T {
 
 export function supabaseDb(sb: SupabaseClient): Db {
   return {
+    async resolveTime(userId, inboxId, idx, choice) {
+      return check(
+        await sb.rpc("resolve_time", { p_user: userId, p_inbox: inboxId, p_idx: idx, p_choice: choice }),
+      ) === true;
+    },
     async findUser(tgId) {
       return check(await sb.from("users").select(USER_COLS).eq("tg_id", tgId).maybeSingle()) as User | null;
     },
