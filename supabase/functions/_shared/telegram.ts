@@ -1,4 +1,4 @@
-export type Button = { text: string; callback_data?: string; url?: string };
+export type Button = { text: string; callback_data?: string; url?: string; web_app?: { url: string } };
 export type SendOpts = { html?: boolean; replyKeyboard?: string[][] };
 
 export interface Tg {

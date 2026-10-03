@@ -12,6 +12,7 @@ const deps = {
   openAccess: Deno.env.get("OPEN_ACCESS") === "true",
   menu: supabaseMenuDb(sb),
   supabaseUrl: Deno.env.get("SUPABASE_URL")!,
+  miniappUrl: Deno.env.get("MINIAPP_URL") ?? undefined,
 };
 const secret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET")!;
 

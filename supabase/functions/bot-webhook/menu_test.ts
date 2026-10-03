@@ -87,6 +87,13 @@ Deno.test("app button says coming soon", async () => {
   assert(tg.sent[0].text.includes("появится скоро"));
 });
 
+Deno.test("app button opens mini app when url is configured", async () => {
+  const { tg, deps } = setup();
+  await handleUpdate(text("📱 Приложение"), { ...deps, miniappUrl: "https://planner.vercel.app" });
+  assertEquals(tg.sent[0].text, "Открой планер 👇");
+  assertEquals(tg.sent[0].buttons, [[{ text: "Открыть", web_app: { url: "https://planner.vercel.app" } }]]);
+});
+
 Deno.test("/menu sends reply keyboard", async () => {
   const { tg, deps } = setup();
   await handleUpdate(text("/menu"), deps);

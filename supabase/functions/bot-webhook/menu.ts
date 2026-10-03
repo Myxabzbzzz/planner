@@ -6,7 +6,7 @@ import {
   fmtAmount, renderHabits, renderMoney, renderSettings, renderTapGuide, renderTasks, renderToday, shortcutAck, tzChoice, type View,
 } from "./views.ts";
 
-export type MenuDeps = { menu: MenuDb; tg: Tg; supabaseUrl: string };
+export type MenuDeps = { menu: MenuDb; tg: Tg; supabaseUrl: string; miniappUrl?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STALE = "Уже неактуально";
@@ -29,7 +29,11 @@ export function parseAmount(text: string): number | null {
 export async function handleMenuButton(user: User, chatId: number, key: MenuKey, d: MenuDeps): Promise<void> {
   if (user.pending_action) await d.menu.setPending(user.id, null);
   if (key === "app") {
-    await d.tg.sendMessage(chatId, "📱 Приложение появится скоро — пока всё доступно кнопками и голосом.");
+    if (d.miniappUrl) {
+      await d.tg.sendMessage(chatId, "Открой планер 👇", [[{ text: "Открыть", web_app: { url: d.miniappUrl } }]]);
+    } else {
+      await d.tg.sendMessage(chatId, "📱 Приложение появится скоро — пока всё доступно кнопками и голосом.");
+    }
     return;
   }
   const views: Record<Exclude<MenuKey, "app">, () => Promise<View>> = {
