@@ -1,10 +1,13 @@
 import { useState } from "react";
 import type { Api } from "../api";
+import { Check } from "../components/Check";
 import { Segmented } from "../components/Segmented";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { WeekStrip } from "../components/WeekStrip";
 import { fmtDayTitle, fmtShortDate, fmtTime, todayIso, weekDays } from "../format";
 import { useLoad } from "../load";
+import { optimisticToggle } from "../optimistic";
+import { hapticResult } from "../telegram";
 import type { Me } from "../types";
 
 type Filter = "today" | "upcoming" | "nodue" | "done";
@@ -24,6 +27,9 @@ export function Tasks({ api, me }: { api: Api; me: Me }) {
   const [filter, setFilter] = useState<Filter>("today");
   const events = useLoad(() => api.events(days[0], days[6]), [api, days[0]]);
   const tasks = useLoad(() => api.tasks(filter), [api, filter]);
+  const [over, setOver] = useState<Record<string, boolean>>({});
+  const toggle = (key: string, cur: boolean, send: (v: boolean) => Promise<unknown>) =>
+    optimisticToggle(cur, (v) => setOver((m) => ({ ...m, [key]: v })), send, hapticResult);
   const marked = new Set((events.data?.days ?? []).map((d) => d.date));
   const dayEvents = events.data?.days.find((d) => d.date === day)?.events ?? [];
 
@@ -35,13 +41,18 @@ export function Tasks({ api, me }: { api: Api; me: Me }) {
         {events.error ? <button className="button" onClick={events.reload}>Повторить</button>
           : events.loading && !events.data ? <div className="muted">Загрузка…</div>
           : dayEvents.length === 0 ? <div className="muted">Встреч нет</div>
-          : dayEvents.map((e) => (
-            <div className="row" key={e.id}>
-              <span className="time">{e.time}</span>
-              <span className="grow ellipsis">{e.title}</span>
-              {e.with_whom && <span className="right">{e.with_whom}</span>}
-            </div>
-          ))}
+          : dayEvents.map((e) => {
+            const k = `e:${e.id}`;
+            const d = over[k] ?? e.done;
+            return (
+              <div className="row" key={e.id}>
+                <Check done={d} label="Встреча прошла" onToggle={() => void toggle(k, d, (v) => api.setEventDone(e.id, v))} />
+                <span className="time">{e.time}</span>
+                <span className={d ? "grow ellipsis done-text" : "grow ellipsis"}>{e.title}</span>
+                {e.with_whom && <span className="right">{e.with_whom}</span>}
+              </div>
+            );
+          })}
       </Card>
       <Segmented items={FILTERS} value={filter} onChange={setFilter} />
       {tasks.loading && !tasks.data ? <Loading />
@@ -49,16 +60,21 @@ export function Tasks({ api, me }: { api: Api; me: Me }) {
         : tasks.data.tasks.length === 0 ? <Empty title={EMPTY[filter]} />
         : (
           <Card>
-            {tasks.data.tasks.map((t) => (
+            {tasks.data.tasks.map((t) => {
+              const k = `t:${t.id}`;
+              const d = over[k] ?? t.done_at !== null;
+              return (
               <div className="row" key={t.id}>
-                <span className={filter === "done" ? "grow ellipsis muted" : "grow ellipsis"}>{t.title}</span>
+                <Check done={d} label="Задача выполнена" onToggle={() => void toggle(k, d, (v) => api.setTaskDone(t.id, v))} />
+                <span className={d ? "grow ellipsis done-text" : "grow ellipsis"}>{t.title}</span>
                 {t.due && filter !== "done" && (
                   <span className={t.overdue ? "right danger" : "right"}>
                     {fmtShortDate(t.due)}{fmtTime(t.due) !== "23:59" ? ` ${fmtTime(t.due)}` : ""}
                   </span>
                 )}
               </div>
-            ))}
+              );
+            })}
           </Card>
         )}
     </>

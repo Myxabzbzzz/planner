@@ -1,11 +1,18 @@
+import { useState } from "react";
 import type { Api } from "../api";
+import { Check } from "../components/Check";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { fmtAmount, fmtDayTitle, todayIso } from "../format";
 import { useLoad } from "../load";
+import { optimisticToggle } from "../optimistic";
+import { hapticResult } from "../telegram";
 import type { Me } from "../types";
 
 export function Today({ api, me }: { api: Api; me: Me }) {
   const { data, error, loading, reload } = useLoad(() => api.today(), [api]);
+  const [over, setOver] = useState<Record<string, boolean>>({});
+  const toggle = (key: string, cur: boolean, send: (v: boolean) => Promise<unknown>) =>
+    optimisticToggle(cur, (v) => setOver((m) => ({ ...m, [key]: v })), send, hapticResult);
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorCard onRetry={reload} />;
   const cur = data.base_currency;
@@ -34,29 +41,47 @@ export function Today({ api, me }: { api: Api; me: Me }) {
       {data.events.length > 0 && (
         <Card className="timeline">
           <h3>Встречи</h3>
-          {data.events.map((e, i) => (
-            <div className="row" key={i}><span className="time">{e.time}</span><span className="grow ellipsis">{e.title}</span></div>
-          ))}
+          {data.events.map((e) => {
+            const k = `e:${e.id}`;
+            const d = over[k] ?? e.done;
+            return (
+              <div className="row" key={e.id}>
+                <Check done={d} label="Встреча прошла" onToggle={() => void toggle(k, d, (v) => api.setEventDone(e.id, v))} />
+                <span className="time">{e.time}</span>
+                <span className={d ? "grow ellipsis done-text" : "grow ellipsis"}>{e.title}</span>
+              </div>
+            );
+          })}
         </Card>
       )}
       {data.tasks.length > 0 && (
         <Card>
           <h3>Задачи</h3>
-          {data.tasks.map((t) => (
-            <div className="row" key={t.id}>
-              <span className="grow ellipsis">{t.title}</span>
-              {t.overdue && <span className="right danger">просрочено</span>}
-            </div>
-          ))}
+          {data.tasks.map((t) => {
+            const k = `t:${t.id}`;
+            const d = over[k] ?? false;
+            return (
+              <div className="row" key={t.id}>
+                <Check done={d} label="Задача выполнена" onToggle={() => void toggle(k, d, (v) => api.setTaskDone(t.id, v))} />
+                <span className={d ? "grow ellipsis done-text" : "grow ellipsis"}>{t.title}</span>
+                {t.overdue && !d && <span className="right danger">просрочено</span>}
+              </div>
+            );
+          })}
           {data.tasks_more > 0 && <div className="row muted">…и ещё {data.tasks_more}</div>}
         </Card>
       )}
       {data.habits.length > 0 && (
         <Card>
           <h3>Привычки</h3>
-          {data.habits.map((h) => (
-            <span key={h.id} className={h.done ? "pill done" : "pill"}>{h.done ? "✓" : "○"} {h.name}</span>
-          ))}
+          {data.habits.map((h) => {
+            const k = `h:${h.id}`;
+            const d = over[k] ?? h.done;
+            return (
+              <button type="button" key={h.id} className={d ? "pill done" : "pill"} aria-pressed={d}
+                onClick={() => void toggle(k, d, (v) => api.setHabitToday(h.id, v))}>{d ? "✓" : "○"} {h.name}</button>
+            );
+          })}
         </Card>
       )}
     </>

@@ -20,4 +20,19 @@ describe("api client", () => {
     await expect(makeApi("https://x", "I", fetchFn).today()).rejects.toMatchObject({ status: 403 });
     await expect(makeApi("https://x", "I", fetchFn).today()).rejects.toBeInstanceOf(ApiError);
   });
+  it("posts marks with method, body and init data", async () => {
+    const seen: { url: string; init: RequestInit }[] = [];
+    const fetchFn = (async (url: URL, init: RequestInit) => {
+      seen.push({ url: String(url), init });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const api = makeApi("https://x/api", "INIT", fetchFn);
+    await api.setTaskDone("t1", true);
+    await api.setHabitToday("h1", false);
+    expect(seen[0].url).toBe("https://x/api/tasks/t1/done");
+    expect(seen[0].init.method).toBe("POST");
+    expect(seen[0].init.body).toBe(JSON.stringify({ done: true }));
+    expect((seen[0].init.headers as Record<string, string>)["X-Init-Data"]).toBe("INIT");
+    expect(seen[1].url).toBe("https://x/api/habits/h1/today");
+  });
 });

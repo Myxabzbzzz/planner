@@ -8,7 +8,7 @@ type WebApp = {
   setHeaderColor?(c: string): void;
   setBackgroundColor?(c: string): void;
   disableVerticalSwipes?(): void;
-  HapticFeedback?: { selectionChanged(): void };
+  HapticFeedback?: { selectionChanged(): void; notificationOccurred?(t: "success" | "error" | "warning"): void };
   BackButton?: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
 };
 
@@ -23,6 +23,8 @@ export function initTelegram() {
 }
 
 export const haptic = () => tg?.HapticFeedback?.selectionChanged();
+
+export const hapticResult = (ok: boolean) => tg?.HapticFeedback?.notificationOccurred?.(ok ? "success" : "error");
 
 export function useBackButton(onBack: (() => void) | null) {
   useEffect(() => {

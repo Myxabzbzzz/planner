@@ -1,7 +1,7 @@
 export type Me = { name: string; tz: string; base_currency: string };
 export type Today = {
   base_currency: string;
-  events: { title: string; time: string }[];
+  events: { id: string; title: string; time: string; done: boolean }[];
   tasks: { id: string; title: string; overdue: boolean }[];
   tasks_more: number;
   spent_today: number;
@@ -11,7 +11,7 @@ export type Today = {
 };
 export type TaskItem = { id: string; title: string; due: string | null; overdue: boolean; done_at: string | null };
 export type TasksResp = { tasks: TaskItem[] };
-export type EventItem = { id: string; title: string; time: string; with_whom: string | null };
+export type EventItem = { id: string; title: string; time: string; with_whom: string | null; done: boolean };
 export type EventsResp = { days: { date: string; events: EventItem[] }[] };
 export type Operation = {
   id: string; date: string; type: "expense" | "income"; title: string; amount: number; category: string;
