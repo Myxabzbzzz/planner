@@ -44,8 +44,7 @@ class Pipeline:
                 reply(self.tg, row, "🙉 Не расслышал. Повтори, пожалуйста.")
                 return
 
-        if self.answerer and is_question(text):
-            self._answer(row, text, ctx)
+        if self.answerer and is_question(text) and self._answer(row, text, ctx):
             return
 
         lines: list[str] = []
@@ -88,12 +87,16 @@ class Pipeline:
 
     # ---------- steps ----------
 
-    def _answer(self, row: InboxRow, text: str, ctx: UserContext) -> None:
-        answer, question = self.answerer.answer(text, ctx)
+    def _answer(self, row: InboxRow, text: str, ctx: UserContext) -> bool:
+        answered = self.answerer.answer(text, ctx)
+        if answered is None:
+            return False
+        answer, question = answered
         self.store.finish(row.id, "done", {"text": text, "question": question, "answered": True})
         if row.source == "shortcut":
             answer = "📲 " + answer
         self._best_effort(reply, self.tg, row, answer)
+        return True
 
     def _transcribe(self, row: InboxRow) -> str:
         path = self.tg.download(row.audio_ref, self.tmp_dir)

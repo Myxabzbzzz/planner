@@ -507,3 +507,17 @@ def test_question_answer_telegram_failure_does_not_retry(ctx):
     tg.edit = boom
     p.process(row(text="сколько потратил"))
     assert store.finished[0][1] == "done"
+
+
+def test_unknown_question_falls_back_to_record(ctx):
+    task = item(kind="task", title="Показать Ахмеду отчёт", source_text="Покажи Ахмеду отчёт завтра")
+    store = FakeStore(ctx)
+    tg = FakeTg()
+    ans = FakeAnswerer()
+    ans.answer = lambda text, ctx: None
+    p = Pipeline(store, tg, FakeStt(""), FakeExtractor([task]), None, lambda: RATES, 0.7,
+                 Path("/tmp/planner-test"), answerer=ans)
+    p.process(row(text="Покажи Ахмеду отчёт завтра"))
+    assert store.inserted[0][0] == "items"
+    assert store.finished[-1][1] == "done"
+    assert "question" not in store.finished[-1][2]

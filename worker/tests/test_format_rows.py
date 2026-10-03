@@ -136,3 +136,8 @@ def test_time_message(ctx):
     assert [b["text"] for b in buttons[1]] == ["18:00", "20:00"]
     assert buttons[0][2]["callback_data"] == "rt:i1:0:1500"
     assert [b["callback_data"] for b in buttons[2]] == ["rt:i1:0:none", "rt:i1:0:drop"]
+
+
+def test_empty_summary_mentions_questions():
+    assert render_summary([], 0) == ("🤷 Не нашёл, что записать. Я записываю дела, встречи, траты и мысли "
+                                     "и отвечаю про траты, доходы, лимит, задачи и встречи.")

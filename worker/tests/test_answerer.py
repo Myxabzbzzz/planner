@@ -113,9 +113,10 @@ def test_find_event_strips_query(ctx):
     assert "«Ахмед»" in text
 
 
-def test_unknown(ctx):
-    text, dump, calls = run(ctx, intent="unknown")
-    assert (text, calls, dump["intent"]) == (UNKNOWN_TEXT, [], "unknown")
+def test_unknown_returns_none_so_the_text_is_parsed_as_a_record(ctx):
+    store = FakeStore()
+    assert Answerer(FakeParser(Question(intent="unknown")), store).answer("Покажи Ахмеду отчёт завтра", ctx) is None
+    assert store.calls == []
 
 
 def test_agenda_future_month_is_not_moved_to_last_year(ctx):

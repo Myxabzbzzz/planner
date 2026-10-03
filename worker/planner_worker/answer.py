@@ -59,8 +59,11 @@ class Answerer:
     def __init__(self, parser: QuestionParser, store):
         self.parser, self.store = parser, store
 
-    def answer(self, text: str, ctx: UserContext) -> tuple[str, dict]:
+    def answer(self, text: str, ctx: UserContext) -> tuple[str, dict] | None:
+        """None — не вопрос к данным: текст разбирается как обычная запись."""
         q = self.parser.parse(text, ctx)
+        if q.intent == "unknown":
+            return None
         return self._answer(q, ctx), q.model_dump()
 
     def _sum(self, ctx: UserContext, kind: str, p: Period, category_id: str | None) -> dict:

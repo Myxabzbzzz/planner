@@ -74,7 +74,8 @@ def render_line(item: ExtractedItem, fx: FxApplied | None, ctx: UserContext) -> 
 
 def render_summary(lines: list[str], review_count: int) -> str:
     if not lines and not review_count:
-        return "🤷 Не нашёл, что записать. Я записываю дела, встречи, траты и мысли — на вопросы не отвечаю."
+        return ("🤷 Не нашёл, что записать. Я записываю дела, встречи, траты и мысли "
+                "и отвечаю про траты, доходы, лимит, задачи и встречи.")
     if not lines:
         return f"❓ Уточни {review_count} — ниже."
     text = "✅ Записал:\n" + "\n".join(lines)
