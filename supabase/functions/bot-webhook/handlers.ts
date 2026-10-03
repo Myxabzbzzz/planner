@@ -95,6 +95,7 @@ async function handleMessage(msg: any, d: Deps) {
     return;
   }
 
+  if ((text === "/start" || text === "/menu") && user.pending_action) await d.menu.setPending(user.id, null);
   if (text === "/start") {
     await d.tg.sendMessage(chatId, onboardedText(user.base_currency!), undefined, { replyKeyboard: MENU_ROWS });
     return;

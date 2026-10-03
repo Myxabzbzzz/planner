@@ -5,10 +5,10 @@ export const HABIT_ID = "30000000-0000-0000-0000-000000000001";
 
 export class FakeMenuDb implements MenuDb {
   todayData: TodaySummary = {
-    base_currency: "UZS", events: [], tasks: [], spent_today: 0, month_spent: 0, limit: null,
+    base_currency: "UZS", events: [], tasks: [], spent_today: 0, month_spent: 0, limit: null, tasks_more: 0,
     habits: [{ id: HABIT_ID, name: "зарядка", done: false }],
   };
-  tasksData: TasksSummary = { tasks: [{ id: TASK_ID, title: "Оплатить интернет", due: null, overdue: false }] };
+  tasksData: TasksSummary = { tasks: [{ id: TASK_ID, title: "Оплатить интернет", due: null, overdue: false }], total: 1 };
   moneyData: MoneySummary = { base_currency: "UZS", month: "10.2026", expense: 0, income: 0, by_category: [], limit: null };
   habitsData: HabitsSummary = {
     habits: [{ id: HABIT_ID, name: "зарядка", week: [false, false, false, false, false, false, false], streak: 0, done_today: false }],

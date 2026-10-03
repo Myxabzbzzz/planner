@@ -25,7 +25,9 @@ export function renderToday(s: TodaySummary): View {
   if (!s.events.length && !s.tasks.length) blocks.push("Сегодня ничего не запланировано.");
   if (s.events.length) blocks.push(["Встречи:", ...s.events.map((e) => `• ${e.time} ${e.title}`)].join("\n"));
   if (s.tasks.length) {
-    blocks.push(["Задачи:", ...s.tasks.map((t) => (t.overdue ? `• ⚠️ ${t.title} (просрочено)` : `• ${t.title}`))].join("\n"));
+    const lines = s.tasks.map((t) => (t.overdue ? `• ⚠️ ${t.title} (просрочено)` : `• ${t.title}`));
+    if (s.tasks_more > 0) lines.push(`• …и ещё ${s.tasks_more}`);
+    blocks.push(["Задачи:", ...lines].join("\n"));
   }
   let money = `💸 Потрачено сегодня: ${fmtAmount(s.spent_today, s.base_currency)}`;
   if (s.limit !== null) {
@@ -48,7 +50,8 @@ export function renderTasks(s: TasksSummary): View {
     `${i + 1}. ${t.overdue ? "⚠️ " : ""}${t.title}${t.due ? ` — до ${t.due}` : ""}`
   );
   const buttons = s.tasks.map((t, i) => ({ text: `✅ ${i + 1}`, callback_data: `done:${t.id}` }));
-  return { text: `☑️ Задачи (${s.tasks.length})\n\n${lines.join("\n")}`, buttons: chunk(buttons, 5) };
+  if (s.total > s.tasks.length) lines.push(`…и ещё ${s.total - s.tasks.length}`);
+  return { text: `☑️ Задачи (${s.total})\n\n${lines.join("\n")}`, buttons: chunk(buttons, 5) };
 }
 
 export function renderMoney(s: MoneySummary): View {

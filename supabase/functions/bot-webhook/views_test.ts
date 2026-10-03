@@ -32,7 +32,7 @@ Deno.test("renderToday full", () => {
     tasks: [{ id: T1, title: "Оплатить интернет", overdue: false }, { id: T2, title: "Сдать отчёт", overdue: true }],
     spent_today: 30000,
     month_spent: 30000,
-    limit: 5000000,
+    limit: 5000000, tasks_more: 0,
     habits: [{ id: H1, name: "зарядка", done: false }, { id: "x", name: "чтение", done: true }],
   });
   assertEquals(v.text, [
@@ -47,7 +47,7 @@ Deno.test("renderToday full", () => {
 
 Deno.test("renderToday empty and over limit", () => {
   const v = renderToday({
-    base_currency: "UZS", events: [], tasks: [], spent_today: 0, month_spent: 6000000, limit: 5000000, habits: [],
+    base_currency: "UZS", events: [], tasks: [], spent_today: 0, month_spent: 6000000, limit: 5000000, habits: [], tasks_more: 0,
   });
   assertEquals(v.text, [
     "📅 Сегодня",
@@ -61,17 +61,17 @@ Deno.test("renderTasks numbered with buttons", () => {
   const v = renderTasks({ tasks: [
     { id: T1, title: "Сдать отчёт", due: "02.10", overdue: true },
     { id: T2, title: "Купить молоко", due: null, overdue: false },
-  ] });
+  ], total: 2 });
   assertEquals(v.text, "☑️ Задачи (2)\n\n1. ⚠️ Сдать отчёт — до 02.10\n2. Купить молоко");
   assertEquals(v.buttons, [[{ text: "✅ 1", callback_data: `done:${T1}` }, { text: "✅ 2", callback_data: `done:${T2}` }]]);
-  assertEquals(renderTasks({ tasks: [] }).text, "☑️ Задачи\n\nОткрытых задач нет 🎉");
+  assertEquals(renderTasks({ tasks: [], total: 0 }).text, "☑️ Задачи\n\nОткрытых задач нет 🎉");
 });
 
 Deno.test("renderTasks buttons wrap by 5", () => {
   const tasks = Array.from({ length: 6 }, (_, i) => ({
     id: `20000000-0000-0000-0000-00000000000${i}`, title: `t${i}`, due: null, overdue: false,
   }));
-  const v = renderTasks({ tasks });
+  const v = renderTasks({ tasks, total: 6 });
   assertEquals(v.buttons!.map((r) => r.length), [5, 1]);
   assert(v.buttons!.flat().every((b) => new TextEncoder().encode(b.callback_data!).length <= 64));
 });
@@ -120,4 +120,18 @@ Deno.test("renderTapGuide contains url, token and rotate button", () => {
   assert(v.text.includes("<code>https://x.supabase.co/functions/v1/capture</code>"));
   assert(v.text.includes(`<code>Bearer ${tok}</code>`));
   assertEquals(v.buttons, [[{ text: "🔄 Перевыпустить токен", callback_data: "tap:new" }]]);
+});
+
+Deno.test("renderToday shows overflow of tasks", () => {
+  const v = renderToday({
+    base_currency: "UZS", events: [], tasks: [{ id: T1, title: "a", overdue: false }], tasks_more: 5,
+    spent_today: 0, month_spent: 0, limit: null, habits: [],
+  });
+  assert(v.text.includes("Задачи:\n• a\n• …и ещё 5"));
+});
+
+Deno.test("renderTasks header uses total and shows overflow", () => {
+  const tasks = [{ id: T1, title: "a", due: null, overdue: false }];
+  const v = renderTasks({ tasks, total: 35 });
+  assertEquals(v.text, "☑️ Задачи (35)\n\n1. a\n…и ещё 34");
 });

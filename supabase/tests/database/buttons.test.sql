@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(27);
 
 insert into public.users (id, tg_id, name, is_allowed, tz) values
   ('00000000-0000-0000-0000-0000000000a1', 11, 'A', true, 'Asia/Tashkent'),
@@ -32,6 +32,8 @@ select is(jsonb_array_length(public.summary_today('00000000-0000-0000-0000-00000
 select is((public.summary_today('00000000-0000-0000-0000-0000000000a1')->'tasks'->0->>'overdue')::boolean, true, 'overdue flag');
 select is((public.summary_today('00000000-0000-0000-0000-0000000000a1')->>'spent_today')::numeric, 30000::numeric, 'spent today');
 
+select is((public.summary_today('00000000-0000-0000-0000-0000000000a1')->>'tasks_more')::int, 0, 'tasks_more is 0 under the cap');
+
 -- «Деньги»
 select is((public.summary_money('00000000-0000-0000-0000-0000000000a1')->>'expense')::numeric, 30000::numeric, 'month expense excludes old');
 select is((public.summary_money('00000000-0000-0000-0000-0000000000a1')->>'income')::numeric, 100000::numeric, 'month income');
@@ -39,6 +41,8 @@ select is((public.summary_money('00000000-0000-0000-0000-0000000000a1')->>'incom
 -- «Задачи»
 select is(jsonb_array_length(public.summary_tasks('00000000-0000-0000-0000-0000000000a1')->'tasks'), 2, 'own open tasks');
 select is(public.summary_tasks('00000000-0000-0000-0000-0000000000a1')->'tasks'->0->>'title', 'Просрочено', 'dated first');
+
+select is((public.summary_tasks('00000000-0000-0000-0000-0000000000a1')->>'total')::int, 2, 'total counts all open tasks');
 
 -- отметка задач
 select is(public.complete_task('00000000-0000-0000-0000-0000000000a1', '20000000-0000-0000-0000-000000000003'), true, 'complete own task');

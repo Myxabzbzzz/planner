@@ -397,3 +397,19 @@ def test_shortcut_summary_has_phone_prefix_and_is_sent_as_new_message(ctx):
     p.process(row(source="shortcut", reply_message_id=None))
     assert tg.edited == []
     assert tg.sent[0][1].startswith("📲 ✅ Записал:")
+
+
+def test_run_one_extraction_error_on_shortcut_row_is_prefixed_and_quotes_text(ctx):
+    p, store, tg = make(ctx, FakeExtractor(ExtractionError("bad json")))
+    run_one(row(source="shortcut", text="x" * 150, reply_message_id=None), p, store, tg)
+    msg = tg.sent[0][1]
+    assert msg.startswith("📲 😵 Не смог разобрать.")
+    assert msg.endswith("\n«" + "x" * 100 + "…»")
+
+
+def test_notify_failed_shortcut_row_is_prefixed_and_quotes_text(ctx):
+    store = FakeStore(ctx)
+    store.failed = [row(id="i9", source="shortcut", text="купить молоко", reply_message_id=None)]
+    tg = FakeTg()
+    notify_failed(store, tg)
+    assert tg.sent[0][1] == "📲 😵 Не получилось разобрать запись. Попробуй отправить ещё раз.\n«купить молоко»"

@@ -176,6 +176,15 @@ def reply(tg, row: InboxRow, text: str, buttons=None) -> None:
         tg.send(row.reply_chat_id, text, buttons)
 
 
+def error_reply(tg, row: InboxRow, text: str) -> None:
+    if row.source == "shortcut":
+        text = "📲 " + text
+        if row.text:
+            quote = row.text[:100] + ("…" if len(row.text) > 100 else "")
+            text += f"\n«{quote}»"
+    reply(tg, row, text)
+
+
 def run_one(row: InboxRow, pipeline: Pipeline, store, tg) -> None:
     original = copy.deepcopy(row.result)
     try:
@@ -183,20 +192,20 @@ def run_one(row: InboxRow, pipeline: Pipeline, store, tg) -> None:
     except ExtractionError as e:
         log.warning("extraction failed for %s: %s", row.id, e)
         store.finish(row.id, "failed", original, f"extraction: {e}", notified=True)
-        reply(tg, row, REPHRASE_TEXT)
+        error_reply(tg, row, REPHRASE_TEXT)
     except Exception as e:  # noqa: BLE001 — любая другая ошибка: ретрай до 3 попыток
         log.exception("processing failed for %s (attempt %s)", row.id, row.attempts)
         if row.attempts < 3:
             store.finish(row.id, "pending", original, str(e))
         else:
             store.finish(row.id, "failed", original, str(e), notified=True)
-            reply(tg, row, FAILED_TEXT)
+            error_reply(tg, row, FAILED_TEXT)
 
 
 def notify_failed(store, tg) -> None:
     for row in store.failed_unnotified():
         try:
-            reply(tg, row, FAILED_TEXT)
+            error_reply(tg, row, FAILED_TEXT)
             store.mark_notified(row.id)
         except Exception as e:
             log.warning("notify_failed: row %s skipped: %s", row.id, e)

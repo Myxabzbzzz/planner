@@ -7,9 +7,10 @@ export type TodaySummary = {
   spent_today: number;
   month_spent: number;
   limit: number | null;
+  tasks_more: number;
   habits: { id: string; name: string; done: boolean }[];
 };
-export type TasksSummary = { tasks: { id: string; title: string; due: string | null; overdue: boolean }[] };
+export type TasksSummary = { tasks: { id: string; title: string; due: string | null; overdue: boolean }[]; total: number };
 export type MoneySummary = {
   base_currency: string;
   month: string;

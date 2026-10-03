@@ -34,12 +34,18 @@ begin
         from public.items
        where user_id = p_user and kind = 'event' and (starts_at at time zone v_tz)::date = v_today), '[]'::jsonb),
     'tasks', coalesce((
-      select jsonb_agg(jsonb_build_object('id', id, 'title', title,
-                                          'overdue', (due_at at time zone v_tz)::date < v_today)
-                       order by due_at)
-        from public.items
+      select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title,
+                                          'overdue', (t.due_at at time zone v_tz)::date < v_today)
+                       order by t.due_at)
+        from (select id, title, due_at from public.items
+               where user_id = p_user and kind = 'task' and done_at is null and due_at is not null
+                 and (due_at at time zone v_tz)::date <= v_today
+               order by due_at
+               limit 20) t), '[]'::jsonb),
+    'tasks_more', greatest((
+      select count(*) from public.items
        where user_id = p_user and kind = 'task' and done_at is null and due_at is not null
-         and (due_at at time zone v_tz)::date <= v_today), '[]'::jsonb),
+         and (due_at at time zone v_tz)::date <= v_today) - 20, 0),
     'spent_today', coalesce((
       select sum(amount_base) from public.transactions
        where user_id = p_user and type = 'expense' and occurred_at = v_today), 0),
@@ -68,7 +74,9 @@ begin
   select tz into v_tz from public.users where id = p_user;
   if not found then return null; end if;
   v_today := (now() at time zone v_tz)::date;
-  return jsonb_build_object('tasks', coalesce((
+  return jsonb_build_object('total', (select count(*) from public.items
+                                       where user_id = p_user and kind = 'task' and done_at is null),
+                            'tasks', coalesce((
     select jsonb_agg(jsonb_build_object(
              'id', t.id, 'title', t.title,
              'due', case when t.due_at is null then null else to_char(t.due_at at time zone v_tz, 'DD.MM') end,

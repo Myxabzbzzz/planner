@@ -37,6 +37,14 @@ Deno.test("202 text/plain, worker offline", async () => {
   assertEquals(db.rows[0].text, "купить молоко");
 });
 
+Deno.test("202 even when workerOnline throws after insert", async () => {
+  const db = new FakeCaptureDb();
+  db.workerOnline = async () => { throw new Error("db down"); };
+  const { status, message } = await call(req(JSON.stringify({ text: "x" }), auth), db);
+  assertEquals([status, message], [202, "Записано, разберу, когда ИИ проснётся"]);
+  assertEquals(db.rows.length, 1);
+});
+
 Deno.test("token is case-insensitive and tolerates extra spaces", async () => {
   const { status, db } = await call(req(JSON.stringify({ text: "x" }), {
     authorization: `Bearer   ${TOKEN.toUpperCase()}`, "content-type": "application/json",

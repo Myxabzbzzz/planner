@@ -21,7 +21,7 @@ export function parseAmount(text: string): number | null {
   if (num.includes(",")) num = num.replace(/\./g, "").replace(",", ".");
   else if ((num.match(/\./g) ?? []).length > 1) num = num.replace(/\./g, "");
   const n = Number(num);
-  if (!Number.isFinite(n)) return null;
+  if (!Number.isFinite(n) || n >= 1e15) return null;
   const mult = !m[2] ? 1 : /^(к|k|тыс)/.test(m[2]) ? 1000 : 1_000_000;
   return Math.round(n * mult * 100) / 100;
 }
@@ -46,8 +46,9 @@ export async function handlePendingInput(user: User, chatId: number, text: strin
   if (user.pending_action !== "limit") return false;
   const amount = parseAmount(text);
   if (amount === null) {
-    await d.tg.sendMessage(chatId, "Не понял сумму, пришли число, например 5 000 000");
-    return true;
+    await d.menu.setPending(user.id, null);
+    await d.tg.sendMessage(chatId, "Лимит не изменил.");
+    return false;
   }
   await d.menu.setLimit(user.id, amount);
   await d.menu.setPending(user.id, null);
@@ -60,11 +61,20 @@ export async function handlePendingInput(user: User, chatId: number, text: strin
 
 // deno-lint-ignore no-explicit-any
 export async function handleMenuCallback(user: User, cq: any, action: string, rest: string[], d: MenuDeps): Promise<boolean> {
+  if (!user.onboarded_at) {
+    await d.tg.answerCallback(cq.id, "Нет доступа");
+    return true;
+  }
   const chatId: number = cq.message.chat.id;
   const messageId: number = cq.message.message_id;
   const stale = () => d.tg.answerCallback(cq.id, STALE);
-  const edit = (v: View, html = false) =>
-    d.tg.editMessage(chatId, messageId, v.text, v.buttons, html ? { html: true } : undefined);
+  const edit = async (v: View, html = false) => {
+    try {
+      await d.tg.editMessage(chatId, messageId, v.text, v.buttons, html ? { html: true } : undefined);
+    } catch (e) {
+      if (!(e instanceof Error && e.message.includes("message is not modified"))) throw e;
+    }
+  };
 
   switch (action) {
     case "done": {

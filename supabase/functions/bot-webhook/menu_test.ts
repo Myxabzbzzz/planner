@@ -116,13 +116,56 @@ Deno.test("pending limit: zero removes", async () => {
   assertEquals(tg.sent[0].text, "✅ Лимит убран.");
 });
 
-Deno.test("pending limit: garbage keeps waiting", async () => {
+Deno.test("pending limit: non-amount text clears pending and is recorded", async () => {
   const { db, tg, menu, deps } = setup();
   db.user.pending_action = "limit";
   await handleUpdate(text("абв"), deps);
   assertEquals(menu.limits, []);
-  assertEquals(menu.pending, []);
-  assert(tg.sent[0].text.startsWith("Не понял сумму"));
+  assertEquals(menu.pending, [null]);
+  assertEquals(tg.sent[0].text, "Лимит не изменил.");
+  assertEquals(db.inbox.length, 1);
+  assertEquals(db.inbox[0].text, "абв");
+});
+
+Deno.test("/menu while pending clears pending", async () => {
+  const { db, menu, deps } = setup();
+  db.user.pending_action = "limit";
+  await handleUpdate(text("/menu"), deps);
+  assertEquals(menu.pending, [null]);
+});
+
+Deno.test("/start while pending clears pending", async () => {
+  const { db, menu, deps } = setup();
+  db.user.pending_action = "limit";
+  await handleUpdate(text("/start"), deps);
+  assertEquals(menu.pending, [null]);
+});
+
+Deno.test("menu callback before onboarding is refused", async () => {
+  const { db, tg, menu, deps } = setup();
+  db.user.onboarded_at = null;
+  await handleUpdate(cb(`done:${TASK_ID}`), deps);
+  assertEquals(tg.answered, [["cb", "Нет доступа"]]);
+  assertEquals(menu.completed, []);
+});
+
+Deno.test("edit 'message is not modified' is ignored", async () => {
+  const { tg, deps } = setup();
+  tg.editMessage = async () => { throw new Error("Bad Request: message is not modified"); };
+  await handleUpdate(cb(`done:${TASK_ID}`), deps);
+  assertEquals(tg.answered[0], ["cb", "Готово ✅"]);
+});
+
+Deno.test("edit other errors are rethrown", async () => {
+  const { tg, deps } = setup();
+  tg.editMessage = async () => { throw new Error("boom"); };
+  let threw = false;
+  try { await handleUpdate(cb(`done:${TASK_ID}`), deps); } catch { threw = true; }
+  assert(threw);
+});
+
+Deno.test("parseAmount rejects absurd magnitudes", () => {
+  assertEquals(parseAmount("1000000000000000"), null);
 });
 
 Deno.test("pending limit: voice still goes to inbox", async () => {
