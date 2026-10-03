@@ -1,9 +1,10 @@
 import re
 from datetime import date, datetime, timedelta
 
-from .schemas import Extraction, UserContext
+from .schemas import Extraction, Question, UserContext
 
 EXTRACTION_SCHEMA: dict = Extraction.model_json_schema()
+QUESTION_SCHEMA: dict = Question.model_json_schema()
 
 SHORT_DAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
@@ -259,3 +260,34 @@ def build_extract_messages(
     text = annotate_in_time(split_number_lists(text), ctx.now)
     user += f"\nСообщение:\n{annotate_times(annotate_dates(text, today))}"
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
+
+
+QUESTION_SYSTEM = """Ты — разборщик вопросов к личному планеру. Определи, что спрашивает пользователь, и верни JSON строго по схеме. Ничего не считай и не отвечай сам.
+
+intent:
+- spent — сколько потрачено (за период, можно в категории). «сколько потратил на такси в сентябре», «сколько ушло за неделю».
+- income — сколько получено или заработано. «какой доход в этом месяце», «сколько заработал в сентябре».
+- top_categories — на что больше всего тратится, разбивка по категориям. «на что больше всего трачу», «покажи траты по категориям».
+- limit_left — сколько осталось до лимита (бюджета) месяца. «сколько осталось до лимита», «какой у меня лимит».
+- compare — сравнить траты двух периодов. «сравни с прошлым месяцем», «сравни эту неделю и прошлую».
+- agenda — что запланировано (встречи и задачи со сроком) на день или неделю. «что у меня завтра», «какие встречи на неделе».
+- open_tasks — какие задачи не сделаны. «что не сделано», «какие задачи висят».
+- find_event — когда встреча с кем-то или про что-то. «когда встреча с Ахмедом», «когда стоматолог».
+- unknown — вопрос не про траты, доходы, лимит, задачи или встречи (погода, факты, привычки, заметки).
+
+Поля:
+- category — только для spent, income, compare, limit_left и только если категория названа явно: точное название из списка категорий пользователя (для income — из категорий доходов). Иначе null.
+- period — today, yesterday, tomorrow, this_week, last_week, next_week, this_month, last_month, next_7_days, all_time или month:YYYY-MM («в сентябре» → month:<текущий год>-09). «за неделю» = this_week, «за месяц» = this_month, «ближайшие дни» = next_7_days. Если период не назван — null.
+- period2 — только для compare: второй период, если назван явно. Иначе null.
+- query — только для find_event: имя человека или главное слово из названия встречи в именительном падеже («с Ахмедом» → «Ахмед», «со стоматологом» → «стоматолог»). Иначе null.
+"""
+
+
+def build_question_messages(text: str, ctx: UserContext) -> list[dict]:
+    user = (
+        f"Сегодня: {ctx.now:%Y-%m-%d} ({WEEKDAYS[ctx.now.weekday()]}).\n"
+        f"Категории расходов: {', '.join(ctx.expense_categories)}.\n"
+        f"Категории доходов: {', '.join(ctx.income_categories)}.\n"
+        f"\nВопрос:\n{text}"
+    )
+    return [{"role": "system", "content": QUESTION_SYSTEM}, {"role": "user", "content": user}]
