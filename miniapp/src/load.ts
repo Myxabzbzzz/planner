@@ -8,6 +8,7 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[]) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setData(null);
     setError(null);
     fn().then((d) => alive && setData(d)).catch((e) => alive && setError(e)).finally(() => alive && setLoading(false));
     return () => {
