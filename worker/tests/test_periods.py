@@ -102,14 +102,39 @@ def test_compare_default_in_january_shows_year():
     assert prev.short == "декабрь 2026 (1–10)"
 
 
-def test_compare_single_period_uses_previous():
+def test_compare_current_week_is_clipped_to_today():
     cur, prev = compare_periods("this_week", None, TODAY)
-    assert (cur.short, prev.short) == ("эта неделя", "прошлая неделя")
+    assert (span(cur), span(prev)) == ((date(2026, 9, 28), date(2026, 10, 2)), (date(2026, 9, 21), date(2026, 9, 25)))
+    assert (cur.short, prev.short) == ("эта неделя (пн–чт)", "прошлая неделя (пн–чт)")
 
 
-def test_compare_only_second_period_is_treated_as_first():
-    cur, prev = compare_periods(None, "month:2026-09", TODAY)
-    assert (cur.short, prev.short) == ("сентябрь", "август")
+def test_compare_explicit_this_and_last_month_is_month_to_date():
+    cur, prev = compare_periods("this_month", "last_month", date(2026, 10, 4))
+    assert (span(cur), span(prev)) == ((date(2026, 10, 1), date(2026, 10, 5)), (date(2026, 9, 1), date(2026, 9, 5)))
+    assert (cur.short, prev.short) == ("октябрь (1–4)", "сентябрь (1–4)")
+
+
+def test_compare_only_last_month_means_this_month_vs_last():
+    cur, prev = compare_periods(None, "last_month", date(2026, 10, 4))
+    assert (cur.short, prev.short) == ("октябрь (1–4)", "сентябрь (1–4)")
+
+
+def test_compare_only_named_month_compares_current_month_with_it():
+    cur, prev = compare_periods(None, "month:2026-08", date(2026, 10, 4))
+    assert (cur.short, prev.short) == ("октябрь (1–4)", "август (1–4)")
+
+
+def test_compare_past_periods_are_not_clipped():
+    cur, prev = compare_periods("last_week", None, TODAY)
+    assert (cur.short, prev.short) == ("прошлая неделя", "неделя с 14 сентября")
+
+
+def test_compare_with_all_time_is_none():
+    assert compare_periods(None, "all_time", TODAY) is None
+
+
+def test_future_month_allowed_for_agenda():
+    assert span(resolve_period("month:2026-11", TODAY, future_ok=True)) == (date(2026, 11, 1), date(2026, 12, 1))
 
 
 def test_compare_two_periods():

@@ -96,7 +96,7 @@ class Answerer:
             return render_compare(cat_name, p1, self._sum(ctx, "expense", p1, cat_id),
                                   p2, self._sum(ctx, "expense", p2, cat_id), ctx)
         if q.intent == "agenda":
-            p = resolve_period(q.period or "today", today)
+            p = resolve_period(q.period or "today", today, future_ok=True)  # планы смотрят вперёд
             data = self.store.ask("ask_agenda", p_user=ctx.user_id, p_from=_iso(p.start), p_to=_iso(p.end))
             return render_agenda(p, data)
         if q.intent == "open_tasks":

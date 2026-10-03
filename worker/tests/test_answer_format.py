@@ -83,9 +83,9 @@ def test_compare(ctx):
 def test_compare_down_and_zero(ctx):
     cur, prev = compare_periods("this_week", None, TODAY)
     assert render_compare("кафе", cur, {"total": 50}, prev, {"total": 100}, ctx) == \
-        "📈 Траты на «кафе»: эта неделя 50 сум vs прошлая неделя 100 сум · −50%"
+        "📈 Траты на «кафе»: эта неделя (пн–чт) 50 сум vs прошлая неделя (пн–чт) 100 сум · −50%"
     assert render_compare(None, cur, {"total": 50}, prev, {"total": 0}, ctx) == \
-        "📈 Траты: эта неделя 50 сум vs прошлая неделя 0 сум"
+        "📈 Траты: эта неделя (пн–чт) 50 сум vs прошлая неделя (пн–чт) 0 сум"
 
 
 def test_agenda_day():

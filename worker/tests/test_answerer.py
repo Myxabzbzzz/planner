@@ -116,3 +116,9 @@ def test_find_event_strips_query(ctx):
 def test_unknown(ctx):
     text, dump, calls = run(ctx, intent="unknown")
     assert (text, calls, dump["intent"]) == (UNKNOWN_TEXT, [], "unknown")
+
+
+def test_agenda_future_month_is_not_moved_to_last_year(ctx):
+    store = FakeStore({"ask_agenda": {"events": [], "tasks": []}})
+    _, _, calls = run(ctx, store, intent="agenda", period="month:2026-11")
+    assert calls[0][1]["p_from"] == "2026-11-01" and calls[0][1]["p_to"] == "2026-12-01"

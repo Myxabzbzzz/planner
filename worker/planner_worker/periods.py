@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from .prompts import SHORT_DAYS
+
 MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь",
               "ноябрь", "декабрь"]
 MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
@@ -53,7 +55,7 @@ def span_period(start: date, end: date) -> Period:
     return Period(start, end, f"с {start:%d.%m} по {last:%d.%m}", f"{start:%d.%m}–{last:%d.%m}")
 
 
-def resolve_period(code: str, today: date) -> Period:
+def resolve_period(code: str, today: date, future_ok: bool = False) -> Period:
     monday = today - timedelta(days=today.weekday())
     first = today.replace(day=1)
     if code == "today":
@@ -79,7 +81,7 @@ def resolve_period(code: str, today: date) -> Period:
         return Period(None, None, "за всё время", "всё время")
     if code.startswith("month:"):
         y, m = int(code[6:10]), int(code[11:13])
-        while (y, m) > (today.year, today.month):  # «в декабре» в октябре — прошлый декабрь
+        while not future_ok and (y, m) > (today.year, today.month):  # «в декабре» в октябре — прошлый декабрь
             y -= 1
         return month_period(y, m, today)
     raise ValueError(f"unknown period: {code}")
@@ -100,18 +102,43 @@ def previous_period(p: Period, today: date) -> Period | None:
     return span_period(start, p.start)
 
 
+def _is_month(p: Period) -> bool:
+    return p.start.day == 1 and p.end == _add_months(p.start, 1)
+
+
+def _upto(p: Period, last: date) -> str:
+    if _is_month(p):
+        return f"{p.short} (1–{last.day})"
+    if (p.end - p.start).days == 7 and p.start.weekday() == 0:
+        return f"{p.short} (пн–{SHORT_DAYS[last.weekday()]})"
+    return f"{p.start:%d.%m}–{last:%d.%m}"
+
+
+def _clip_to_today(p1: Period, p2: Period, today: date) -> tuple[Period, Period]:
+    """Идущий период — по сегодня включительно, второй — столько же дней с его начала."""
+    if not (p1.start <= today < p1.end) or (p1.end - p1.start).days == 1:
+        return p1, p2
+    end2 = min(p2.start + (today + DAY - p1.start), p2.end)
+    s1, s2 = _upto(p1, today), _upto(p2, end2 - DAY)
+    return Period(p1.start, today + DAY, s1, s1), Period(p2.start, end2, s2, s2)
+
+
+def _current_like(code: str | None) -> str:
+    if code in ("last_week", "this_week", "next_week"):
+        return "this_week"
+    if code in ("yesterday", "today", "tomorrow"):
+        return "today"
+    return "this_month"
+
+
 def compare_periods(code1: str | None, code2: str | None, today: date) -> tuple[Period, Period] | None:
-    if code1 is None and code2 is None:
-        first = today.replace(day=1)
-        prev_first = _add_months(first, -1)
-        prev_end = min(prev_first + timedelta(days=today.day), first)
-        cur_short = f"{MONTHS_NOM[today.month - 1]} (1–{today.day})"
-        prev_short = (f"{MONTHS_NOM[prev_first.month - 1]}{_year(prev_first.year, today)} "
-                      f"(1–{(prev_end - DAY).day})")
-        return (Period(first, today + DAY, cur_short, cur_short),
-                Period(prev_first, prev_end, prev_short, prev_short))
+    """«Сравни с прошлым месяцем» — текущий месяц по сегодня против того же числа дней прошлого."""
     if code1 is None:
-        code1, code2 = code2, None
+        code1 = _current_like(code2)
+        if code2 == code1:
+            code2 = None
     p1 = resolve_period(code1, today)
     p2 = resolve_period(code2, today) if code2 else previous_period(p1, today)
-    return (p1, p2) if p2 else None
+    if p1.start is None or p2 is None or p2.start is None:
+        return None
+    return _clip_to_today(p1, p2, today)
