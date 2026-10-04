@@ -1,8 +1,8 @@
 export type Me = { name: string; tz: string; base_currency: string };
 export type Today = {
   base_currency: string;
-  events: { id: string; title: string; time: string; done: boolean }[];
-  tasks: { id: string; title: string; overdue: boolean }[];
+  events: { id: string; title: string; time: string; date: string; with_whom: string | null; done: boolean }[];
+  tasks: { id: string; title: string; due: string; overdue: boolean }[];
   tasks_more: number;
   spent_today: number;
   month_spent: number;
@@ -24,7 +24,7 @@ export type MoneyResp = {
   operations: Operation[];
 };
 export type HabitDay = { date: string; done: boolean };
-export type HabitsResp = { habits: { id: string; name: string; days: HabitDay[]; streak: number; done_today: boolean }[] };
+export type HabitsResp = { habits: { id: string; name: string; target_per_week: number; days: HabitDay[]; streak: number; done_today: boolean }[] };
 export type Note = { id: string; kind: "thought" | "journal"; text: string; created_at: string };
 export type NotesResp = { notes: Note[]; next_before: string | null };
 export type Categories = { expense: string[]; income: string[] };

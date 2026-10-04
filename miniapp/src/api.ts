@@ -1,3 +1,4 @@
+import type { EventPatch, HabitPatch, NotePatch, TaskPatch } from "./itemEdit";
 import type { OpPatch } from "./opEdit";
 import type { Categories, EventsResp, HabitsResp, Me, MoneyResp, NotesResp, TasksResp, Today } from "./types";
 
@@ -37,6 +38,14 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     categories: () => get<Categories>("/categories"),
     updateTransaction: (id: string, patch: OpPatch) => post(`/transactions/${id}`, patch),
     deleteTransaction: (id: string) => post(`/transactions/${id}/delete`, {}),
+    updateTask: (id: string, patch: TaskPatch) => post(`/tasks/${id}`, patch),
+    deleteTask: (id: string) => post(`/tasks/${id}/delete`, {}),
+    updateEvent: (id: string, patch: EventPatch) => post(`/events/${id}`, patch),
+    deleteEvent: (id: string) => post(`/events/${id}/delete`, {}),
+    updateNote: (id: string, patch: NotePatch) => post(`/notes/${id}`, patch),
+    deleteNote: (id: string) => post(`/notes/${id}/delete`, {}),
+    updateHabit: (id: string, patch: HabitPatch) => post(`/habits/${id}`, patch),
+    archiveHabit: (id: string) => post(`/habits/${id}/archive`, {}),
     notes: (q?: string, before?: string) => get<NotesResp>("/notes", { q, before }),
   };
 }

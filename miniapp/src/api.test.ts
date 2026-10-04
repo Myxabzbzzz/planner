@@ -53,3 +53,24 @@ describe("api client", () => {
     ]);
   });
 });
+
+describe("edit endpoints", () => {
+  it("posts patches and deletes to item routes", async () => {
+    const calls: [string, RequestInit | undefined][] = [];
+    const f = (async (u: URL | RequestInfo, init?: RequestInit) => {
+      calls.push([String(u), init]);
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+    const api = makeApi("https://x/api", "init", f);
+    await api.updateTask("t1", { due_date: null });
+    await api.deleteEvent("e1");
+    await api.updateNote("n1", { kind: "journal" });
+    await api.archiveHabit("h1");
+    expect(calls.map(([u, i]) => [u, i?.body])).toEqual([
+      ["https://x/api/tasks/t1", '{"due_date":null}'],
+      ["https://x/api/events/e1/delete", "{}"],
+      ["https://x/api/notes/n1", '{"kind":"journal"}'],
+      ["https://x/api/habits/h1/archive", "{}"],
+    ]);
+  });
+});
