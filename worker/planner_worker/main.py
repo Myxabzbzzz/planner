@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 import time
 from pathlib import Path
 
@@ -87,6 +88,10 @@ def main() -> None:
 
     tmp_dir = Path(__file__).resolve().parents[1] / "tmp"
     log.info("removed %s leftover shortcut files", cleanup_tmp(tmp_dir))
+    try:
+        log.info("removed %s old audio files", store.sweep_audio(datetime.now(timezone.utc)))
+    except Exception as e:  # noqa: BLE001 — без сети на старте уберём при следующем запуске
+        log.warning("audio sweep failed: %s", type(e).__name__)
     signer = ShortcutSigner()
     job_runner = lambda job: run_job(job, store, tg, signer, cfg.supabase_url, tmp_dir)  # noqa: E731
 

@@ -21,6 +21,7 @@ FAILED_TEXT = "😵 Не получилось разобрать запись. �
 REPHRASE_TEXT = "😵 Не смог разобрать. Переформулируй, пожалуйста."
 NOT_HEARD = "🙉 Не расслышал. Повтори, пожалуйста."
 PREFIXES = {"shortcut": "📲 ", "miniapp": "📱 "}
+STORAGE = "storage:"
 
 
 def chat_text(row: InboxRow, text: str) -> str:
@@ -102,6 +103,16 @@ class Pipeline:
         return True
 
     def _transcribe(self, row: InboxRow) -> str:
+        if row.audio_ref.startswith(STORAGE):
+            key = row.audio_ref[len(STORAGE):]
+            path = self.store.download_audio(key, self.tmp_dir)
+            try:
+                text = self.stt.transcribe(path)
+            finally:
+                path.unlink(missing_ok=True)
+            self.store.set_text(row.id, text)  # повтор не распознаёт заново
+            self.store.remove_audio(key)
+            return text
         path = self.tg.download(row.audio_ref, self.tmp_dir)
         try:
             return self.stt.transcribe(path)
@@ -222,6 +233,14 @@ def error_reply(tg, row: InboxRow, text: str) -> None:
     reply(tg, row, text)
 
 
+def _drop_audio(store, row: InboxRow) -> None:
+    if row.audio_ref and row.audio_ref.startswith(STORAGE):
+        try:
+            store.remove_audio(row.audio_ref[len(STORAGE):])
+        except Exception as e:  # noqa: BLE001 — уборка подхватит через сутки
+            log.warning("audio cleanup failed for %s: %s", row.id, type(e).__name__)
+
+
 def run_one(row: InboxRow, pipeline: Pipeline, store, tg) -> None:
     original = copy.deepcopy(row.result)
     try:
@@ -229,6 +248,7 @@ def run_one(row: InboxRow, pipeline: Pipeline, store, tg) -> None:
     except ExtractionError as e:
         log.warning("extraction failed for %s: %s", row.id, e)
         store.finish(row.id, "failed", original, f"extraction: {e}", notified=True)
+        _drop_audio(store, row)
         error_reply(tg, row, REPHRASE_TEXT)
     except Exception as e:  # noqa: BLE001 — любая другая ошибка: ретрай до 3 попыток
         log.exception("processing failed for %s (attempt %s)", row.id, row.attempts)
@@ -236,6 +256,7 @@ def run_one(row: InboxRow, pipeline: Pipeline, store, tg) -> None:
             store.finish(row.id, "pending", original, str(e))
         else:
             store.finish(row.id, "failed", original, str(e), notified=True)
+            _drop_audio(store, row)
             error_reply(tg, row, FAILED_TEXT)
 
 

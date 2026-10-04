@@ -547,3 +547,65 @@ def test_miniapp_error_reply_has_prefix_and_quote(ctx):
     r = row(text="абракадабра", source="miniapp", reply_message_id=None)
     run_one(r, p, store, tg)
     assert tg.sent[0][1].startswith("📱 😵") and "«абракадабра»" in tg.sent[0][1]
+
+
+class AudioStore(FakeStore):
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        self.downloaded, self.texts, self.removed = [], [], []
+
+    def download_audio(self, key, dest_dir):
+        self.downloaded.append(key)
+        return dest_dir / Path(key).name
+
+    def set_text(self, inbox_id, text):
+        self.texts.append((inbox_id, text))
+
+    def remove_audio(self, key):
+        self.removed.append(key)
+
+
+def audio_row(**kw):
+    return row(**{"text": None, "source": "miniapp", "audio_ref": "storage:u1/a.m4a", "reply_message_id": None, **kw})
+
+
+def test_storage_audio_is_transcribed_saved_and_removed(ctx):
+    store = AudioStore(ctx)
+    p, _, tg = make(ctx, FakeExtractor([TAXI]), stt=FakeStt("30 000 на такси"), store=store)
+
+    def no_tg_download(*a):
+        raise AssertionError("telegram download must not be used")
+
+    tg.download = no_tg_download
+    p.process(audio_row())
+    assert store.downloaded == ["u1/a.m4a"]
+    assert store.texts == [("i1", "30 000 на такси")]
+    assert store.removed == ["u1/a.m4a"]
+    assert store.inserted[0][0] == "transactions"
+
+
+def test_final_failure_removes_storage_audio(ctx):
+    store = AudioStore(ctx)
+    p, _, tg = make(ctx, FakeExtractor(RuntimeError("ollama down")), stt=FakeStt("кофе"), store=store)
+    store.removed.clear()
+
+    def boom(*a):
+        raise RuntimeError("stt crashed")
+
+    p.stt.transcribe = boom
+    run_one(audio_row(attempts=3), p, store, tg)
+    assert store.finished[-1][1] == "failed"
+    assert store.removed == ["u1/a.m4a"]
+
+
+def test_retry_keeps_storage_audio(ctx):
+    store = AudioStore(ctx)
+    p, _, tg = make(ctx, FakeExtractor(), stt=FakeStt("кофе"), store=store)
+
+    def boom(*a):
+        raise RuntimeError("stt crashed")
+
+    p.stt.transcribe = boom
+    run_one(audio_row(attempts=1), p, store, tg)
+    assert store.finished[-1][1] == "pending"
+    assert store.removed == []

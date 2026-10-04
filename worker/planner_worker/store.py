@@ -1,9 +1,12 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from .fx import RateTable
 from .schemas import InboxRow, UserContext
+
+AUDIO_BUCKET = "audio"
 
 
 class Store:
@@ -87,3 +90,32 @@ class Store:
 
     def ask(self, fn: str, **params) -> dict:
         return self.sb.rpc(fn, params).execute().data
+
+    def download_audio(self, key: str, dest_dir: Path) -> Path:
+        data = self.sb.storage.from_(AUDIO_BUCKET).download(key)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        p = dest_dir / Path(key).name
+        p.write_bytes(data)
+        return p
+
+    def remove_audio(self, key: str) -> None:
+        self.sb.storage.from_(AUDIO_BUCKET).remove([key])
+
+    def set_text(self, inbox_id: str, text: str) -> None:
+        self.sb.table("inbox").update({"text": text}).eq("id", inbox_id).execute()
+
+    def sweep_audio(self, now_utc: datetime, max_age: timedelta = timedelta(hours=24)) -> int:
+        """Удаляет файлы старше суток — страховка, если воркер упал между загрузкой и распознаванием."""
+        bucket = self.sb.storage.from_(AUDIO_BUCKET)
+        cutoff = now_utc - max_age
+        old = []
+        for folder in bucket.list():
+            if folder.get("id") is not None:  # файл в корне — не наш формат пути
+                continue
+            for f in bucket.list(folder["name"]):
+                created = f.get("created_at")
+                if created and datetime.fromisoformat(created.replace("Z", "+00:00")) < cutoff:
+                    old.append(f"{folder['name']}/{f['name']}")
+        if old:
+            bucket.remove(old)
+        return len(old)
