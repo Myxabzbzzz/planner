@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import type { Api } from "../api";
 import { Check } from "../components/Check";
+import { EventSheet, TaskSheet } from "../components/ItemSheets";
 import { Segmented } from "../components/Segmented";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { WeekStrip } from "../components/WeekStrip";
 import { fmtDayTitle, fmtShortDate, fmtTime, todayIso, weekDays } from "../format";
 import { useLoad } from "../load";
 import { useToggles } from "../useToggles";
-import type { Me } from "../types";
+import type { EventItem, Me, TaskItem } from "../types";
 
 type Filter = "today" | "upcoming" | "nodue" | "done";
 const FILTERS: { key: Filter; label: string }[] = [
@@ -27,6 +28,8 @@ export function Tasks({ api, me }: { api: Api; me: Me }) {
   const events = useLoad(() => api.events(days[0], days[6]), [api, days[0]]);
   const tasks = useLoad(() => api.tasks(filter), [api, filter]);
   const { over, toggle, reset } = useToggles();
+  const [editing, setEditing] = useState<{ kind: "event"; item: EventItem & { date: string } } | { kind: "task"; item: TaskItem } | null>(null);
+  const saved = () => { setEditing(null); events.reload(); tasks.reload(); };
   useEffect(reset, [events.data, tasks.data, reset]);
   const marked = new Set((events.data?.days ?? []).map((d) => d.date));
   const dayEvents = events.data?.days.find((d) => d.date === day)?.events ?? [];
@@ -46,7 +49,8 @@ export function Tasks({ api, me }: { api: Api; me: Me }) {
               <div className="row" key={e.id}>
                 <Check done={d} label="Встреча прошла" onToggle={() => void toggle(k, d, (v) => api.setEventDone(e.id, v))} />
                 <span className="time">{e.time}</span>
-                <span className={d ? "grow ellipsis done-text" : "grow ellipsis"}>{e.title}</span>
+                <button type="button" className={d ? "grow ellipsis done-text tap" : "grow ellipsis tap"}
+                  onClick={() => setEditing({ kind: "event", item: { ...e, date: day } })}>{e.title}</button>
                 {e.with_whom && <span className="right">{e.with_whom}</span>}
               </div>
             );
@@ -64,7 +68,8 @@ export function Tasks({ api, me }: { api: Api; me: Me }) {
               return (
               <div className="row" key={t.id}>
                 <Check done={d} label="Задача выполнена" onToggle={() => void toggle(k, d, (v) => api.setTaskDone(t.id, v))} />
-                <span className={d ? "grow ellipsis done-text" : "grow ellipsis"}>{t.title}</span>
+                <button type="button" className={d ? "grow ellipsis done-text tap" : "grow ellipsis tap"}
+                  onClick={() => setEditing({ kind: "task", item: t })}>{t.title}</button>
                 {t.due && filter !== "done" && (
                   <span className={t.overdue ? "right danger" : "right"}>
                     {fmtShortDate(t.due)}{fmtTime(t.due) !== "23:59" ? ` ${fmtTime(t.due)}` : ""}
@@ -75,6 +80,8 @@ export function Tasks({ api, me }: { api: Api; me: Me }) {
             })}
           </Card>
         )}
+      {editing?.kind === "event" && <EventSheet api={api} item={editing.item} onClose={() => setEditing(null)} onSaved={saved} />}
+      {editing?.kind === "task" && <TaskSheet api={api} item={editing.item} onClose={() => setEditing(null)} onSaved={saved} />}
     </>
   );
 }

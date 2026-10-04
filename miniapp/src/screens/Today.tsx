@@ -1,10 +1,12 @@
+import { useState } from "react";
 import type { Api } from "../api";
 import { Check } from "../components/Check";
+import { EventSheet, TaskSheet } from "../components/ItemSheets";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { fmtAmount, fmtDayTitle, todayIso } from "../format";
 import { useLoad } from "../load";
 import { useToggles } from "../useToggles";
-import type { Me } from "../types";
+import type { Me, Today as TodayData } from "../types";
 
 export function Today({ api, me }: { api: Api; me: Me }) {
   const { data, error, loading, reload } = useLoad(() => api.today(), [api]);
@@ -13,6 +15,9 @@ export function Today({ api, me }: { api: Api; me: Me }) {
     reset();
     reload();
   };
+  const [editing, setEditing] = useState<
+    { kind: "event"; item: TodayData["events"][number] } | { kind: "task"; item: TodayData["tasks"][number] } | null>(null);
+  const saved = () => { setEditing(null); retry(); };
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorCard onRetry={retry} />;
   const cur = data.base_currency;
@@ -48,7 +53,8 @@ export function Today({ api, me }: { api: Api; me: Me }) {
               <div className="row" key={e.id}>
                 <Check done={d} label="Встреча прошла" onToggle={() => void toggle(k, d, (v) => api.setEventDone(e.id, v))} />
                 <span className="time">{e.time}</span>
-                <span className={d ? "grow ellipsis done-text" : "grow ellipsis"}>{e.title}</span>
+                <button type="button" className={d ? "grow ellipsis done-text tap" : "grow ellipsis tap"}
+                  onClick={() => setEditing({ kind: "event", item: e })}>{e.title}</button>
               </div>
             );
           })}
@@ -63,7 +69,8 @@ export function Today({ api, me }: { api: Api; me: Me }) {
             return (
               <div className="row" key={t.id}>
                 <Check done={d} label="Задача выполнена" onToggle={() => void toggle(k, d, (v) => api.setTaskDone(t.id, v))} />
-                <span className={d ? "grow ellipsis done-text" : "grow ellipsis"}>{t.title}</span>
+                <button type="button" className={d ? "grow ellipsis done-text tap" : "grow ellipsis tap"}
+                  onClick={() => setEditing({ kind: "task", item: t })}>{t.title}</button>
                 {t.overdue && !d && <span className="right danger">просрочено</span>}
               </div>
             );
@@ -84,6 +91,8 @@ export function Today({ api, me }: { api: Api; me: Me }) {
           })}
         </Card>
       )}
+      {editing?.kind === "event" && <EventSheet api={api} item={editing.item} onClose={() => setEditing(null)} onSaved={saved} />}
+      {editing?.kind === "task" && <TaskSheet api={api} item={editing.item} onClose={() => setEditing(null)} onSaved={saved} />}
     </>
   );
 }

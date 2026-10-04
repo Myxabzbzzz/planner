@@ -104,3 +104,8 @@ button.pill { cursor: pointer; }
 .button.wide { display: block; width: 100%; margin-top: 12px; }
 .button:disabled { opacity: .45; }
 .button.ghost-danger { background: none; color: var(--danger); }
+.tap { text-align: left; font: inherit; color: inherit; background: none; cursor: pointer; }
+.tap:active { opacity: .6; }
+.field textarea { font: inherit; font-size: 17px; color: var(--text); background: var(--bg2); border: none; border-radius: 10px;
+  padding: 11px 12px; outline: none; resize: vertical; }
+.field textarea:focus { box-shadow: 0 0 0 2px var(--accent); }

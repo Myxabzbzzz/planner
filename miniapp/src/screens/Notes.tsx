@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api";
+import { NoteSheet } from "../components/ItemSheets";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { fmtShortDate, fmtTime } from "../format";
 import { makeNotesLoader, type NotesState } from "../notesFeed";
+import type { Note } from "../types";
 
 export function Notes({ api }: { api: Api }) {
   const [q, setQ] = useState("");
@@ -10,6 +12,7 @@ export function Notes({ api }: { api: Api }) {
   const [state, setState] = useState<NotesState>({ notes: [], next: null, loading: true, error: false });
   const loader = useMemo(() => makeNotesLoader((qq, before) => api.notes(qq, before), setState), [api]);
   const { notes, next, loading, error } = state;
+  const [editing, setEditing] = useState<Note | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setQuery(q.trim()), 300);
@@ -27,15 +30,19 @@ export function Notes({ api }: { api: Api }) {
         : (
           <>
             {notes.map((n) => (
-              <Card key={n.id}>
-                <div className="note-meta">{n.kind === "journal" ? "📔 Дневник" : "💡 Мысль"} · {fmtShortDate(n.created_at)} {fmtTime(n.created_at)}</div>
-                <div className="note-text">{n.text}</div>
-              </Card>
+              <button type="button" key={n.id} className="op-row" onClick={() => setEditing(n)}>
+                <Card>
+                  <div className="note-meta">{n.kind === "journal" ? "📔 Дневник" : "💡 Мысль"} · {fmtShortDate(n.created_at)} {fmtTime(n.created_at)}</div>
+                  <div className="note-text">{n.text}</div>
+                </Card>
+              </button>
             ))}
             {error && <div className="sub">Не удалось загрузить ещё — нажми ещё раз</div>}
             {next && <button type="button" className="button wide" disabled={loading} onClick={() => loader.more()}>{loading ? "Загрузка…" : "Показать ещё"}</button>}
           </>
         )}
+      {editing && <NoteSheet api={api} item={editing} onClose={() => setEditing(null)}
+        onSaved={() => { setEditing(null); loader.search(query); }} />}
     </>
   );
 }
