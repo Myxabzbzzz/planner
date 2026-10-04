@@ -11,12 +11,22 @@ class FakeApiDb implements ApiDb {
   calls: Array<[string, unknown[]]> = [];
   inbox: InboxInsert[] = [];
   online: boolean | Error = true;
+  uploads: Array<[string, number, string]> = [];
+  removed: string[] = [];
+  failInbox = false;
+  async uploadAudio(path: string, bytes: Uint8Array, contentType: string) {
+    this.uploads.push([path, bytes.length, contentType]);
+  }
+  async removeAudio(path: string) {
+    this.removed.push(path);
+  }
   async userByTg(_tg: number) { return this.user; }
   async call(fn: string, args: unknown[]): Promise<unknown> {
     this.calls.push([fn, args]);
     return { fn };
   }
   async createInbox(row: InboxInsert) {
+    if (this.failInbox) throw new Error("db down");
     this.inbox.push(row);
     return "new-id";
   }
@@ -39,7 +49,7 @@ async function req(path: string, opts: { init?: string; method?: string; body?: 
 }
 
 async function run(r: Request, db = new FakeApiDb()) {
-  const res = await handleApi(r, { db, botToken: TOKEN, nowSec: () => NOW });
+  const res = await handleApi(r, { db, botToken: TOKEN, nowSec: () => NOW, newId: () => "f-1" });
   const body = res.status === 204 ? null : await res.json();
   return { status: res.status, body, db, cors: res.headers.get("access-control-allow-origin") };
 }
@@ -254,4 +264,37 @@ Deno.test("GET /inbox/<id> returns own status, null is 404", async () => {
   }
   assertEquals((await run(await req(`/inbox/${id}`), new NullDb())).status, 404);
   assertEquals((await run(await req("/inbox/not-a-uuid"))).status, 404);
+});
+
+async function audioReq(bytes: Uint8Array<ArrayBuffer>, contentType: string) {
+  const init = await signInitData({ auth_date: String(NOW - 10), user: JSON.stringify({ id: 7 }) }, TOKEN);
+  return new Request("https://x.supabase.co/functions/v1/api/inbox/audio", {
+    method: "POST", headers: { "x-init-data": init, "content-type": contentType }, body: bytes,
+  });
+}
+
+Deno.test("POST /inbox/audio uploads and creates a row", async () => {
+  const r = await run(await audioReq(new Uint8Array(1000), "audio/mp4"));
+  assertEquals([r.status, r.body], [201, { id: "new-id", worker_online: true }]);
+  assertEquals(r.db.uploads, [["u1/f-1.m4a", 1000, "audio/mp4"]]);
+  assertEquals(r.db.inbox, [{ user_id: "u1", source: "miniapp", text: null, audio_ref: "storage:u1/f-1.m4a", reply_chat_id: 7 }]);
+});
+
+Deno.test("audio mime with params is accepted, others are 415", async () => {
+  const r = await run(await audioReq(new Uint8Array(10), "audio/webm;codecs=opus"));
+  assertEquals([r.status, r.db.uploads], [201, [["u1/f-1.webm", 10, "audio/webm"]]]);
+  assertEquals((await run(await audioReq(new Uint8Array(10), "text/plain"))).status, 415);
+});
+
+Deno.test("audio size limits", async () => {
+  assertEquals((await run(await audioReq(new Uint8Array(0), "audio/mp4"))).status, 400);
+  const big = await run(await audioReq(new Uint8Array(2_097_153), "audio/mp4"));
+  assertEquals([big.status, big.db.uploads.length], [413, 0]);
+});
+
+Deno.test("audio is removed when the inbox insert fails", async () => {
+  const db = new FakeApiDb();
+  db.failInbox = true;
+  const r = await run(await audioReq(new Uint8Array(10), "audio/mp4"), db);
+  assertEquals([r.status, r.db.removed], [500, ["u1/f-1.m4a"]]);
 });

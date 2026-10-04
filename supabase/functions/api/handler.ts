@@ -1,7 +1,7 @@
 import type { ApiDb, InboxInsert } from "./db.ts";
 import { verifyInitData } from "./initdata.ts";
 
-export type ApiDeps = { db: ApiDb; botToken: string; nowSec: () => number };
+export type ApiDeps = { db: ApiDb; botToken: string; nowSec: () => number; newId?: () => string };
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -182,6 +182,27 @@ async function postInboxText(req: Request, userId: string, tgId: number, db: Api
   return await createAndReport(db, { user_id: userId, source: "miniapp", text: text.trim(), audio_ref: null, reply_chat_id: tgId });
 }
 
+const AUDIO_EXT: Record<string, string> = { "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/webm": "webm" };
+const MAX_AUDIO = 2_097_152;
+
+async function postInboxAudio(req: Request, userId: string, tgId: number, d: ApiDeps): Promise<Response> {
+  const mime = (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+  const ext = AUDIO_EXT[mime];
+  if (!ext) return json(415, { error: "unsupported_media_type" });
+  if (Number(req.headers.get("content-length") ?? "0") > MAX_AUDIO) return json(413, { error: "too_large" });
+  const bytes = new Uint8Array(await req.arrayBuffer());
+  if (bytes.length === 0) throw new BadRequest();
+  if (bytes.length > MAX_AUDIO) return json(413, { error: "too_large" });
+  const path = `${userId}/${(d.newId ?? (() => crypto.randomUUID()))()}.${ext}`;
+  await d.db.uploadAudio(path, bytes, mime);
+  try {
+    return await createAndReport(d.db, { user_id: userId, source: "miniapp", text: null, audio_ref: `storage:${path}`, reply_chat_id: tgId });
+  } catch (e) {
+    await d.db.removeAudio(path).catch(() => {});
+    throw e;
+  }
+}
+
 export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "GET" && req.method !== "POST") return json(405, { error: "method_not_allowed" });
@@ -195,6 +216,7 @@ export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname.replace(/^(?:\/functions\/v1)?\/api(?=\/|$)/, "") || "/";
     if (req.method === "POST" && path === "/inbox") return await postInboxText(req, user.id, auth.tgId, d.db);
+    if (req.method === "POST" && path === "/inbox/audio") return await postInboxAudio(req, user.id, auth.tgId, d);
     if (req.method === "POST") {
       const pr = await postRoute(path, req, user.id);
       if (!pr) return json(404, { error: "not_found" });

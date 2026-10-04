@@ -10,6 +10,8 @@ export interface ApiDb {
   call(fn: string, args: unknown[]): Promise<unknown>;
   createInbox(row: InboxInsert): Promise<string>;
   workerOnline(): Promise<boolean>;
+  uploadAudio(path: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  removeAudio(path: string): Promise<void>;
 }
 
 const ARG_NAMES: Record<string, string[]> = {
@@ -58,6 +60,14 @@ export function supabaseApiDb(sb: SupabaseClient): ApiDb {
       const { data, error } = await sb.rpc("worker_online");
       if (error) throw error;
       return data === true;
+    },
+    async uploadAudio(path, bytes, contentType) {
+      const { error } = await sb.storage.from("audio").upload(path, bytes, { contentType, upsert: false });
+      if (error) throw error;
+    },
+    async removeAudio(path) {
+      const { error } = await sb.storage.from("audio").remove([path]);
+      if (error) throw error;
     },
   };
 }
