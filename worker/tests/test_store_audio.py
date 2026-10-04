@@ -39,8 +39,23 @@ class FakeStorage:
 
 
 class FakeTable:
-    def __init__(self, log):
+    def __init__(self, log, rows=None):
         self.log = log
+        self.rows = rows or []
+        self.data = []
+
+    def select(self, cols):
+        self.data = list(self.rows)
+        return self
+
+    def in_(self, col, values):
+        self.data = [r for r in self.data if r.get(col) in values]
+        return self
+
+    def like(self, col, pattern):
+        prefix = pattern.rstrip("%")
+        self.data = [r for r in self.data if (r.get(col) or "").startswith(prefix)]
+        return self
 
     def update(self, values):
         self.log.append(("update", values))
@@ -59,10 +74,11 @@ class FakeSb:
         self.bucket = FakeBucket()
         self.storage = FakeStorage(self.bucket)
         self.log: list = []
+        self.inbox_rows: list[dict] = []
 
     def table(self, name):
         assert name == "inbox"
-        return FakeTable(self.log)
+        return FakeTable(self.log, self.inbox_rows)
 
 
 def test_download_writes_file(tmp_path):
@@ -84,3 +100,11 @@ def test_sweep_removes_only_older_than_a_day():
     sb = FakeSb()
     assert Store(sb).sweep_audio(NOW) == 2
     assert sorted(sb.bucket.removed) == ["u1/old.m4a", "u2/old.webm"]
+
+
+def test_sweep_keeps_audio_of_rows_still_waiting():
+    sb = FakeSb()
+    sb.inbox_rows = [{"status": "pending", "audio_ref": "storage:u2/old.webm"},
+                     {"status": "done", "audio_ref": "storage:u1/old.m4a"}]
+    assert Store(sb).sweep_audio(NOW) == 1
+    assert sb.bucket.removed == ["u1/old.m4a"]

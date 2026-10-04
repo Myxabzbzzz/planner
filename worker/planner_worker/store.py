@@ -108,14 +108,18 @@ class Store:
         """Удаляет файлы старше суток — страховка, если воркер упал между загрузкой и распознаванием."""
         bucket = self.sb.storage.from_(AUDIO_BUCKET)
         cutoff = now_utc - max_age
+        waiting = {r["audio_ref"].removeprefix("storage:") for r in
+                   self.sb.table("inbox").select("audio_ref").in_("status", ["pending", "processing"])
+                   .like("audio_ref", "storage:%").execute().data}  # ноутбук спал дольше суток — запись ещё ждёт
         old = []
         for folder in bucket.list():
             if folder.get("id") is not None:  # файл в корне — не наш формат пути
                 continue
             for f in bucket.list(folder["name"]):
                 created = f.get("created_at")
-                if created and datetime.fromisoformat(created.replace("Z", "+00:00")) < cutoff:
-                    old.append(f"{folder['name']}/{f['name']}")
+                key = f"{folder['name']}/{f['name']}"
+                if created and key not in waiting and datetime.fromisoformat(created.replace("Z", "+00:00")) < cutoff:
+                    old.append(key)
         if old:
             bucket.remove(old)
         return len(old)
