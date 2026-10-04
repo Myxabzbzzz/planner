@@ -1,10 +1,15 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export type ApiUser = { id: string; is_allowed: boolean; onboarded_at: string | null };
+export type InboxInsert = {
+  user_id: string; source: "miniapp"; text: string | null; audio_ref: string | null; reply_chat_id: number;
+};
 
 export interface ApiDb {
   userByTg(tgId: number): Promise<ApiUser | null>;
   call(fn: string, args: unknown[]): Promise<unknown>;
+  createInbox(row: InboxInsert): Promise<string>;
+  workerOnline(): Promise<boolean>;
 }
 
 const ARG_NAMES: Record<string, string[]> = {
@@ -27,6 +32,7 @@ const ARG_NAMES: Record<string, string[]> = {
   delete_note: ["p_user", "p_id"],
   update_habit: ["p_user", "p_id", "p_name", "p_target"],
   archive_habit: ["p_user", "p_id"],
+  api_inbox_status: ["p_user", "p_id"],
 };
 
 export function supabaseApiDb(sb: SupabaseClient): ApiDb {
@@ -42,6 +48,16 @@ export function supabaseApiDb(sb: SupabaseClient): ApiDb {
       const { data, error } = await sb.rpc(fn, Object.fromEntries(names.map((n, i) => [n, args[i]])));
       if (error) throw error;
       return data;
+    },
+    async createInbox(row) {
+      const { data, error } = await sb.from("inbox").insert(row).select("id").single();
+      if (error) throw error;
+      return (data as { id: string }).id;
+    },
+    async workerOnline() {
+      const { data, error } = await sb.rpc("worker_online");
+      if (error) throw error;
+      return data === true;
     },
   };
 }

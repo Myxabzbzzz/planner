@@ -1,4 +1,4 @@
-import type { ApiDb } from "./db.ts";
+import type { ApiDb, InboxInsert } from "./db.ts";
 import { verifyInitData } from "./initdata.ts";
 
 export type ApiDeps = { db: ApiDb; botToken: string; nowSec: () => number };
@@ -21,6 +21,8 @@ const DAY_MS = 86_400_000;
 class BadRequest extends Error {}
 
 function route(path: string, q: URLSearchParams, userId: string): [string, unknown[]] | null {
+  const inbox = new RegExp(`^/inbox/(${UUID})$`, "i").exec(path);
+  if (inbox) return ["api_inbox_status", [userId, inbox[1].toLowerCase()]];
   switch (path) {
     case "/me":
       return ["api_me", [userId]];
@@ -161,6 +163,25 @@ async function postRoute(path: string, req: Request, userId: string): Promise<[s
   return null;
 }
 
+const MAX_TEXT = 4000;
+
+async function createAndReport(db: ApiDb, row: InboxInsert): Promise<Response> {
+  const id = await db.createInbox(row);
+  return json(201, { id, worker_online: await db.workerOnline().catch(() => false) });
+}
+
+async function postInboxText(req: Request, userId: string, tgId: number, db: ApiDb): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    throw new BadRequest();
+  }
+  const text = (body as { text?: unknown } | null)?.text;
+  if (typeof text !== "string" || text.trim() === "" || text.trim().length > MAX_TEXT) throw new BadRequest();
+  return await createAndReport(db, { user_id: userId, source: "miniapp", text: text.trim(), audio_ref: null, reply_chat_id: tgId });
+}
+
 export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "GET" && req.method !== "POST") return json(405, { error: "method_not_allowed" });
@@ -173,6 +194,7 @@ export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
     if (!user || !user.is_allowed || !user.onboarded_at) return json(403, { error: "forbidden" });
     const url = new URL(req.url);
     const path = url.pathname.replace(/^(?:\/functions\/v1)?\/api(?=\/|$)/, "") || "/";
+    if (req.method === "POST" && path === "/inbox") return await postInboxText(req, user.id, auth.tgId, d.db);
     if (req.method === "POST") {
       const pr = await postRoute(path, req, user.id);
       if (!pr) return json(404, { error: "not_found" });
@@ -181,7 +203,8 @@ export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
     }
     const r = route(path, url.searchParams, user.id);
     if (!r) return json(404, { error: "not_found" });
-    return json(200, await d.db.call(r[0], r[1]));
+    const data = await d.db.call(r[0], r[1]);
+    return data === null ? json(404, { error: "not_found" }) : json(200, data);
   } catch (e) {
     if (e instanceof BadRequest) return json(400, { error: "bad_request" });
     if ((e as { code?: string })?.code === "P0001") return json(400, { error: "bad_request" }); // проверка в SQL

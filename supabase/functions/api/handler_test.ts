@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { handleApi } from "./handler.ts";
-import type { ApiDb, ApiUser } from "./db.ts";
+import type { ApiDb, ApiUser, InboxInsert } from "./db.ts";
 import { signInitData } from "./initdata.ts";
 
 const TOKEN = "123:ABC";
@@ -9,10 +9,20 @@ const NOW = 1_790_900_000;
 class FakeApiDb implements ApiDb {
   user: ApiUser | null = { id: "u1", is_allowed: true, onboarded_at: "2026-10-01T00:00:00Z" };
   calls: Array<[string, unknown[]]> = [];
+  inbox: InboxInsert[] = [];
+  online: boolean | Error = true;
   async userByTg(_tg: number) { return this.user; }
   async call(fn: string, args: unknown[]): Promise<unknown> {
     this.calls.push([fn, args]);
     return { fn };
+  }
+  async createInbox(row: InboxInsert) {
+    this.inbox.push(row);
+    return "new-id";
+  }
+  async workerOnline() {
+    if (this.online instanceof Error) throw this.online;
+    return this.online;
   }
 }
 
@@ -218,4 +228,30 @@ Deno.test("edit routes reject bad bodies", async () => {
 Deno.test("edit of a missing item is 404", async () => {
   const r = await run(await post(`/notes/${EID}`, { text: "x" }));  // FakeApiDb.call → не true
   assertEquals(r.status, 404);
+});
+
+Deno.test("POST /inbox creates a miniapp row and reports worker state", async () => {
+  const r = await run(await req("/inbox", { method: "POST", body: { text: "  кофе 40 000 " } }));
+  assertEquals([r.status, r.body], [201, { id: "new-id", worker_online: true }]);
+  assertEquals(r.db.inbox, [{ user_id: "u1", source: "miniapp", text: "кофе 40 000", audio_ref: null, reply_chat_id: 7 }]);
+});
+
+Deno.test("POST /inbox: worker check failure means offline, bad text is 400", async () => {
+  const db = new FakeApiDb();
+  db.online = new Error("down");
+  assertEquals((await run(await req("/inbox", { method: "POST", body: { text: "x" } }), db)).body, { id: "new-id", worker_online: false });
+  for (const body of [{ text: "  " }, { text: "x".repeat(4001) }, { text: 5 }, {}]) {
+    const r = await run(await req("/inbox", { method: "POST", body }));
+    assertEquals([r.status, r.db.inbox.length], [400, 0], JSON.stringify(body));
+  }
+});
+
+Deno.test("GET /inbox/<id> returns own status, null is 404", async () => {
+  const id = "3f2c1a2b-1111-2222-3333-444455556666";
+  assertEquals((await run(await req(`/inbox/${id}`))).db.calls, [["api_inbox_status", ["u1", id]]]);
+  class NullDb extends FakeApiDb {
+    override async call(fn: string, args: unknown[]) { this.calls.push([fn, args]); return null; }
+  }
+  assertEquals((await run(await req(`/inbox/${id}`), new NullDb())).status, 404);
+  assertEquals((await run(await req("/inbox/not-a-uuid"))).status, 404);
 });
