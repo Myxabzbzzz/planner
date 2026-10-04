@@ -10,6 +10,7 @@ type WebApp = {
   disableVerticalSwipes?(): void;
   HapticFeedback?: { selectionChanged(): void; notificationOccurred?(t: "success" | "error" | "warning"): void };
   showConfirm?(message: string, cb: (ok: boolean) => void): void;
+  close?(): void;
   BackButton?: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
 };
 

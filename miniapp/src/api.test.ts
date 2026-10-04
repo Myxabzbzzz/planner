@@ -74,3 +74,19 @@ describe("edit endpoints", () => {
     ]);
   });
 });
+
+describe("inbox endpoints", () => {
+  it("sends text and reads status", async () => {
+    const calls: [string, RequestInit | undefined][] = [];
+    const f = (async (u: URL | RequestInfo, init?: RequestInit) => {
+      calls.push([String(u), init]);
+      return new Response(JSON.stringify(String(u).endsWith("/inbox") ? { id: "i1", worker_online: true } : { status: "done", reply: "✅" }), { status: 200 });
+    }) as typeof fetch;
+    const api = makeApi("https://x/api", "init", f);
+    expect(await api.sendText("кофе")).toEqual({ id: "i1", worker_online: true });
+    expect(await api.inboxStatus("i1")).toEqual({ status: "done", reply: "✅" });
+    expect(calls[0][1]?.method).toBe("POST");
+    expect(calls[0][1]?.body).toBe('{"text":"кофе"}');
+    expect(calls[1][0]).toBe("https://x/api/inbox/i1");
+  });
+});

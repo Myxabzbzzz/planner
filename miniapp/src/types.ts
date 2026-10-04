@@ -28,3 +28,5 @@ export type HabitsResp = { habits: { id: string; name: string; target_per_week: 
 export type Note = { id: string; kind: "thought" | "journal"; text: string; created_at: string };
 export type NotesResp = { notes: Note[]; next_before: string | null };
 export type Categories = { expense: string[]; income: string[] };
+export type Sent = { id: string; worker_online: boolean };
+export type InboxStatus = { status: "pending" | "processing" | "done" | "failed" | "needs_review"; reply: string | null };

@@ -1,6 +1,6 @@
 import type { EventPatch, HabitPatch, NotePatch, TaskPatch } from "./itemEdit";
 import type { OpPatch } from "./opEdit";
-import type { Categories, EventsResp, HabitsResp, Me, MoneyResp, NotesResp, TasksResp, Today } from "./types";
+import type { Categories, EventsResp, HabitsResp, InboxStatus, Me, MoneyResp, NotesResp, Sent, TasksResp, Today } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number) {
@@ -25,6 +25,15 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     });
     if (!res.ok) throw new ApiError(res.status);
   }
+  async function postFor<T>(path: string, body: BodyInit, contentType: string): Promise<T> {
+    const res = await fetchFn(new URL(base + path), {
+      method: "POST",
+      headers: { "X-Init-Data": initData, "content-type": contentType },
+      body,
+    });
+    if (!res.ok) throw new ApiError(res.status);
+    return (await res.json()) as T;
+  }
   return {
     me: () => get<Me>("/me"),
     today: () => get<Today>("/today"),
@@ -46,6 +55,8 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     deleteNote: (id: string) => post(`/notes/${id}/delete`, {}),
     updateHabit: (id: string, patch: HabitPatch) => post(`/habits/${id}`, patch),
     archiveHabit: (id: string) => post(`/habits/${id}/archive`, {}),
+    sendText: (text: string) => postFor<Sent>("/inbox", JSON.stringify({ text }), "application/json"),
+    inboxStatus: (id: string) => get<InboxStatus>(`/inbox/${id}`),
     notes: (q?: string, before?: string) => get<NotesResp>("/notes", { q, before }),
   };
 }

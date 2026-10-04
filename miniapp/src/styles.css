@@ -109,3 +109,17 @@ button.pill { cursor: pointer; }
 .field textarea { font: inherit; font-size: 17px; color: var(--text); background: var(--bg2); border: none; border-radius: 10px;
   padding: 11px 12px; outline: none; resize: vertical; }
 .field textarea:focus { box-shadow: 0 0 0 2px var(--accent); }
+.page { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--bg); }
+.dock .tabbar { position: static; }
+.composer { max-width: 640px; margin: 0 auto; padding: 8px 12px 6px; }
+.composer-row { display: flex; align-items: center; gap: 8px; }
+.composer-input { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--text); background: var(--bg2); border: none;
+  border-radius: 18px; padding: 9px 14px; outline: none; }
+.composer-btn { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: var(--accent-text); font-size: 18px; }
+.composer-btn.ghost { background: var(--bg2); color: var(--accent); }
+.composer-btn:disabled { opacity: .45; }
+.composer-status { margin: 4px 4px 0; }
+.toast { margin-bottom: 8px; padding: 10px 12px; border-radius: 12px; background: var(--bg2); white-space: pre-line; font-size: 15px; }
+.toast.error { color: var(--danger); }
+.toast .button { margin-top: 8px; }
