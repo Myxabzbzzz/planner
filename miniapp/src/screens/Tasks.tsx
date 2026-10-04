@@ -20,13 +20,13 @@ const EMPTY: Record<Filter, string> = {
   nodue: "Задач без срока нет", done: "Выполненных пока нет",
 };
 
-export function Tasks({ api, me }: { api: Api; me: Me }) {
+export function Tasks({ api, me, refresh = 0 }: { api: Api; me: Me; refresh?: number }) {
   const today = todayIso(me.tz);
   const days = weekDays(today);
   const [day, setDay] = useState(today);
   const [filter, setFilter] = useState<Filter>("today");
-  const events = useLoad(() => api.events(days[0], days[6]), [api, days[0]]);
-  const tasks = useLoad(() => api.tasks(filter), [api, filter]);
+  const events = useLoad(() => api.events(days[0], days[6]), [api, days[0]], refresh);
+  const tasks = useLoad(() => api.tasks(filter), [api, filter], refresh);
   const { over, toggle, reset } = useToggles();
   const [editing, setEditing] = useState<{ kind: "event"; item: EventItem & { date: string } } | { kind: "task"; item: TaskItem } | null>(null);
   const saved = () => { setEditing(null); events.reload(); tasks.reload(); };

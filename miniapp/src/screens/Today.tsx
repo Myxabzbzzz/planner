@@ -8,8 +8,8 @@ import { useLoad } from "../load";
 import { useToggles } from "../useToggles";
 import type { Me, Today as TodayData } from "../types";
 
-export function Today({ api, me }: { api: Api; me: Me }) {
-  const { data, error, loading, reload } = useLoad(() => api.today(), [api]);
+export function Today({ api, me, refresh = 0 }: { api: Api; me: Me; refresh?: number }) {
+  const { data, error, loading, reload } = useLoad(() => api.today(), [api], refresh);
   const { over, toggle, reset } = useToggles();
   const retry = () => {
     reset();

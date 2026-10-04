@@ -16,10 +16,10 @@ function groupByDay(ops: Operation[]) {
   return [...map.entries()];
 }
 
-export function Money({ api, me }: { api: Api; me: Me }) {
+export function Money({ api, me, refresh = 0 }: { api: Api; me: Me; refresh?: number }) {
   const thisMonth = currentMonth(me.tz);
   const [month, setMonth] = useState(thisMonth);
-  const { data, error, loading, reload } = useLoad(() => api.money(month), [api, month]);
+  const { data, error, loading, reload } = useLoad(() => api.money(month), [api, month], refresh);
   const [editing, setEditing] = useState<Operation | null>(null);
   const go = (d: number) => { haptic(); setMonth((m) => shiftMonth(m, d)); };
 

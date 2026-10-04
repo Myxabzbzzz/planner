@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { makeApi } from "./api";
 import { Composer } from "./components/Composer";
 import { IconHabits, IconMoney, IconNotes, IconTasks, IconToday } from "./components/Icons";
@@ -39,13 +39,11 @@ export default function App() {
     <>
       <main className="page">
         <h1>{TABS.find((t) => t.key === tab)!.label}</h1>
-        <Fragment key={refresh}>
-        {tab === "today" && <Today api={api} me={me.data} />}
-        {tab === "tasks" && <Tasks api={api} me={me.data} />}
-        {tab === "money" && <Money api={api} me={me.data} />}
-        {tab === "habits" && <Habits api={api} />}
-        {tab === "notes" && <Notes api={api} />}
-        </Fragment>
+        {tab === "today" && <Today api={api} me={me.data} refresh={refresh} />}
+        {tab === "tasks" && <Tasks api={api} me={me.data} refresh={refresh} />}
+        {tab === "money" && <Money api={api} me={me.data} refresh={refresh} />}
+        {tab === "habits" && <Habits api={api} refresh={refresh} />}
+        {tab === "notes" && <Notes api={api} refresh={refresh} />}
       </main>
       <div className="dock">
         <Composer api={api} onDone={() => setRefresh((n) => n + 1)} />

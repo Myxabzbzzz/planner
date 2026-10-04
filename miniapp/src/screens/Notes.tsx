@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../api";
 import { NoteSheet } from "../components/ItemSheets";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
@@ -6,7 +6,7 @@ import { fmtShortDate, fmtTime } from "../format";
 import { makeNotesLoader, type NotesState } from "../notesFeed";
 import type { Note } from "../types";
 
-export function Notes({ api }: { api: Api }) {
+export function Notes({ api, refresh = 0 }: { api: Api; refresh?: number }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [state, setState] = useState<NotesState>({ notes: [], next: null, loading: true, error: false });
@@ -20,6 +20,13 @@ export function Notes({ api }: { api: Api }) {
   }, [q]);
 
   useEffect(() => { loader.search(query); }, [loader, query]);
+  const seen = useRef(refresh);
+  useEffect(() => {
+    if (refresh === seen.current) return;
+    seen.current = refresh;
+    loader.search(query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refresh]);
 
   return (
     <>

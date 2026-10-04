@@ -9,8 +9,8 @@ import { habitView } from "../habitView";
 import { useToggles } from "../useToggles";
 import type { HabitsResp } from "../types";
 
-export function Habits({ api }: { api: Api }) {
-  const { data, error, loading, reload } = useLoad(() => api.habits(4), [api]);
+export function Habits({ api, refresh = 0 }: { api: Api; refresh?: number }) {
+  const { data, error, loading, reload } = useLoad(() => api.habits(4), [api], refresh);
   const { over, toggle, reset } = useToggles();
   useEffect(reset, [data, reset]);
   const [editing, setEditing] = useState<HabitsResp["habits"][number] | null>(null);
