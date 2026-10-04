@@ -90,3 +90,17 @@ describe("inbox endpoints", () => {
     expect(calls[1][0]).toBe("https://x/api/inbox/i1");
   });
 });
+
+describe("audio upload", () => {
+  it("posts the blob with its base mime", async () => {
+    let seen: RequestInit | undefined;
+    const f = (async (_u: URL | RequestInfo, init?: RequestInit) => {
+      seen = init;
+      return new Response('{"id":"i1","worker_online":false}', { status: 201 });
+    }) as typeof fetch;
+    const blob = new Blob([new Uint8Array(3)], { type: "audio/webm;codecs=opus" });
+    expect(await makeApi("https://x/api", "init", f).sendAudio(blob)).toEqual({ id: "i1", worker_online: false });
+    expect((seen?.headers as Record<string, string>)["content-type"]).toBe("audio/webm");
+    expect(seen?.body).toBe(blob);
+  });
+});

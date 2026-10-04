@@ -1,14 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../api";
 import { MAX_TEXT, type Outcome, validText, waitForOutcome, waitingText } from "../composer";
+import { fmtSeconds, MAX_BYTES, micSupported } from "../recorder";
 import { hapticResult, tg } from "../telegram";
 import type { Sent } from "../types";
+import { useRecorder } from "../useRecorder";
 
 export function Composer({ api, onDone }: { api: Api; onDone: () => void }) {
   const [text, setText] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [busy, setBusy] = useState(false);
+  const [clip, setClip] = useState<Blob | null>(null);
+  const micOk = useMemo(() => micSupported({
+    mediaDevices: navigator.mediaDevices,
+    MediaRecorder: (window as unknown as { MediaRecorder?: { isTypeSupported?: (m: string) => boolean } }).MediaRecorder,
+  }), []);
+  const sendClip = (blob: Blob) => void send(() => api.sendAudio(blob), () => setClip(null));
+  const recorder = useRecorder((blob) => {
+    if (blob.size > MAX_BYTES) {
+      setStatus("Запись слишком большая — до 60 секунд.");
+      return;
+    }
+    setClip(blob);
+    sendClip(blob);
+  });
+  const showMic = micOk && !recorder.denied;
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
@@ -61,13 +78,29 @@ export function Composer({ api, onDone }: { api: Api; onDone: () => void }) {
           )}
         </div>
       )}
-      <form className="composer-row" onSubmit={(e) => { e.preventDefault(); submitText(); }}>
-        <input className="composer-input" placeholder="Запиши или спроси…" value={text} maxLength={MAX_TEXT}
-          enterKeyHint="send" onChange={(e) => setText(e.target.value)} disabled={busy} />
-        {text.trim() !== "" && (
-          <button type="submit" className="composer-btn" disabled={busy || !validText(text)} aria-label="Отправить">↑</button>
-        )}
-      </form>
+      {recorder.state === "recording" ? (
+        <div className="composer-row">
+          <button type="button" className="composer-btn ghost" onClick={() => recorder.stop(false)} aria-label="Отменить">✕</button>
+          <span className="rec-dot" />
+          <span className="grow">{fmtSeconds(recorder.seconds)} / 1:00</span>
+          <button type="button" className="composer-btn" onClick={() => recorder.stop(true)} aria-label="Отправить запись">■</button>
+        </div>
+      ) : (
+        <form className="composer-row" onSubmit={(e) => { e.preventDefault(); submitText(); }}>
+          <input className="composer-input" value={text} maxLength={MAX_TEXT} enterKeyHint="send"
+            placeholder={showMic ? "Запиши или спроси…" : "Напиши или спроси (голосом — в чате бота)"}
+            onChange={(e) => setText(e.target.value)} disabled={busy} />
+          {text.trim() !== "" ? (
+            <button type="submit" className="composer-btn" disabled={busy || !validText(text)} aria-label="Отправить">↑</button>
+          ) : showMic && (
+            <button type="button" className="composer-btn ghost" disabled={busy} onClick={() => void recorder.start()} aria-label="Записать голос">🎤</button>
+          )}
+        </form>
+      )}
+      {clip && !busy && recorder.state === "idle" && (
+        <button type="button" className="pill" onClick={() => sendClip(clip)}>↻ Отправить запись ещё раз</button>
+      )}
+      {recorder.denied && <div className="composer-status sub">Нет доступа к микрофону. Голосом — в чате бота.</div>}
       {status && <div className="composer-status sub">{status}</div>}
     </div>
   );

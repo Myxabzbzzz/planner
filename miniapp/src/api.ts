@@ -1,5 +1,6 @@
 import type { EventPatch, HabitPatch, NotePatch, TaskPatch } from "./itemEdit";
 import type { OpPatch } from "./opEdit";
+import { baseMime } from "./recorder";
 import type { Categories, EventsResp, HabitsResp, InboxStatus, Me, MoneyResp, NotesResp, Sent, TasksResp, Today } from "./types";
 
 export class ApiError extends Error {
@@ -57,6 +58,7 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     archiveHabit: (id: string) => post(`/habits/${id}/archive`, {}),
     sendText: (text: string) => postFor<Sent>("/inbox", JSON.stringify({ text }), "application/json"),
     inboxStatus: (id: string) => get<InboxStatus>(`/inbox/${id}`),
+    sendAudio: (blob: Blob) => postFor<Sent>("/inbox/audio", blob, baseMime(blob.type)),
     notes: (q?: string, before?: string) => get<NotesResp>("/notes", { q, before }),
   };
 }

@@ -123,3 +123,6 @@ button.pill { cursor: pointer; }
 .toast { margin-bottom: 8px; padding: 10px 12px; border-radius: 12px; background: var(--bg2); white-space: pre-line; font-size: 15px; }
 .toast.error { color: var(--danger); }
 .toast .button { margin-top: 8px; }
+.composer-row .grow { flex: 1; color: var(--hint); font-variant-numeric: tabular-nums; }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); animation: rec 1s infinite; }
+@keyframes rec { 50% { opacity: .3; } }
