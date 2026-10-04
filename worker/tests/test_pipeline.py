@@ -472,7 +472,7 @@ def test_question_is_answered_without_records(ctx):
     assert ans.calls == ["Сколько потратил в октябре"]
     assert store.inserted == [] and store.cleared == []
     assert store.finished == [("i1", "done", {"text": "Сколько потратил в октябре", "question": {"intent": "spent"},
-                                              "answered": True}, None, False)]
+                                              "answered": True, "reply": ans.text}, None, False)]
     assert tg.edited == [(5, 77, ans.text, None)]
 
 
@@ -521,3 +521,29 @@ def test_unknown_question_falls_back_to_record(ctx):
     assert store.inserted[0][0] == "items"
     assert store.finished[-1][1] == "done"
     assert "question" not in store.finished[-1][2]
+
+
+def test_done_result_keeps_reply(ctx):
+    p, store, tg = make(ctx, FakeExtractor([TAXI]))
+    p.process(row(text="30 000 на такси"))
+    assert store.finished[-1][2]["reply"].startswith("✅ Записал:")
+
+
+def test_miniapp_summary_gets_phone_prefix_in_chat_only(ctx):
+    p, store, tg = make(ctx, FakeExtractor([TAXI]))
+    p.process(row(text="30 000 на такси", source="miniapp", reply_message_id=None))
+    assert tg.sent[0][1].startswith("📱 ✅ Записал:")
+    assert store.finished[-1][2]["reply"].startswith("✅ Записал:")
+
+
+def test_empty_transcript_reply_is_stored(ctx):
+    p, store, tg = make(ctx, FakeExtractor(), stt=FakeStt(""))
+    p.process(row(text=None, source="voice", audio_ref="f1"))
+    assert store.finished[-1][2] == {"text": "", "reply": "🙉 Не расслышал. Повтори, пожалуйста."}
+
+
+def test_miniapp_error_reply_has_prefix_and_quote(ctx):
+    p, store, tg = make(ctx, FakeExtractor(ExtractionError("bad json")))
+    r = row(text="абракадабра", source="miniapp", reply_message_id=None)
+    run_one(r, p, store, tg)
+    assert tg.sent[0][1].startswith("📱 😵") and "«абракадабра»" in tg.sent[0][1]

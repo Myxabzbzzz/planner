@@ -50,8 +50,8 @@ class Store:
     def insert(self, table: str, row: dict) -> None:
         if table == "habit_logs":
             self.sb.table(table).upsert(row, on_conflict="habit_id,date").execute()
-        elif table == "habits":
-            self.sb.table(table).upsert(row, on_conflict="user_id,name", ignore_duplicates=True).execute()
+        elif table == "habits":  # повторное «хочу трекать X» разархивирует X
+            self.sb.table(table).upsert(row, on_conflict="user_id,name").execute()
         else:
             self.sb.table(table).insert(row).execute()
 

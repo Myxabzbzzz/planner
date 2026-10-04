@@ -19,6 +19,12 @@ log = logging.getLogger(__name__)
 
 FAILED_TEXT = "😵 Не получилось разобрать запись. Попробуй отправить ещё раз."
 REPHRASE_TEXT = "😵 Не смог разобрать. Переформулируй, пожалуйста."
+NOT_HEARD = "🙉 Не расслышал. Повтори, пожалуйста."
+PREFIXES = {"shortcut": "📲 ", "miniapp": "📱 "}
+
+
+def chat_text(row: InboxRow, text: str) -> str:
+    return PREFIXES.get(row.source, "") + text
 
 class Pipeline:
     def __init__(self, store, tg, stt, extractor, classifier, fetch_rates: Callable[[], RateTable],
@@ -40,8 +46,8 @@ class Pipeline:
         if text is None:
             text = self._transcribe(row)
             if not text:
-                self.store.finish(row.id, "failed", {"text": ""}, "empty_transcript", notified=True)
-                reply(self.tg, row, "🙉 Не расслышал. Повтори, пожалуйста.")
+                self.store.finish(row.id, "failed", {"text": "", "reply": NOT_HEARD}, "empty_transcript", notified=True)
+                reply(self.tg, row, chat_text(row, NOT_HEARD))
                 return
 
         if self.answerer and is_question(text) and self._answer(row, text, ctx):
@@ -66,11 +72,10 @@ class Pipeline:
                 review.append(self._review_entry(it, f"нет курса валюты: {e}", cls))
 
         status = "needs_review" if review else "done"
-        self.store.finish(row.id, status, {"text": text, "saved": len(lines), "pending_review": review})
         summary = render_summary(lines, len(review))
-        if row.source == "shortcut":
-            summary = "📲 " + summary
-        self._best_effort(reply, self.tg, row, summary,
+        self.store.finish(row.id, status, {"text": text, "saved": len(lines), "pending_review": review,
+                                           "reply": summary})
+        self._best_effort(reply, self.tg, row, chat_text(row, summary),
                           summary_buttons(row.id) if lines else None)
         for idx, entry in enumerate(review):
             it = ExtractedItem.model_validate(entry["item"])
@@ -92,10 +97,8 @@ class Pipeline:
         if answered is None:
             return False
         answer, question = answered
-        self.store.finish(row.id, "done", {"text": text, "question": question, "answered": True})
-        if row.source == "shortcut":
-            answer = "📲 " + answer
-        self._best_effort(reply, self.tg, row, answer)
+        self.store.finish(row.id, "done", {"text": text, "question": question, "answered": True, "reply": answer})
+        self._best_effort(reply, self.tg, row, chat_text(row, answer))
         return True
 
     def _transcribe(self, row: InboxRow) -> str:
@@ -211,8 +214,8 @@ def reply(tg, row: InboxRow, text: str, buttons=None) -> None:
 
 
 def error_reply(tg, row: InboxRow, text: str) -> None:
-    if row.source == "shortcut":
-        text = "📲 " + text
+    if row.source in PREFIXES:
+        text = chat_text(row, text)
         if row.text:
             quote = row.text[:100] + ("…" if len(row.text) > 100 else "")
             text += f"\n«{quote}»"
