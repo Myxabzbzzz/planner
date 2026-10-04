@@ -20,6 +20,13 @@ const ARG_NAMES: Record<string, string[]> = {
   update_transaction: ["p_user", "p_id", "p_amount", "p_title", "p_category"],
   delete_transaction: ["p_user", "p_id"],
   api_categories: ["p_user"],
+  update_task: ["p_user", "p_id", "p_title", "p_due_date", "p_due_time", "p_clear_due"],
+  update_event: ["p_user", "p_id", "p_title", "p_date", "p_time", "p_with_whom"],
+  delete_item: ["p_user", "p_id", "p_kind"],
+  update_note: ["p_user", "p_id", "p_text", "p_kind"],
+  delete_note: ["p_user", "p_id"],
+  update_habit: ["p_user", "p_id", "p_name", "p_target"],
+  archive_habit: ["p_user", "p_id"],
 };
 
 export function supabaseApiDb(sb: SupabaseClient): ApiDb {

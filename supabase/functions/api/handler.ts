@@ -83,12 +83,66 @@ function txPatch(b: Record<string, unknown>, userId: string, id: string): unknow
   return [userId, id, amount ?? null, typeof title === "string" ? title.trim() : null, category ?? null];
 }
 
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const isTitle = (v: unknown) => typeof v === "string" && v.trim() !== "" && v.trim().length <= 200;
+
+function optTitle(v: unknown): string | null {
+  if (v === undefined) return null;
+  if (!isTitle(v)) throw new BadRequest();
+  return (v as string).trim();
+}
+
+function requireSome(b: Record<string, unknown>, keys: string[]) {
+  if (!keys.some((k) => b[k] !== undefined)) throw new BadRequest();
+}
+
+function taskPatch(b: Record<string, unknown>, u: string, id: string): unknown[] {
+  requireSome(b, ["title", "due_date", "due_time"]);
+  const { due_date, due_time } = b;
+  if (due_date !== undefined && due_date !== null && !(typeof due_date === "string" && realDate(due_date))) throw new BadRequest();
+  if (due_time !== undefined && due_time !== null && !(typeof due_time === "string" && TIME.test(due_time))) throw new BadRequest();
+  if (typeof due_time === "string" && typeof due_date !== "string") throw new BadRequest();
+  return [u, id, optTitle(b.title), due_date ?? null, due_time ?? null, due_date === null];
+}
+
+function eventPatch(b: Record<string, unknown>, u: string, id: string): unknown[] {
+  requireSome(b, ["title", "date", "time", "with_whom"]);
+  const { date, time, with_whom } = b;
+  if (date !== undefined && !(typeof date === "string" && realDate(date))) throw new BadRequest();
+  if (time !== undefined && !(typeof time === "string" && TIME.test(time))) throw new BadRequest();
+  if (with_whom !== undefined && !(typeof with_whom === "string" && with_whom.trim().length <= 200)) throw new BadRequest();
+  return [u, id, optTitle(b.title), date ?? null, time ?? null, with_whom ?? null];
+}
+
+function notePatch(b: Record<string, unknown>, u: string, id: string): unknown[] {
+  requireSome(b, ["text", "kind"]);
+  const { text, kind } = b;
+  if (text !== undefined && !(typeof text === "string" && text.trim() !== "" && text.trim().length <= 4000)) throw new BadRequest();
+  if (kind !== undefined && kind !== "thought" && kind !== "journal") throw new BadRequest();
+  return [u, id, typeof text === "string" ? text.trim() : null, kind ?? null];
+}
+
+function habitPatch(b: Record<string, unknown>, u: string, id: string): unknown[] {
+  requireSome(b, ["name", "target"]);
+  const { target } = b;
+  if (target !== undefined && !(Number.isInteger(target) && (target as number) >= 1 && (target as number) <= 7)) throw new BadRequest();
+  return [u, id, optTitle(b.name), target ?? null];
+}
+
 const POST_ROUTES: [RegExp, string, BodyParser][] = [
   [new RegExp(`^/tasks/(${UUID})/done$`, "i"), "set_item_done", (b, u, id) => [u, id, "task", doneArg(b)]],
   [new RegExp(`^/events/(${UUID})/done$`, "i"), "set_item_done", (b, u, id) => [u, id, "event", doneArg(b)]],
   [new RegExp(`^/habits/(${UUID})/today$`, "i"), "set_habit_today", (b, u, id) => [u, id, doneArg(b)]],
   [new RegExp(`^/transactions/(${UUID})$`, "i"), "update_transaction", txPatch],
   [new RegExp(`^/transactions/(${UUID})/delete$`, "i"), "delete_transaction", (_b, u, id) => [u, id]],
+  [new RegExp(`^/tasks/(${UUID})$`, "i"), "update_task", taskPatch],
+  [new RegExp(`^/events/(${UUID})$`, "i"), "update_event", eventPatch],
+  [new RegExp(`^/notes/(${UUID})$`, "i"), "update_note", notePatch],
+  [new RegExp(`^/habits/(${UUID})$`, "i"), "update_habit", habitPatch],
+  [new RegExp(`^/tasks/(${UUID})/delete$`, "i"), "delete_item", (_b, u, id) => [u, id, "task"]],
+  [new RegExp(`^/events/(${UUID})/delete$`, "i"), "delete_item", (_b, u, id) => [u, id, "event"]],
+  [new RegExp(`^/notes/(${UUID})/delete$`, "i"), "delete_note", (_b, u, id) => [u, id]],
+  [new RegExp(`^/habits/(${UUID})/archive$`, "i"), "archive_habit", (_b, u, id) => [u, id]],
 ];
 
 async function postRoute(path: string, req: Request, userId: string): Promise<[string, unknown[]] | null> {

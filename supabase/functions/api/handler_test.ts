@@ -168,3 +168,54 @@ Deno.test("transactions: bad bodies are 400, missing row 404, db validation erro
   bad.call = () => Promise.reject({ code: "P0001", message: "bad category" });
   assertEquals((await run(await req(`/transactions/${ID}`, { method: "POST", body: { category: "нет такой" } }), bad)).status, 400);
 });
+
+class TrueDb extends FakeApiDb {
+  override async call(fn: string, args: unknown[]): Promise<unknown> {
+    this.calls.push([fn, args]);
+    return true;
+  }
+}
+const EID = "3f2c1a2b-1111-2222-3333-444455556666";
+const post = (path: string, body: unknown) => req(path, { method: "POST", body });
+
+Deno.test("edit routes map bodies to sql args", async () => {
+  const cases: Array<[string, unknown, string, unknown[]]> = [
+    [`/tasks/${EID}`, { title: " Купить " }, "update_task", ["u1", EID, "Купить", null, null, false]],
+    [`/tasks/${EID}`, { due_date: "2026-10-10", due_time: "09:30" }, "update_task", ["u1", EID, null, "2026-10-10", "09:30", false]],
+    [`/tasks/${EID}`, { due_date: null }, "update_task", ["u1", EID, null, null, null, true]],
+    [`/events/${EID}`, { time: "16:30", with_whom: "" }, "update_event", ["u1", EID, null, null, "16:30", ""]],
+    [`/notes/${EID}`, { text: "Идея", kind: "journal" }, "update_note", ["u1", EID, "Идея", "journal"]],
+    [`/habits/${EID}`, { name: "Чтение", target: 3 }, "update_habit", ["u1", EID, "Чтение", 3]],
+    [`/tasks/${EID}/delete`, {}, "delete_item", ["u1", EID, "task"]],
+    [`/events/${EID}/delete`, {}, "delete_item", ["u1", EID, "event"]],
+    [`/notes/${EID}/delete`, {}, "delete_note", ["u1", EID]],
+    [`/habits/${EID}/archive`, {}, "archive_habit", ["u1", EID]],
+  ];
+  for (const [path, body, fn, args] of cases) {
+    const r = await run(await post(path, body), new TrueDb());
+    assertEquals([r.status, r.db.calls], [200, [[fn, args]]], path);
+  }
+});
+
+Deno.test("edit routes reject bad bodies", async () => {
+  const bad: Array<[string, unknown]> = [
+    [`/tasks/${EID}`, {}],
+    [`/tasks/${EID}`, { due_time: "09:30" }],
+    [`/tasks/${EID}`, { due_date: "2026-02-30" }],
+    [`/tasks/${EID}`, { title: "" }],
+    [`/events/${EID}`, { time: "9:30" }],
+    [`/events/${EID}`, { with_whom: "x".repeat(201) }],
+    [`/notes/${EID}`, { kind: "idea" }],
+    [`/notes/${EID}`, { text: "x".repeat(4001) }],
+    [`/habits/${EID}`, { target: 0 }],
+    [`/habits/${EID}`, { target: 2.5 }],
+  ];
+  for (const [path, body] of bad) {
+    assertEquals((await run(await post(path, body), new TrueDb())).status, 400, JSON.stringify(body));
+  }
+});
+
+Deno.test("edit of a missing item is 404", async () => {
+  const r = await run(await post(`/notes/${EID}`, { text: "x" }));  // FakeApiDb.call → не true
+  assertEquals(r.status, 404);
+});
