@@ -249,3 +249,31 @@ def test_split_comma_chains():
 def test_numbers_only_hint(ctx):
     assert "только из чисел" in build_extract_messages("50 80", ctx)[1]["content"]
     assert "только из чисел" not in build_extract_messages("кофе 40 000", ctx)[1]["content"]
+
+
+def test_annotate_amounts():
+    from planner_worker.prompts import annotate_amounts
+    assert annotate_amounts("25 тыщ кофе") == "25 тыщ (25000) кофе"
+    assert annotate_amounts("потратил 25 тысяч на такси") == "потратил 25 тысяч (25000) на такси"
+    assert annotate_amounts("кофе 40 тыс.") == "кофе 40 тыс. (40000)"
+    assert annotate_amounts("2 тыщи на хлеб") == "2 тыщи (2000) на хлеб"
+    assert annotate_amounts("1 тысяча") == "1 тысяча (1000)"
+    assert annotate_amounts("такси 30к") == "такси 30к (30000)"
+    assert annotate_amounts("такси 30 к") == "такси 30 к (30000)"
+    assert annotate_amounts("1,5 млн за ноутбук") == "1,5 млн (1500000) за ноутбук"
+    assert annotate_amounts("2 миллиона") == "2 миллиона (2000000)"
+    assert annotate_amounts("полторы тысячи на кофе") == "полторы тысячи (1500) на кофе"
+    assert annotate_amounts("20 тысяч долларов") == "20 тысяч (20000) долларов"
+
+
+def test_annotate_amounts_leaves_other_text():
+    from planner_worker.prompts import annotate_amounts
+    for s in ["кофе 40 000", "к 9 отвезти машину", "в 3 к врачу", "пришло 200 к", "тысяча вопросов"]:
+        expected = "пришло 200 к (200000)" if s == "пришло 200 к" else s
+        assert annotate_amounts(s) == expected
+    once = annotate_amounts("25 тыщ кофе")
+    assert annotate_amounts(once) == once
+
+
+def test_messages_annotate_amounts(ctx):
+    assert build_extract_messages("25 тыщ кофе", ctx)[1]["content"].endswith("25 тыщ (25000) кофе")

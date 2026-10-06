@@ -31,6 +31,7 @@ SYSTEM = """Ты — парсер личного планера. Раздели 
 - Для дней недели и относительных дат бери дату из строки «Календарь» — ближайший будущий такой день (сегодняшний день недели = сегодня).
 - Если после слова стоит дата в скобках (YYYY-MM-DD) — используй именно её.
 - Если после времени стоит время в скобках (ЧЧ:ММ) — используй именно его. Если время не названо — не придумывай его.
+- Если после суммы стоит число в скобках («25 тыщ (25000)») — это точная сумма, amount — именно это число.
 - Несколько сумм подряд («потратил 290 и 60 и ещё 100») — отдельная запись на каждую сумму; суммы никогда не складывай.
 - Суммы: «40 000» → 40000, «22,4» → 22.4, «пятьсот» → 500, «2к» → 2000.
 - Вопросы и просьбы к самому боту («можешь написать код?», «что такое инфляция?», «расскажи анекдот», «привет») — не записи: items: []. Но свои идеи и размышления с вопросом («а что если открыть кофейню?») — note.
@@ -230,6 +231,29 @@ def annotate_times(text: str) -> str:
     return _BARE_TIME_RE.sub(rep, _TIME_RE.sub(rep, text))
 
 
+_AMOUNT_RE = re.compile(
+    r"(?<![\w.,])(?P<n>\d+(?:[.,]\d+)?|полтор[аы])"
+    r"(?:\s*(?P<word>тыщ[аиу]?|тысяч[аиу]?|тыс\.?|млн\.?|миллион(?:а|ов)?)(?![а-яё])"
+    r"|(?P<k>к)(?![а-яё\w])"  # «30к» слитно — всегда тысячи
+    r"|\s+(?P<ks>к)(?=\s*$|\s*[,.;!?)]|\s+(?:сум|руб|долл|тенге|евро)|\s*[$₽₸€]))"  # «30 к» — только в конце/перед валютой
+    r"(?!\s*\(\d)",
+    re.IGNORECASE,
+)
+
+
+def annotate_amounts(text: str) -> str:
+    """«25 тыщ» → «25 тыщ (25000)»: сумму считает код, модель только переписывает её."""
+    def rep(m: re.Match) -> str:
+        n = m.group("n").lower()
+        base = 1.5 if n.startswith("полтор") else float(n.replace(",", "."))
+        word = (m.group("word") or "").lower()
+        mult = 1_000_000 if word.startswith(("млн", "миллион")) else 1000
+        value = round(base * mult, 2)
+        return f"{m.group(0)} ({int(value) if value == int(value) else value})"
+
+    return _AMOUNT_RE.sub(rep, text)
+
+
 _ONLY_NUMBERS_RE = re.compile(r"[\d\s.,]*\d[\d\s.,]*")
 
 
@@ -258,7 +282,7 @@ def build_extract_messages(
     if feedback:
         user += "Прошлый разбор содержал ошибки, исправь их:\n- " + "\n- ".join(feedback) + "\n"
     text = annotate_in_time(split_number_lists(text), ctx.now)
-    user += f"\nСообщение:\n{annotate_times(annotate_dates(text, today))}"
+    user += f"\nСообщение:\n{annotate_amounts(annotate_times(annotate_dates(text, today)))}"
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
 
