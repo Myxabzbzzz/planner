@@ -1,6 +1,7 @@
 import logging
-from datetime import datetime, timezone
+import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -22,6 +23,15 @@ HEARTBEAT_EVERY = 30.0
 log = logging.getLogger("planner_worker")
 
 
+def _log_failure(what: str) -> None:
+    """Сеть пропала (Mac проснулся без Wi-Fi) — одна строка; остальное — с трейсбеком."""
+    exc = sys.exc_info()[1]
+    if isinstance(exc, httpx.TransportError):
+        log.warning("%s: no network (%s)", what, type(exc).__name__)
+    else:
+        log.exception(what)
+
+
 def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None) -> float:
     """One loop iteration; never raises on transient errors. Returns new last_beat."""
     if time.monotonic() - last_beat >= HEARTBEAT_EVERY:
@@ -29,11 +39,11 @@ def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None) -> float:
         try:
             store.heartbeat(cfg.worker_id)
         except Exception:
-            log.exception("heartbeat failed")
+            _log_failure("heartbeat failed")
         try:
             notify_failed(store, tg)
         except Exception:
-            log.exception("notify_failed failed")
+            _log_failure("notify_failed failed")
     try:
         row = store.claim()
         if row is None:
@@ -48,7 +58,7 @@ def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None) -> float:
         log.info("processing %s (%s, attempt %s)", row.id, row.source, row.attempts)
         run_one(row, pipeline, store, tg)
     except Exception:
-        log.exception("loop error")
+        _log_failure("loop error")
         time.sleep(cfg.poll_interval)
     return last_beat
 

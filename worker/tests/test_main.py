@@ -84,3 +84,34 @@ def test_failed_job_backs_off(monkeypatch):
     cfg = SimpleNamespace(worker_id="w", poll_interval=2)
     m.tick(s, None, None, cfg, time.monotonic(), job_runner=lambda j: False)
     assert sleeps == [10]
+
+
+class NetStore(Store):
+    def __init__(self, exc):
+        super().__init__()
+        self.exc = exc
+
+    def heartbeat(self, worker_id):
+        raise self.exc
+
+    def claim(self):
+        raise self.exc
+
+
+def test_network_errors_are_one_line_warnings(caplog):
+    import logging
+    import httpx
+
+    caplog.set_level(logging.INFO, logger="planner_worker")
+    m.tick(NetStore(httpx.ConnectError("[Errno 8] nodename nor servname provided")), None, None, CFG, 0.0)
+    recs = [r for r in caplog.records if r.name == "planner_worker"]
+    assert recs and all(r.levelno == logging.WARNING and r.exc_info is None for r in recs)
+    assert any("ConnectError" in r.getMessage() for r in recs)
+
+
+def test_other_errors_keep_the_traceback(caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="planner_worker")
+    m.tick(Store(claim_error=True), None, None, CFG, time.monotonic())
+    assert any(r.levelno == logging.ERROR and r.exc_info for r in caplog.records)
