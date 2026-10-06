@@ -10,7 +10,7 @@ CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 _ANNOTATION_RE = re.compile(r"\((?:\d{4}-\d{2}-\d{2}|\d{2}:\d{2})\)")
 _CLOCK_RE = re.compile(r"(?<!\d)\d{1,2}:\d{2}(?!\d)")
 _AMOUNT_RE = re.compile(
-    r"(?<![\d.,])(\d{1,3}(?:[ \u00a0]\d{3})+|\d+)(?:[.,](\d{1,2}))?(?!\d)\s*(к|k|тыс\w*|млн|миллион\w*)?(?!\w)",
+    r"(?<![\d.,])(\d{1,3}(?:[ \u00a0]\d{3})+|\d+)(?:[.,](\d{1,2}))?(?!\d)\s*(к|k|тыс\w*|тыщ\w*|млн|миллион\w*)?(?!\w)",
     re.IGNORECASE,
 )
 _CENT = Decimal("0.005")

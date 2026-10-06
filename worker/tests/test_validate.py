@@ -145,3 +145,15 @@ def test_localize_keeps_amount_written_as_its_own_number(ctx):
     # «290,60,80» — модель разбила на три траты; 60 есть в тексте отдельным числом — не трогаем
     it = localize(item(kind="expense", amount=60, source_text="Я потратил 290,60,80."), ctx)
     assert it.amount == 60
+
+
+def test_amounts_in_understands_tyshch():
+    from decimal import Decimal
+    from planner_worker.validate import amounts_in
+    assert amounts_in("25 тыщ кофе") == [Decimal(25000)]
+    assert amounts_in("2 тыщи на хлеб") == [Decimal(2000)]
+
+
+def test_localize_keeps_model_amount_for_tyshch(ctx):
+    it = ExtractedItem(kind="expense", title="Кофе", source_text="25 тыщ кофе", amount=25000)
+    assert localize(it, ctx).amount == 25000
