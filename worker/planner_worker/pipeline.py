@@ -1,13 +1,14 @@
 import copy
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo
 
 from .classifier import decide
-from .format import KIND_LABELS, render_line, render_summary, review_message, summary_buttons, time_message
+from .format import (KIND_LABELS, past_time_message, render_line, render_summary, review_message, summary_buttons,
+                     time_message)
 from .fx import FxApplied, FxError, RateTable, convert
 from .llm import ExtractionError
 from .rows import to_row
@@ -22,6 +23,7 @@ REPHRASE_TEXT = "😵 Не смог разобрать. Переформулир
 NOT_HEARD = "🙉 Не расслышал. Повтори, пожалуйста."
 PREFIXES = {"shortcut": "📲 ", "miniapp": "📱 "}
 STORAGE = "storage:"
+PAST_GRACE = timedelta(minutes=15)
 
 
 def chat_text(row: InboxRow, text: str) -> str:
@@ -63,6 +65,9 @@ class Pipeline:
                 reason = "time" if errs == [NO_TIME] else "; ".join(errs)
                 review.append(self._review_entry(it, reason, None))
                 continue
+            if self._past_today(it, ctx):
+                review.append(self._review_entry(it, "past", None))
+                continue
             cls = self.classifier.classify(it.source_text) if self.classifier else None
             if not decide(it, cls, self.threshold):
                 review.append(self._review_entry(it, "laya", cls))
@@ -81,6 +86,7 @@ class Pipeline:
         for idx, entry in enumerate(review):
             it = ExtractedItem.model_validate(entry["item"])
             msg, buttons = (time_message(row.id, idx, it, ctx) if entry["reason"] == "time"
+                            else past_time_message(row.id, idx, it, ctx) if entry["reason"] == "past"
                             else review_message(row.id, idx, it, entry["reason"]))
             self._best_effort(self.tg.send, row.reply_chat_id, msg, buttons)
 
@@ -153,6 +159,14 @@ class Pipeline:
         return render_line(it, fx, ctx)
 
     @staticmethod
+    def _past_today(it: ExtractedItem, ctx: UserContext) -> bool:
+        """Встреча на сегодня, но её время уже прошло: «04:30» днём — скорее 16:30 или завтра."""
+        if it.kind != "event" or it.starts_at is None:
+            return False
+        local = it.starts_at.astimezone(ZoneInfo(ctx.tz))
+        return local.date() == ctx.now.date() and local < ctx.now - PAST_GRACE
+
+    @staticmethod
     def _review_entry(it: ExtractedItem, reason: str, cls) -> dict:
         laya = {"group": cls.group, "confidence": cls.confidence} if cls else None
         return {"item": it.model_dump(mode="json"), "reason": reason, "laya": laya}
@@ -191,7 +205,10 @@ class Pipeline:
         day = it.starts_at.astimezone(tz).date() if it.starts_at else ctx.now.date()
         if forced == "event" and entry.get("forced_time"):
             hh, mm = map(int, entry["forced_time"].split(":"))
-            return it.model_copy(update={"kind": "event", "starts_at": datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz)})
+            start = datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz)
+            if entry.get("reason") == "past" and start <= ctx.now:
+                start += timedelta(days=1)  # «Завтра 04:30»
+            return it.model_copy(update={"kind": "event", "starts_at": start})
         return it.model_copy(update={"kind": "task", "starts_at": None,
                                      "due_at": datetime(day.year, day.month, day.day, 23, 59, tzinfo=tz)})
 
@@ -199,7 +216,8 @@ class Pipeline:
                            saved: list[str], warnings: list[str]) -> None:
         if forced == "drop":
             return
-        if entry.get("reason") == "time" and forced in ("event", "task"):
+        if (entry.get("reason") == "time" and forced in ("event", "task")) or \
+                (entry.get("reason") == "past" and entry.get("forced_time")):
             saved.append(self._save(self._apply_time_choice(entry, forced, ctx), ctx, inbox_id))
             return
         # пользователь сам выбрал тип — не переделываем встречу в задачу и не требуем времени

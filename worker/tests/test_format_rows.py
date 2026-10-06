@@ -141,3 +141,25 @@ def test_time_message(ctx):
 def test_empty_summary_mentions_questions():
     assert render_summary([], 0) == ("🤷 Не нашёл, что записать. Я записываю дела, встречи, траты и мысли "
                                      "и отвечаю про траты, доходы, лимит, задачи и встречи.")
+
+
+def test_past_time_message_offers_today_pm_and_tomorrow(ctx):
+    from planner_worker.format import past_time_message
+    it = ExtractedItem(kind="event", title="Встреча с Амиром", source_text="Встреча с Амиром 04:30",
+                       starts_at=datetime(2026, 10, 1, 4, 30, tzinfo=ZoneInfo("Asia/Tashkent")))
+    text, buttons = past_time_message("i1", 0, it, ctx)
+    assert text == "🕐 04:30 уже прошло. Когда «Встреча с Амиром»?"
+    assert buttons == [
+        [{"text": "Сегодня 16:30", "callback_data": "rt:i1:0:1630"}, {"text": "Завтра 04:30", "callback_data": "rt:i1:0:0430"}],
+        [{"text": "Оставить 04:30", "callback_data": "rv:i1:0:event"}, {"text": "🗑 Пропустить", "callback_data": "rt:i1:0:drop"}],
+    ]
+
+
+def test_past_time_message_without_today_option_late_evening(ctx):
+    from dataclasses import replace
+    from planner_worker.format import past_time_message
+    late = replace(ctx, now=datetime(2026, 10, 1, 22, 0, tzinfo=ZoneInfo("Asia/Tashkent")))
+    it = ExtractedItem(kind="event", title="Созвон", source_text="созвон 08:00",
+                       starts_at=datetime(2026, 10, 1, 8, 0, tzinfo=ZoneInfo("Asia/Tashkent")))
+    _, buttons = past_time_message("i1", 2, it, late)
+    assert buttons[0] == [{"text": "Завтра 08:00", "callback_data": "rt:i1:2:0800"}]

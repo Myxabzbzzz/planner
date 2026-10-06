@@ -609,3 +609,53 @@ def test_retry_keeps_storage_audio(ctx):
     run_one(audio_row(attempts=1), p, store, tg)
     assert store.finished[-1][1] == "pending"
     assert store.removed == []
+
+
+PAST = item(kind="event", title="Встреча с Амиром", source_text="Встреча с Амиром 04:30",
+            starts_at=datetime(2026, 10, 1, 4, 30))
+
+
+def test_event_earlier_today_asks_instead_of_saving(ctx):
+    p, store, tg = make(ctx, FakeExtractor([PAST]))
+    p.process(row(text="Встреча с Амиром 04:30"))
+    assert store.inserted == []
+    _, status, result, _, _ = store.finished[-1]
+    assert status == "needs_review" and result["pending_review"][0]["reason"] == "past"
+    assert tg.sent[0][1] == "🕐 04:30 уже прошло. Когда «Встреча с Амиром»?"
+
+
+def test_event_a_few_minutes_ago_is_saved(ctx):
+    just = item(kind="event", title="Созвон", source_text="созвон 09:50", starts_at=datetime(2026, 10, 1, 9, 50))
+    p, store, tg = make(ctx, FakeExtractor([just]))
+    p.process(row(text="созвон 09:50"))
+    assert store.inserted[0][0] == "items"
+
+
+def test_event_on_an_explicit_past_day_is_saved(ctx):
+    yday = item(kind="event", title="Встреча", source_text="вчера (2026-09-30) в 15:00 (15:00) встреча",
+                starts_at=datetime(2026, 9, 30, 15, 0))
+    p, store, tg = make(ctx, FakeExtractor([yday]))
+    p.process(row(text="вчера в 15:00 встреча"))
+    assert store.inserted[0][0] == "items"
+
+
+def _past_pending(**extra):
+    return [{"item": PAST.model_dump(mode="json"), "reason": "past", "laya": None, **extra}]
+
+
+def test_past_choice_tomorrow_moves_to_next_day(ctx):
+    p, store, tg = make(ctx, FakeExtractor())
+    p.process(row(result={"pending_review": _past_pending(forced_kind="event", forced_time="04:30")}))
+    assert store.inserted[0][1]["starts_at"] == "2026-10-01T23:30:00+00:00"  # 02.10 04:30 Ташкент
+
+
+def test_past_choice_today_pm(ctx):
+    p, store, tg = make(ctx, FakeExtractor())
+    p.process(row(result={"pending_review": _past_pending(forced_kind="event", forced_time="16:30")}))
+    assert store.inserted[0][1]["starts_at"] == "2026-10-01T11:30:00+00:00"  # 01.10 16:30 Ташкент
+
+
+def test_past_choice_keep_saves_as_is(ctx):
+    p, store, tg = make(ctx, FakeExtractor())
+    p.process(row(result={"pending_review": _past_pending(forced_kind="event")}))
+    assert store.inserted[0][1]["starts_at"] == "2026-09-30T23:30:00+00:00"  # 01.10 04:30 Ташкент

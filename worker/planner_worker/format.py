@@ -108,3 +108,17 @@ def time_message(inbox_id: str, idx: int, item: ExtractedItem, ctx: UserContext)
     tail = [{"text": "Без времени", "callback_data": f"rt:{inbox_id}:{idx}:none"},
             {"text": "🗑 Пропустить", "callback_data": f"rt:{inbox_id}:{idx}:drop"}]
     return text, [times[:3], times[3:], tail]
+
+
+def past_time_message(inbox_id: str, idx: int, item: ExtractedItem, ctx: UserContext) -> tuple[str, list[list[dict]]]:
+    """Время встречи сегодня уже прошло: «04:30» скорее значит 16:30 или завтра."""
+    local = item.starts_at.astimezone(ZoneInfo(ctx.tz))
+    hhmm = f"{local:%H:%M}"
+    text = f"🕐 {hhmm} уже прошло. Когда «{item.title}»?"
+    first = []
+    pm = local.replace(hour=local.hour + 12) if local.hour < 12 else None
+    if pm and pm > ctx.now:
+        first.append({"text": f"Сегодня {pm:%H:%M}", "callback_data": f"rt:{inbox_id}:{idx}:{pm:%H%M}"})
+    first.append({"text": f"Завтра {hhmm}", "callback_data": f"rt:{inbox_id}:{idx}:{local:%H%M}"})
+    return text, [first, [{"text": f"Оставить {hhmm}", "callback_data": f"rv:{inbox_id}:{idx}:event"},
+                          {"text": "🗑 Пропустить", "callback_data": f"rt:{inbox_id}:{idx}:drop"}]]
