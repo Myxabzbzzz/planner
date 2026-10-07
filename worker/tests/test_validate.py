@@ -154,6 +154,15 @@ def test_amounts_in_understands_tyshch():
     assert amounts_in("2 тыщи на хлеб") == [Decimal(2000)]
 
 
+def test_amounts_in_understands_thousand_dots():
+    from decimal import Decimal
+    from planner_worker.validate import amounts_in
+    assert amounts_in("расходы 150.000 и 60.000,50.000,70.000,30.000") == [
+        Decimal(150000), Decimal(60000), Decimal(50000), Decimal(70000), Decimal(30000)]
+    assert amounts_in("1.250.000 сум") == [Decimal(1250000)]
+    assert amounts_in("кофе 22.40") == [Decimal("22.40")]
+
+
 def test_localize_keeps_model_amount_for_tyshch(ctx):
     it = ExtractedItem(kind="expense", title="Кофе", source_text="25 тыщ кофе", amount=25000)
     assert localize(it, ctx).amount == 25000

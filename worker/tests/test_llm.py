@@ -277,3 +277,30 @@ def test_annotate_amounts_leaves_other_text():
 
 def test_messages_annotate_amounts(ctx):
     assert build_extract_messages("25 тыщ кофе", ctx)[1]["content"].endswith("25 тыщ (25000) кофе")
+
+
+def test_join_thousand_dots():
+    from planner_worker.prompts import join_thousand_dots
+    assert join_thousand_dots("расходы 150.000 и 60.000,50.000") == "расходы 150000 и 60000,50000"
+    assert join_thousand_dots("1.250.000 сум") == "1250000 сум"
+    for s in ["кофе 22.40", "в 10.30 встреча", "11.10 стоматолог", "11.10.2026", "курс 1.5"]:
+        assert join_thousand_dots(s) == s
+
+
+def test_annotate_dates_past():
+    from datetime import date
+
+    from planner_worker.prompts import annotate_dates
+    t = date(2026, 10, 7)
+    assert annotate_dates("за вчера расходы", t) == "за вчера (2026-10-06) расходы"
+    assert annotate_dates("позавчера такси", t) == "позавчера (2026-10-05) такси"
+
+
+def test_messages_dotted_amount_list(ctx):
+    user = build_extract_messages("Шушара добавь за вчера расходы 150.000 и 60.000,50.000,70.000,30.000", ctx)[1]["content"]
+    assert "вчера (2026-09-30) расходы 150000 и 60000 и 50000 и 70000 и 30000" in user
+
+
+def test_prompt_explains_occurred_on():
+    from planner_worker.prompts import SYSTEM
+    assert "occurred_on" in SYSTEM

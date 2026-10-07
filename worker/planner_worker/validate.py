@@ -3,6 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from .prompts import join_thousand_dots, split_number_lists
 from .schemas import ExtractedItem, UserContext
 
 NO_TIME = "у встречи не названо время"
@@ -22,9 +23,9 @@ _DATE_IN_TEXT_RE = re.compile(
 
 
 def amounts_in(text: str) -> list[Decimal]:
-    """Числа-суммы из текста пользователя («200$», «40 000», «22,4», «300к», «12 миллионов»).
+    """Числа-суммы из текста пользователя («200$», «40 000», «150.000», «22,4», «300к», «12 миллионов»).
     Аннотации дат/времени и время «15:30» не считаются."""
-    clean = _CLOCK_RE.sub(" ", _ANNOTATION_RE.sub(" ", text))
+    clean = _CLOCK_RE.sub(" ", _ANNOTATION_RE.sub(" ", split_number_lists(join_thousand_dots(text))))
     out = []
     for m in _AMOUNT_RE.finditer(clean):
         n = Decimal(re.sub(r"[ \u00a0]", "", m.group(1)) + (f".{m.group(2)}" if m.group(2) else ""))

@@ -29,7 +29,7 @@ SYSTEM = """Ты — парсер личного планера. Раздели 
 - source_text — дословный фрагмент сообщения, к которому относится запись.
 - Даты и время — локальные, формат YYYY-MM-DDTHH:MM:SS, без часового пояса. Относительные даты («завтра», «в пятницу») считай от текущего момента.
 - Для дней недели и относительных дат бери дату из строки «Календарь» — ближайший будущий такой день (сегодняшний день недели = сегодня).
-- Если после слова стоит дата в скобках (YYYY-MM-DD) — используй именно её.
+- Если после слова стоит дата в скобках (YYYY-MM-DD) — используй именно её; у трат и доходов это occurred_on.
 - Если после времени стоит время в скобках (ЧЧ:ММ) — используй именно его. Если время не названо — не придумывай его.
 - Если после суммы стоит число в скобках («25 тыщ (25000)») — это точная сумма, amount — именно это число.
 - Несколько сумм подряд («потратил 290 и 60 и ещё 100») — отдельная запись на каждую сумму; суммы никогда не складывай.
@@ -48,7 +48,7 @@ _WEEKDAY_STEMS = [
     ("суббота", r"суббот(?:а|у|ы)"),
     ("воскресенье", r"воскресень(?:е|я)"),
 ]
-_DATE_WORDS = r"послезавтра|завтра|сегодня|" + "|".join(p for _, p in _WEEKDAY_STEMS)
+_DATE_WORDS = r"послезавтра|позавчера|завтра|вчера|сегодня|" + "|".join(p for _, p in _WEEKDAY_STEMS)
 _DATE_RE = re.compile(rf"(?<!\w)({_DATE_WORDS})(?!\w)(?!\s*\(\d{{4}}-\d{{2}}-\d{{2}}\))", re.IGNORECASE)
 _NUM_WORDS = {"один": 1, "одну": 1, "одного": 1, "два": 2, "две": 2, "пару": 2, "три": 3, "четыре": 4, "пять": 5,
               "шесть": 6, "семь": 7, "восемь": 8, "девять": 9, "десять": 10}
@@ -147,6 +147,14 @@ def annotate_in_time(text: str, now: datetime) -> str:
     return _IN_TIME_RE.sub(rep, text)
 
 
+_THOUSAND_DOTS_RE = re.compile(r"(?<![\d.])\d{1,3}(?:\.\d{3})+(?![\d.])")
+
+
+def join_thousand_dots(text: str) -> str:
+    """«150.000» и «1.250.000» — точка разделяет тысячи: «150000». «22.40» и даты «11.10» не трогаем."""
+    return _THOUSAND_DOTS_RE.sub(lambda m: m.group(0).replace(".", ""), text)
+
+
 _LIST_COMMA_RE = re.compile(r"(?<=\d)\s+,\s*(?=\d)|(?<=\d),\s+(?=\d)")
 _COMMA_CHAIN_RE = re.compile(r"(?<![\d.,])\d+(?:,\d+){2,}(?![\d,])")
 
@@ -166,6 +174,10 @@ def annotate_dates(text: str, today: date) -> str:
             return today + timedelta(days=1)
         if w == "послезавтра":
             return today + timedelta(days=2)
+        if w == "вчера":
+            return today - timedelta(days=1)
+        if w == "позавчера":
+            return today - timedelta(days=2)
         for idx, (_, pat) in enumerate(_WEEKDAY_STEMS):
             if re.fullmatch(pat, w):
                 return today + timedelta(days=(idx - today.weekday()) % 7)
@@ -176,7 +188,7 @@ def annotate_dates(text: str, today: date) -> str:
 
     def rep(m: re.Match) -> str:
         w = m.group(1)
-        is_weekday = w.lower() not in ("сегодня", "завтра", "послезавтра")
+        is_weekday = w.lower() not in ("сегодня", "завтра", "послезавтра", "вчера", "позавчера")
         if is_weekday and re.search(r"\(\d{4}-\d{2}-\d{2}\)", text[m.end():m.end() + 40]):
             return w  # «в воскресенье следующее 11.10» — явная дата важнее дня недели
         return f"{w} ({resolve(w).isoformat()})"
@@ -281,7 +293,7 @@ def build_extract_messages(
         user += "Сообщение состоит только из чисел — это траты (expense), по одной записи на каждое число, title «Трата».\n"
     if feedback:
         user += "Прошлый разбор содержал ошибки, исправь их:\n- " + "\n- ".join(feedback) + "\n"
-    text = annotate_in_time(split_number_lists(text), ctx.now)
+    text = annotate_in_time(split_number_lists(join_thousand_dots(text)), ctx.now)
     user += f"\nСообщение:\n{annotate_amounts(annotate_times(annotate_dates(text, today)))}"
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
