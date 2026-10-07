@@ -18,22 +18,38 @@ export type NewInbox = {
   text?: string;
   audio_ref?: string;
   reply_chat_id: number;
-  reply_message_id: number;
+  reply_message_id?: number;
+};
+
+export type Queue = {
+  waiting: number;
+  needs_review: number;
+  failed: number;
+  oldest: string | null;
 };
 
 export interface Db {
   resolveTime(userId: string, inboxId: string, idx: number, choice: string): Promise<boolean>;
   findUser(tgId: number): Promise<User | null>;
   createUser(u: Omit<User, "id" | "onboarded_at" | "base_currency"> & { name?: string }): Promise<User>;
-  isInvited(username: string): Promise<boolean>;
-  invite(username: string): Promise<void>;
-  revoke(username: string): Promise<void>;
+  /** Запоминает апдейт; false — его уже обрабатывали (Telegram повторил при таймауте). */
+  recordUpdate(updateId: number | undefined): Promise<boolean>;
+  /** Ник в базе должен быть свежим, иначе `/deny @ник` бьёт мимо. */
+  touchUser(tgId: number, username: string | null, name: string): Promise<void>;
+  /** Одноразовое приглашение по нику или постоянное по tg_id. */
+  claimInvite(tgId: number, username: string | null): Promise<boolean>;
+  invite(username: string | null, tgId?: number): Promise<void>;
+  revoke(username: string | null, tgId?: number): Promise<number>;
   onboard(userId: string, currency: string): Promise<void>;
   knownCurrency(code: string): Promise<boolean>;
   workerOnline(): Promise<boolean>;
   createInbox(row: NewInbox): Promise<string>;
+  setInboxReply(inboxId: string, messageId: number): Promise<void>;
   deleteRecords(userId: string, inboxId: string): Promise<number>;
   resolveReview(userId: string, inboxId: string, idx: number, kind: string): Promise<boolean>;
+  retryInbox(userId: string, inboxId: string): Promise<boolean>;
+  cancelInbox(userId: string, inboxId: string): Promise<boolean>;
+  queue(userId: string): Promise<Queue>;
 }
 
 const USER_COLS = "id,tg_id,tg_username,is_allowed,is_admin,onboarded_at,base_currency,pending_action";
@@ -57,16 +73,21 @@ export function supabaseDb(sb: SupabaseClient): Db {
     async createUser(u) {
       return check(await sb.from("users").insert(u).select(USER_COLS).single()) as User;
     },
-    async isInvited(username) {
-      return check(await sb.from("invites").select("username").eq("username", username).maybeSingle()) !== null;
+    async recordUpdate(updateId) {
+      if (updateId === undefined || updateId === null) return true;
+      return check(await sb.rpc("record_update", { p_update_id: updateId })) === true;
     },
-    async invite(username) {
-      check(await sb.from("invites").upsert({ username }));
-      check(await sb.from("users").update({ is_allowed: true }).eq("tg_username", username));
+    async touchUser(tgId, username, name) {
+      check(await sb.rpc("touch_user", { p_tg_id: tgId, p_username: username, p_name: name }));
     },
-    async revoke(username) {
-      check(await sb.from("invites").delete().eq("username", username));
-      check(await sb.from("users").update({ is_allowed: false }).eq("tg_username", username).eq("is_admin", false));
+    async claimInvite(tgId, username) {
+      return check(await sb.rpc("claim_invite", { p_tg_id: tgId, p_username: username })) === true;
+    },
+    async invite(username, tgId) {
+      check(await sb.rpc("invite_user", { p_username: username, p_tg_id: tgId ?? null }));
+    },
+    async revoke(username, tgId) {
+      return Number(check(await sb.rpc("revoke_user", { p_username: username, p_tg_id: tgId ?? null })) ?? 0);
     },
     async onboard(userId, currency) {
       check(await sb.rpc("onboard_user", { p_user_id: userId, p_currency: currency }));
@@ -83,6 +104,9 @@ export function supabaseDb(sb: SupabaseClient): Db {
     async createInbox(row) {
       return (check(await sb.from("inbox").insert(row).select("id").single()) as { id: string }).id;
     },
+    async setInboxReply(inboxId, messageId) {
+      check(await sb.from("inbox").update({ reply_message_id: messageId }).eq("id", inboxId));
+    },
     async deleteRecords(userId, inboxId) {
       return check(await sb.rpc("delete_inbox_records", { p_user: userId, p_inbox: inboxId })) as number;
     },
@@ -90,6 +114,15 @@ export function supabaseDb(sb: SupabaseClient): Db {
       return check(
         await sb.rpc("resolve_review", { p_user: userId, p_inbox: inboxId, p_idx: idx, p_kind: kind }),
       ) === true;
+    },
+    async retryInbox(userId, inboxId) {
+      return check(await sb.rpc("retry_inbox", { p_user: userId, p_inbox: inboxId })) === true;
+    },
+    async cancelInbox(userId, inboxId) {
+      return check(await sb.rpc("cancel_inbox", { p_user: userId, p_inbox: inboxId })) === true;
+    },
+    async queue(userId) {
+      return check(await sb.rpc("inbox_queue", { p_user: userId })) as Queue;
     },
   };
 }

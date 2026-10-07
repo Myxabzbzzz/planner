@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import type { Api } from "../api";
-import { fmtAmount, fmtDayTitle, fmtRateNote, fmtNumber } from "../format";
+import { fmtAmount, fmtDayTitle, fmtNumber, fmtRateNote } from "../format";
 import { buildPatch, editableAmount } from "../opEdit";
 import { confirmDialog, hapticResult } from "../telegram";
-import { IconClose } from "./Icons";
 import type { Categories, Operation } from "../types";
+import { Sheet } from "./Sheet";
 
-type Props = { api: Api; op: Operation; base: string; onClose: () => void; onSaved: () => void };
-
-export function OpSheet({ api, op, base, onClose, onSaved }: Props) {
+export function OpSheet({ api, op, base, onClose, onSaved }: {
+  api: Api; op: Operation; base: string; onClose: () => void; onSaved: () => void;
+}) {
   const edit = editableAmount(op, base);
   const [amount, setAmount] = useState(fmtNumber(edit.amount));
   const [title, setTitle] = useState(op.title);
@@ -20,16 +20,14 @@ export function OpSheet({ api, op, base, onClose, onSaved }: Props) {
   useEffect(() => {
     let alive = true;
     api.categories().then((c) => alive && setCats(c)).catch(() => alive && setCats({ expense: [], income: [] }));
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [api]);
 
   const patch = buildPatch(op, { amount, title, category });
   const options = cats ? cats[op.type] : [];
   const choices = options.includes(op.category) ? options : [op.category, ...options];
 
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
     try {
@@ -43,61 +41,57 @@ export function OpSheet({ api, op, base, onClose, onSaved }: Props) {
     }
   }
 
-  const save = () => {
-    if (patch && patch !== "invalid") void run(() => api.updateTransaction(op.id, patch));
-  };
-  const remove = async () => {
-    if (await confirmDialog("Удалить эту операцию?")) void run(() => api.deleteTransaction(op.id));
-  };
-
   return (
-    <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
-      <div className="sheet" role="dialog" aria-label="Операция" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-head">
-          <div>
-            <div className="sheet-title">{op.type === "income" ? "Доход" : "Расход"}</div>
-            <div className="sheet-kicker">{fmtDayTitle(op.date)}</div>
-          </div>
-          <button type="button" className="sheet-close" onClick={onClose} disabled={busy} aria-label="Закрыть"><IconClose /></button>
+    <Sheet
+      title={op.type === "income" ? "Доход" : "Расход"}
+      kicker={fmtDayTitle(op.date)}
+      busy={busy}
+      dirty={patch !== null}
+      onClose={onClose}
+      footer={
+        <>
+          {patch === "invalid" && <div className="sub danger">Проверь сумму и название.</div>}
+          {error && <div className="sub danger">{error}</div>}
+          <button type="button" className="btn wide block" disabled={busy || !patch || patch === "invalid"}
+            onClick={() => { if (patch && patch !== "invalid") void run(() => api.updateTransaction(op.id, patch)); }}>
+            {busy ? "Сохраняю…" : "Сохранить"}
+          </button>
+          <button type="button" className="btn wide danger-text" disabled={busy}
+            onClick={async () => {
+              if (await confirmDialog("Удалить эту операцию?")) void run(() => api.deleteTransaction(op.id));
+            }}>
+            Удалить операцию
+          </button>
+        </>
+      }
+    >
+      <label className="field">
+        <span>Сумма{edit.currency && `, ${edit.currency}`}</span>
+        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} />
+      </label>
+      {op.orig && (
+        <div className="card-foot">
+          Было: {fmtRateNote(op.orig, base)} = {fmtAmount(op.amount, base)}. Пересчитаю по тому же курсу.
         </div>
+      )}
 
-        <label className="field">
-          <span>Сумма{edit.currency && `, ${edit.currency}`}</span>
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} />
-        </label>
-        {op.orig && (
-          <div className="sub">
-            Было: {fmtRateNote(op.orig, base)} = {fmtAmount(op.amount, base)}. Пересчитаю по тому же курсу.
-          </div>
-        )}
+      <label className="field">
+        <span>Название</span>
+        <input value={title} placeholder={op.category} maxLength={200}
+          onChange={(e) => setTitle(e.target.value)} disabled={busy} />
+      </label>
 
-        <label className="field">
-          <span>Название</span>
-          <input value={title} placeholder={op.category} maxLength={200} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
-        </label>
-
-        <div className="field">
-          <span>Категория</span>
-          <div className="chips">
-            {choices.map((c) => (
-              <button type="button" key={c} className={c === category ? "pill done" : "pill"} aria-pressed={c === category}
-                onClick={() => setCategory(c)} disabled={busy}>
-                {c}
-              </button>
-            ))}
-          </div>
+      <div className="field">
+        <span>Категория</span>
+        <div className="chips">
+          {choices.map((c) => (
+            <button type="button" key={c} className={c === category ? "pill on" : "pill"}
+              aria-pressed={c === category} onClick={() => setCategory(c)} disabled={busy}>
+              {c}
+            </button>
+          ))}
         </div>
-
-        {patch === "invalid" && <div className="danger sub">Проверь сумму и название.</div>}
-        {error && <div className="danger sub">{error}</div>}
-
-        <button type="button" className="button wide" onClick={save} disabled={busy || !patch || patch === "invalid"}>
-          {busy ? "Сохраняю…" : "Сохранить"}
-        </button>
-        <button type="button" className="button wide ghost-danger" onClick={remove} disabled={busy}>
-          Удалить
-        </button>
       </div>
-    </div>
+    </Sheet>
   );
 }

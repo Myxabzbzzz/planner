@@ -39,6 +39,8 @@ class UserContext:
     expense_categories: dict[str, str]
     income_categories: dict[str, str]
     habits: dict[str, str]
+    # прошлые уточнения пользователя: (дословный текст, выбранный им kind) — few-shot для LLM
+    corrections: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass

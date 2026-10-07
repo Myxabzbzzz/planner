@@ -298,3 +298,91 @@ Deno.test("audio is removed when the inbox insert fails", async () => {
   const r = await run(await audioReq(new Uint8Array(10), "audio/mp4"), db);
   assertEquals([r.status, r.db.removed], [500, ["u1/f-1.m4a"]]);
 });
+
+// ——— План 7: создание записей руками и настройки из миниаппа ———
+
+Deno.test("GET /profile and /settings map to rpc, months validated", async () => {
+  assertEquals((await run(await req("/profile"))).db.calls, [["api_profile", ["u1", 6]]]);
+  assertEquals((await run(await req("/profile?months=12"))).db.calls, [["api_profile", ["u1", 12]]]);
+  assertEquals((await run(await req("/profile?months=0"))).status, 400);
+  assertEquals((await run(await req("/profile?months=13"))).status, 400);
+  assertEquals((await run(await req("/settings"))).db.calls, [["api_settings", ["u1"]]]);
+});
+
+Deno.test("POST /tasks creates and answers 201 with the new id", async () => {
+  const db = new FakeApiDb();
+  db.call = async (fn: string, args: unknown[]) => {
+    db.calls.push([fn, args]);
+    return "new-task-id";
+  };
+  const r = await run(await req("/tasks", { method: "POST", body: { title: "Позвонить врачу" } }), db);
+  assertEquals([r.status, r.body], [201, { id: "new-task-id" }]);
+  assertEquals(r.db.calls, [["create_task", ["u1", "Позвонить врачу", null, null]]]);
+});
+
+Deno.test("POST /tasks trims, keeps due date and time, rejects time without a date", async () => {
+  const mk = async (body: unknown) => {
+    const db = new FakeApiDb();
+    db.call = async (fn: string, args: unknown[]) => {
+      db.calls.push([fn, args]);
+      return "id";
+    };
+    return await run(await req("/tasks", { method: "POST", body }), db);
+  };
+  assertEquals((await mk({ title: "  Хлеб  ", due_date: "2026-10-09", due_time: "09:30" })).db.calls,
+    [["create_task", ["u1", "Хлеб", "2026-10-09", "09:30"]]]);
+  assertEquals((await mk({ title: "x", due_time: "09:30" })).status, 400);
+  assertEquals((await mk({ title: "   " })).status, 400);
+  assertEquals((await mk({ title: "x", due_date: "2026-02-30" })).status, 400);
+});
+
+Deno.test("POST /events requires a real date and time", async () => {
+  const mk = async (body: unknown) => {
+    const db = new FakeApiDb();
+    db.call = async (fn: string, args: unknown[]) => {
+      db.calls.push([fn, args]);
+      return "id";
+    };
+    return await run(await req("/events", { method: "POST", body }), db);
+  };
+  assertEquals((await mk({ title: "Созвон", date: "2026-10-09", time: "14:00", with_whom: "Андрей" })).db.calls,
+    [["create_event", ["u1", "Созвон", "2026-10-09", "14:00", "Андрей"]]]);
+  assertEquals((await mk({ title: "Созвон", date: "2026-10-09" })).status, 400);
+  assertEquals((await mk({ title: "Созвон", date: "2026-10-09", time: "25:00" })).status, 400);
+});
+
+Deno.test("POST /notes, /habits, /transactions validate their payloads", async () => {
+  const mk = async (path: string, body: unknown) => {
+    const db = new FakeApiDb();
+    db.call = async (fn: string, args: unknown[]) => {
+      db.calls.push([fn, args]);
+      return "id";
+    };
+    return await run(await req(path, { method: "POST", body }), db);
+  };
+  assertEquals((await mk("/notes", { text: "идея", kind: "thought" })).db.calls,
+    [["create_note", ["u1", "идея", "thought"]]]);
+  assertEquals((await mk("/notes", { text: "идея", kind: "other" })).status, 400);
+  assertEquals((await mk("/habits", { name: "Зарядка", target: 5 })).db.calls,
+    [["create_habit", ["u1", "Зарядка", 5]]]);
+  assertEquals((await mk("/habits", { name: "Зарядка", target: 8 })).status, 400);
+  assertEquals((await mk("/transactions", { type: "expense", amount: 1500, title: "Такси", category: "Транспорт" })).db.calls,
+    [["create_transaction", ["u1", "expense", 1500, "Такси", "Транспорт", null]]]);
+  assertEquals((await mk("/transactions", { type: "expense", amount: 0 })).status, 400);
+  assertEquals((await mk("/transactions", { type: "transfer", amount: 10 })).status, 400);
+});
+
+Deno.test("habit day, unarchive, limit and notify post routes", async () => {
+  const H = "3f2c1a2b-1111-2222-3333-444455556666";
+  assertEquals((await run(await req(`/habits/${H}/day`, { method: "POST", body: { date: "2026-10-06", done: true } }))).db.calls,
+    [["set_habit_on", ["u1", H, "2026-10-06", true]]]);
+  assertEquals((await run(await req(`/habits/${H}/day`, { method: "POST", body: { done: true } }))).status, 400);
+  assertEquals((await run(await req(`/habits/${H}/unarchive`, { method: "POST", body: {} }))).db.calls,
+    [["unarchive_habit", ["u1", H]]]);
+  assertEquals((await run(await req("/settings/limit", { method: "POST", body: { amount: 90000 } }))).db.calls,
+    [["api_set_limit", ["u1", 90000]]]);
+  assertEquals((await run(await req("/settings/limit", { method: "POST", body: { amount: -1 } }))).status, 400);
+  assertEquals((await run(await req("/settings/notify", { method: "POST", body: { kind: "daily", on: false } }))).db.calls,
+    [["api_set_notify", ["u1", "daily", false]]]);
+  assertEquals((await run(await req("/settings/notify", { method: "POST", body: { kind: "nope", on: false } }))).status, 400);
+});

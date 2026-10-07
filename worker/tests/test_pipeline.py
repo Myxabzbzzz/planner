@@ -23,6 +23,8 @@ class FakeStore:
         self.notified: list[str] = []
         self.cleared: list[str] = []
         self.events: list[str] = []
+        self.texts: list[tuple[str, str]] = []
+        self.removed_audio: list[str] = []
 
     def load_context(self, user_id, now_utc):
         return self.ctx
@@ -49,6 +51,12 @@ class FakeStore:
 
     def mark_notified(self, inbox_id):
         self.notified.append(inbox_id)
+
+    def set_text(self, inbox_id, text):
+        self.texts.append((inbox_id, text))
+
+    def remove_audio(self, key):
+        self.removed_audio.append(key)
 
 
 class FakeTg:
@@ -402,9 +410,11 @@ def test_shortcut_summary_has_phone_prefix_and_is_sent_as_new_message(ctx):
 def test_run_one_extraction_error_on_shortcut_row_is_prefixed_and_quotes_text(ctx):
     p, store, tg = make(ctx, FakeExtractor(ExtractionError("bad json")))
     run_one(row(source="shortcut", text="x" * 150, reply_message_id=None), p, store, tg)
-    msg = tg.sent[0][1]
+    msg, buttons = tg.sent[0][1], tg.sent[0][2]
     assert msg.startswith("📲 😵 Не смог разобрать.")
-    assert msg.endswith("\n«" + "x" * 100 + "…»")
+    assert msg.endswith("\n\nЧто я услышал:\n«" + "x" * 150 + "»")
+    assert buttons == [[{"text": "🔄 Повторить", "callback_data": "rtx:i1"},
+                        {"text": "🚫 Убрать", "callback_data": "cxl:i1"}]]
 
 
 def test_notify_failed_shortcut_row_is_prefixed_and_quotes_text(ctx):
@@ -412,7 +422,8 @@ def test_notify_failed_shortcut_row_is_prefixed_and_quotes_text(ctx):
     store.failed = [row(id="i9", source="shortcut", text="купить молоко", reply_message_id=None)]
     tg = FakeTg()
     notify_failed(store, tg)
-    assert tg.sent[0][1] == "📲 😵 Не получилось разобрать запись. Попробуй отправить ещё раз.\n«купить молоко»"
+    assert tg.sent[0][1] == ("📲 😵 Не получилось разобрать запись. Попробуй отправить ещё раз."
+                             "\n\nЧто я услышал:\n«купить молоко»")
 
 
 NO_TIME = item(kind="event", title="Встреча с Амиром", source_text="завтра (2026-10-02) встреча с Амиром",
@@ -683,3 +694,74 @@ def test_future_money_choice_saves_today(ctx):
     p.process(row(result={"pending_review": pending}))
     assert store.inserted[0][0] == "transactions"
     assert store.inserted[0][1]["occurred_at"] == "2026-10-01"
+
+
+def test_chat_voice_transcript_is_saved_and_shown_on_failure(ctx):
+    """#11: расшифровку голосового из чата раньше не показывали и не сохраняли."""
+    p, store, tg = make(ctx, FakeExtractor(ExtractionError("bad json")), stt=FakeStt("купить молоко и хлеб"))
+    run_one(row(source="voice", text=None, audio_ref="file-123", reply_message_id=None), p, store, tg)
+    assert store.texts == [("i1", "купить молоко и хлеб")]
+    msg, buttons = tg.sent[0][1], tg.sent[0][2]
+    assert "Что я услышал:\n«купить молоко и хлеб»" in msg
+    assert buttons[0][0]["callback_data"] == "rtx:i1"
+
+
+def test_storage_voice_still_removes_the_file(ctx):
+    p, store, tg = make(ctx, FakeExtractor([]), stt=FakeStt("тишина"))
+    store.download_audio = lambda key, d: Path("/tmp/planner-test/x.m4a")
+    Path("/tmp/planner-test").mkdir(parents=True, exist_ok=True)
+    Path("/tmp/planner-test/x.m4a").write_bytes(b"x")
+    p.process(row(source="miniapp", text=None, audio_ref="storage:u1/x.m4a"))
+    assert store.removed_audio == ["u1/x.m4a"]
+    assert store.texts == [("i1", "тишина")]
+
+
+def test_review_pass_confirms_even_when_everything_was_skipped(ctx):
+    """#5: бот обещал «записываю…», значит финальный ответ обязан прийти от воркера."""
+    p, store, tg = make(ctx, FakeExtractor())
+    pending = [{"item": item(kind="task", source_text="мусор").model_dump(mode="json"),
+                "reason": "laya", "forced_kind": "drop"},
+               {"item": item(kind="task", source_text="и это").model_dump(mode="json"),
+                "reason": "laya", "forced_kind": "drop"}]
+    p.process(row(result={"pending_review": pending}))
+    assert tg.sent[-1][1] == "🗑 Пропустил 2."
+    assert store.finished[-1][1] == "done"
+
+
+def test_review_pass_without_answers_says_nothing(ctx):
+    p, store, tg = make(ctx, FakeExtractor())
+    pending = [{"item": item(kind="task", source_text="мусор").model_dump(mode="json"), "reason": "laya"}]
+    p.process(row(result={"pending_review": pending}))
+    assert tg.sent == []
+    assert store.finished[-1][1] == "needs_review"
+
+
+def test_remembered_correction_stops_asking_again(ctx):
+    """#36: пользователь один раз сказал, что «кофе 40 000» — трата. Больше не спрашиваем."""
+    import dataclasses
+    c = dataclasses.replace(ctx, corrections=(("кофе 40 000", "expense"),))
+    bad = item(kind="expense", title="Кофе", source_text="кофе 40 000", amount=40000)
+    cls = FakeClassifier({"кофе 40 000": Classification("note", 0.99)})
+    p, store, tg = make(c, FakeExtractor([bad], [bad]), classifier=cls, store=FakeStore(c))
+    p.process(row())
+    assert [t for t, _ in store.inserted] == ["transactions"]
+    assert store.finished[0][1] == "done"
+
+
+def test_without_a_correction_it_still_asks(ctx):
+    bad = item(kind="expense", title="Кофе", source_text="кофе 40 000", amount=40000)
+    cls = FakeClassifier({"кофе 40 000": Classification("note", 0.99)})
+    p, store, tg = make(ctx, FakeExtractor([bad], [bad]), classifier=cls)
+    p.process(row())
+    assert store.inserted == []
+    assert store.finished[0][1] == "needs_review"
+
+
+def test_remembered_correction_must_match_the_kind(ctx):
+    import dataclasses
+    c = dataclasses.replace(ctx, corrections=(("кофе 40 000", "note"),))
+    bad = item(kind="expense", title="Кофе", source_text="кофе 40 000", amount=40000)
+    cls = FakeClassifier({"кофе 40 000": Classification("note", 0.99)})
+    p, store, _ = make(c, FakeExtractor([bad], [bad]), classifier=cls, store=FakeStore(c))
+    p.process(row())
+    assert store.finished[0][1] == "needs_review"

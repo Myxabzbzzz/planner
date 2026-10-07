@@ -3,6 +3,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
 from .fx import FxApplied
+from .rows import habit_date
 from .schemas import ExtractedItem, UserContext
 
 KIND_LABELS: dict[str, str] = {
@@ -68,7 +69,9 @@ def render_line(item: ExtractedItem, fx: FxApplied | None, ctx: UserContext) -> 
     if k == "journal":
         return f"📔 {_clip(item.title)}"
     if k == "habit_done":
-        return f"🔁 {item.habit} — отмечено"
+        day = habit_date(item, ctx)
+        when = "отмечено" if day == ctx.now.date() else f"отмечено за {day:%d.%m}"
+        return f"🔁 {item.habit} — {when}"
     return f"➕ Новая привычка: {item.title.strip()}"
 
 
@@ -86,6 +89,12 @@ def render_summary(lines: list[str], review_count: int) -> str:
 
 def summary_buttons(inbox_id: str) -> list[list[dict]]:
     return [[{"text": "🗑 Удалить всё", "callback_data": f"del:{inbox_id}"}]]
+
+
+def failure_buttons(inbox_id: str) -> list[list[dict]]:
+    """«Не получилось разобрать» без кнопки — тупик: запись уже не вернуть в очередь."""
+    return [[{"text": "🔄 Повторить", "callback_data": f"rtx:{inbox_id}"},
+             {"text": "🚫 Убрать", "callback_data": f"cxl:{inbox_id}"}]]
 
 
 def review_message(inbox_id: str, idx: int, item: ExtractedItem, reason: str) -> tuple[str, list[list[dict]]]:

@@ -57,3 +57,54 @@ export function weekDays(isoDate: string): string[] {
   const monday = new Date(d.getTime() - mondayOffset * 86_400_000);
   return Array.from({ length: 7 }, (_, i) => isoOf(new Date(monday.getTime() + i * 86_400_000)));
 }
+
+const MONTHS_SHORT = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+
+export const monthShort = (ym: string) => MONTHS_SHORT[Number(ym.split("-")[1]) - 1] ?? ym;
+
+/** Один знак после запятой, без хвостовых нулей: 1.3 → «1,3», 20 → «20». */
+const oneDecimal = (x: number): string => {
+  const r = Math.round(x * 10) / 10;
+  return Number.isInteger(r) ? String(r) : String(r).replace(".", ",");
+};
+
+/** Короткая форма для осей и подписей: 61 240 → «61 тыс.», 1 250 000 → «1,3 млн». */
+export function fmtCompact(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return `${oneDecimal(n / 1e9)} млрд`;
+  if (abs >= 1e6) return `${oneDecimal(n / 1e6)} млн`;
+  if (abs >= 10_000) return `${fmtNumber(Math.round(n / 1000))} тыс.`;
+  return fmtNumber(n);
+}
+
+/**
+ * «Сегодня» и «Завтра» вместо даты: на экране задач это главное, что хочется
+ * прочитать, а полную дату видно в шторке.
+ */
+export function relDay(isoDate: string, todayIsoDate: string): string | null {
+  const diff = Math.round((Date.parse(isoDate.slice(0, 10) + "T00:00:00Z")
+    - Date.parse(todayIsoDate.slice(0, 10) + "T00:00:00Z")) / 86_400_000);
+  if (diff === 0) return "Сегодня";
+  if (diff === 1) return "Завтра";
+  if (diff === -1) return "Вчера";
+  return null;
+}
+
+/** Подпись срока в списке: «Сегодня», «Завтра», иначе «09.10», плюс время, если оно задано. */
+export function dueLabel(due: string, todayIsoDate: string): string {
+  const time = due.slice(11, 16);
+  const day = relDay(due, todayIsoDate) ?? fmtShortDate(due);
+  return time === "" || time === "23:59" ? day : `${day} ${time}`;
+}
+
+/** «3 дня», «5 дней» — для подписей серий и стажа. */
+export function plural(n: number, one: string, few: string, many: string): string {
+  const m100 = n % 100;
+  const m10 = n % 10;
+  if (m100 >= 11 && m100 <= 14) return many;
+  if (m10 === 1) return one;
+  if (m10 >= 2 && m10 <= 4) return few;
+  return many;
+}
+
+export const days = (n: number) => `${n} ${plural(n, "день", "дня", "дней")}`;

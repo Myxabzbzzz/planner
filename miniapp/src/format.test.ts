@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtAmount, fmtDayTitle, fmtNumber, fmtRateNote, fmtShortDate, fmtTime, monthTitle, shiftMonth, weekDays } from "./format";
+import { days, dueLabel, fmtAmount, fmtCompact, fmtDayTitle, fmtNumber, fmtRateNote, fmtShortDate, fmtTime, monthShort, monthTitle, relDay, shiftMonth, weekDays } from "./format";
 
 describe("format", () => {
   it("money like the bot", () => {
@@ -31,5 +31,65 @@ describe("fmtRateNote", () => {
   });
   it("shows inverse when < 1", () => {
     expect(fmtRateNote({ amount: 40000, currency: "UZS", rate: 0.0000846 }, "USD")).toBe("40 000 сум по курсу 1 $ = 11 820,33 сум");
+  });
+});
+
+describe("короткие числа", () => {
+  it("мелкие суммы оставляет как есть", () => {
+    expect(fmtCompact(0)).toBe("0");
+    expect(fmtCompact(9999)).toBe("9 999");
+  });
+
+  it("от десяти тысяч переходит в тысячи", () => {
+    expect(fmtCompact(10_000)).toBe("10 тыс.");
+    expect(fmtCompact(61_240)).toBe("61 тыс.");
+  });
+
+  it("миллионы и миллиарды с одним знаком", () => {
+    expect(fmtCompact(1_250_000)).toBe("1,3 млн");
+    expect(fmtCompact(2_000_000_000)).toBe("2 млрд");
+  });
+});
+
+describe("относительные дни", () => {
+  const today = "2026-10-07";
+
+  it("знает вчера, сегодня и завтра", () => {
+    expect(relDay("2026-10-06", today)).toBe("Вчера");
+    expect(relDay("2026-10-07", today)).toBe("Сегодня");
+    expect(relDay("2026-10-08", today)).toBe("Завтра");
+  });
+
+  it("на остальных днях молчит", () => {
+    expect(relDay("2026-10-09", today)).toBeNull();
+    expect(relDay("2026-10-05", today)).toBeNull();
+  });
+
+  it("работает через границу месяца", () => {
+    expect(relDay("2026-11-01", "2026-10-31")).toBe("Завтра");
+  });
+});
+
+describe("подпись срока", () => {
+  const today = "2026-10-07";
+
+  it("23:59 значит «в течение дня» — время не показываем", () => {
+    expect(dueLabel("2026-10-07T23:59", today)).toBe("Сегодня");
+  });
+
+  it("настоящее время дописывается", () => {
+    expect(dueLabel("2026-10-07T14:00", today)).toBe("Сегодня 14:00");
+  });
+
+  it("далёкая дата показывается числом", () => {
+    expect(dueLabel("2026-10-20T23:59", today)).toBe("20.10");
+    expect(dueLabel("2026-10-20T09:15", today)).toBe("20.10 09:15");
+  });
+});
+
+describe("склонение", () => {
+  it("день, дня, дней", () => {
+    expect([1, 2, 5, 11, 21, 101, 112].map(days))
+      .toEqual(["1 день", "2 дня", "5 дней", "11 дней", "21 день", "101 день", "112 дней"]);
   });
 });

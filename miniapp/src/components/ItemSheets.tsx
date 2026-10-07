@@ -1,16 +1,15 @@
 import { useState, type ReactNode } from "react";
-import type { Api } from "../api";
+import { ApiError, type Api } from "../api";
 import { buildEventPatch, buildHabitPatch, buildNotePatch, buildTaskPatch, splitDue, type NoteKind } from "../itemEdit";
-import { ApiError } from "../api";
 import { confirmDialog, hapticResult } from "../telegram";
-import { IconClose } from "./Icons";
+import { Sheet } from "./Sheet";
 
 type Base<T> = { api: Api; item: T; onClose: () => void; onSaved: () => void };
 
 function useRun(onSaved: () => void) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
     try {
@@ -19,35 +18,40 @@ function useRun(onSaved: () => void) {
       onSaved();
     } catch (e) {
       hapticResult(false);
-      setError(e instanceof ApiError && e.status === 400 ? "Проверь поля." : "Не удалось сохранить. Попробуй ещё раз.");
+      setError(
+        e instanceof ApiError && e.status === 400
+          ? "Проверь поля — что-то не подходит."
+          : "Не удалось сохранить. Попробуй ещё раз.",
+      );
       setBusy(false);
     }
   }
   return { busy, error, run };
 }
 
-function Frame({ title, busy, error, invalid, canSave, onSave, removeLabel, onRemove, onClose, children }: {
-  title: string; busy: boolean; error: string | null; invalid: boolean; canSave: boolean; onSave: () => void;
-  removeLabel: string; onRemove: () => void; onClose: () => void; children: ReactNode;
+/** Низ шторки: сохранить, удалить и строка ошибки. Один вид у всех форм. */
+function Actions({ busy, error, canSave, onSave, removeLabel, onRemove, saveLabel = "Сохранить" }: {
+  busy: boolean; error: string | null; canSave: boolean; onSave: () => void;
+  removeLabel?: string; onRemove?: () => void; saveLabel?: string;
 }) {
   return (
-    <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
-      <div className="sheet" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-head">
-          <span className="sheet-title">{title}</span>
-          <button type="button" className="sheet-close" onClick={onClose} disabled={busy} aria-label="Закрыть"><IconClose /></button>
-        </div>
-        {children}
-        {invalid && <div className="danger sub">Проверь поля.</div>}
-        {error && <div className="danger sub">{error}</div>}
-        <button type="button" className="button wide" onClick={onSave} disabled={busy || !canSave}>
-          {busy ? "Сохраняю…" : "Сохранить"}
+    <>
+      {error && <div className="sub danger">{error}</div>}
+      <button type="button" className="btn wide block" onClick={onSave} disabled={busy || !canSave}>
+        {busy ? "Сохраняю…" : saveLabel}
+      </button>
+      {onRemove && (
+        <button type="button" className="btn wide danger-text" onClick={onRemove} disabled={busy}>
+          {removeLabel}
         </button>
-        <button type="button" className="button wide ghost-danger" onClick={onRemove} disabled={busy}>{removeLabel}</button>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
+
+const Field = ({ label, children }: { label: string; children: ReactNode }) => (
+  <label className="field"><span>{label}</span>{children}</label>
+);
 
 export function TaskSheet({ api, item, onClose, onSaved }: Base<{ id: string; title: string; due: string | null }>) {
   const was = splitDue(item.due);
@@ -56,26 +60,43 @@ export function TaskSheet({ api, item, onClose, onSaved }: Base<{ id: string; ti
   const [time, setTime] = useState(was.time);
   const { busy, error, run } = useRun(onSaved);
   const patch = buildTaskPatch(item, { title, date, time });
+  const dirty = patch !== null;
   return (
-    <Frame title="Задача" busy={busy} error={error} invalid={patch === "invalid"} canSave={!!patch && patch !== "invalid"}
-      onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateTask(item.id, patch)); }}
-      removeLabel="Удалить" onClose={onClose}
-      onRemove={async () => { if (await confirmDialog("Удалить задачу?")) void run(() => api.deleteTask(item.id)); }}>
-      <label className="field"><span>Название</span>
-        <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} disabled={busy} /></label>
-      <label className="field"><span>Срок</span>
-        <input type="date" value={date} onChange={(e) => { setDate(e.target.value); if (!e.target.value) setTime(""); }} disabled={busy} /></label>
-      {date && (
-        <label className="field"><span>Время (необязательно)</span>
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={busy} /></label>
+    <Sheet title="Задача" busy={busy} dirty={dirty} onClose={onClose} footer={
+      <Actions busy={busy} error={error} canSave={!!patch && patch !== "invalid"}
+        onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateTask(item.id, patch)); }}
+        removeLabel="Удалить задачу"
+        onRemove={async () => { if (await confirmDialog("Удалить задачу?")) void run(() => api.deleteTask(item.id)); }} />
+    }>
+      <Field label="Что сделать">
+        <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
+      </Field>
+      <div className="row-2">
+        <Field label="Срок">
+          <input type="date" value={date} disabled={busy}
+            onChange={(e) => { setDate(e.target.value); if (!e.target.value) setTime(""); }} />
+        </Field>
+        {date !== "" && (
+          <Field label="Время">
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={busy} />
+          </Field>
+        )}
+      </div>
+      {date !== "" && (
+        <div className="chips" style={{ marginTop: 12 }}>
+          <button type="button" className="pill" onClick={() => { setDate(""); setTime(""); }} disabled={busy}>
+            Убрать срок
+          </button>
+        </div>
       )}
-      {date && <button type="button" className="pill" onClick={() => { setDate(""); setTime(""); }} disabled={busy}>Без срока</button>}
-    </Frame>
+      {patch === "invalid" && <div className="sub danger">Проверь название и срок.</div>}
+    </Sheet>
   );
 }
 
-export function EventSheet({ api, item, onClose, onSaved }:
-  Base<{ id: string; title: string; date: string; time: string; with_whom: string | null }>) {
+export function EventSheet({ api, item, onClose, onSaved }: Base<{
+  id: string; title: string; date: string; time: string; with_whom: string | null;
+}>) {
   const [title, setTitle] = useState(item.title);
   const [date, setDate] = useState(item.date);
   const [time, setTime] = useState(item.time);
@@ -83,23 +104,36 @@ export function EventSheet({ api, item, onClose, onSaved }:
   const { busy, error, run } = useRun(onSaved);
   const patch = buildEventPatch(item, { title, date, time, withWhom });
   return (
-    <Frame title="Встреча" busy={busy} error={error} invalid={patch === "invalid"} canSave={!!patch && patch !== "invalid"}
-      onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateEvent(item.id, patch)); }}
-      removeLabel="Удалить" onClose={onClose}
-      onRemove={async () => { if (await confirmDialog("Удалить встречу?")) void run(() => api.deleteEvent(item.id)); }}>
-      <label className="field"><span>Название</span>
-        <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} disabled={busy} /></label>
-      <label className="field"><span>Дата</span>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={busy} /></label>
-      <label className="field"><span>Время</span>
-        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={busy} /></label>
-      <label className="field"><span>С кем</span>
-        <input value={withWhom} maxLength={200} onChange={(e) => setWithWhom(e.target.value)} disabled={busy} /></label>
-    </Frame>
+    <Sheet title="Встреча" busy={busy} dirty={patch !== null} onClose={onClose} footer={
+      <Actions busy={busy} error={error} canSave={!!patch && patch !== "invalid"}
+        onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateEvent(item.id, patch)); }}
+        removeLabel="Удалить встречу"
+        onRemove={async () => { if (await confirmDialog("Удалить встречу?")) void run(() => api.deleteEvent(item.id)); }} />
+    }>
+      <Field label="Название">
+        <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
+      </Field>
+      <div className="row-2">
+        <Field label="Дата">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={busy} />
+        </Field>
+        <Field label="Время">
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={busy} />
+        </Field>
+      </div>
+      <Field label="С кем">
+        <input value={withWhom} maxLength={200} placeholder="необязательно"
+          onChange={(e) => setWithWhom(e.target.value)} disabled={busy} />
+      </Field>
+      {patch === "invalid" && <div className="sub danger">Проверь дату и время.</div>}
+    </Sheet>
   );
 }
 
-const KINDS: { key: NoteKind; label: string }[] = [{ key: "thought", label: "Мысль" }, { key: "journal", label: "Дневник" }];
+export const KINDS: { key: NoteKind; label: string }[] = [
+  { key: "thought", label: "Мысль" },
+  { key: "journal", label: "Дневник" },
+];
 
 export function NoteSheet({ api, item, onClose, onSaved }: Base<{ id: string; text: string; kind: NoteKind }>) {
   const [text, setText] = useState(item.text);
@@ -107,44 +141,66 @@ export function NoteSheet({ api, item, onClose, onSaved }: Base<{ id: string; te
   const { busy, error, run } = useRun(onSaved);
   const patch = buildNotePatch(item, { text, kind });
   return (
-    <Frame title="Заметка" busy={busy} error={error} invalid={patch === "invalid"} canSave={!!patch && patch !== "invalid"}
-      onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateNote(item.id, patch)); }}
-      removeLabel="Удалить" onClose={onClose}
-      onRemove={async () => { if (await confirmDialog("Удалить заметку?")) void run(() => api.deleteNote(item.id)); }}>
-      <label className="field"><span>Текст</span>
-        <textarea rows={5} value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} disabled={busy} /></label>
-      <div className="chips">
-        {KINDS.map((k) => (
-          <button type="button" key={k.key} className={k.key === kind ? "pill done" : "pill"} aria-pressed={k.key === kind}
-            onClick={() => setKind(k.key)} disabled={busy}>{k.label}</button>
-        ))}
+    <Sheet title="Заметка" busy={busy} dirty={patch !== null} onClose={onClose} footer={
+      <Actions busy={busy} error={error} canSave={!!patch && patch !== "invalid"}
+        onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateNote(item.id, patch)); }}
+        removeLabel="Удалить заметку"
+        onRemove={async () => { if (await confirmDialog("Удалить заметку?")) void run(() => api.deleteNote(item.id)); }} />
+    }>
+      <Field label="Текст">
+        <textarea rows={6} value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} disabled={busy} />
+      </Field>
+      <div className="field">
+        <span>Тип</span>
+        <div className="chips">
+          {KINDS.map((k) => (
+            <button type="button" key={k.key} className={k.key === kind ? "pill on" : "pill"}
+              aria-pressed={k.key === kind} onClick={() => setKind(k.key)} disabled={busy}>
+              {k.label}
+            </button>
+          ))}
+        </div>
       </div>
-    </Frame>
+    </Sheet>
   );
 }
 
-export function HabitSheet({ api, item, onClose, onSaved }: Base<{ id: string; name: string; target_per_week: number }>) {
+export const TARGETS = [1, 2, 3, 4, 5, 6, 7];
+export const targetLabel = (n: number) => (n === 7 ? "каждый день" : `${n}`);
+
+export function HabitSheet({ api, item, onClose, onSaved }: Base<{
+  id: string; name: string; target_per_week: number;
+}>) {
   const [name, setName] = useState(item.name);
   const [target, setTarget] = useState(item.target_per_week);
   const { busy, error, run } = useRun(onSaved);
   const patch = buildHabitPatch(item, { name, target });
   return (
-    <Frame title="Привычка" busy={busy} error={error} invalid={patch === "invalid"} canSave={!!patch && patch !== "invalid"}
-      onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateHabit(item.id, patch)); }}
-      removeLabel="Удалить" onClose={onClose}
-      onRemove={async () => {
-        if (await confirmDialog("Удалить привычку? История отметок сохранится.")) void run(() => api.archiveHabit(item.id));
-      }}>
-      <label className="field"><span>Название</span>
-        <input value={name} maxLength={200} onChange={(e) => setName(e.target.value)} disabled={busy} /></label>
-      <div className="field"><span>Раз в неделю</span>
+    <Sheet title="Привычка" busy={busy} dirty={patch !== null} onClose={onClose} footer={
+      <Actions busy={busy} error={error} canSave={!!patch && patch !== "invalid"}
+        onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateHabit(item.id, patch)); }}
+        removeLabel="Убрать из списка"
+        onRemove={async () => {
+          if (await confirmDialog("Убрать привычку? Отметки сохранятся — её можно вернуть, добавив заново.")) {
+            void run(() => api.archiveHabit(item.id));
+          }
+        }} />
+    }>
+      <Field label="Название">
+        <input value={name} maxLength={200} onChange={(e) => setName(e.target.value)} disabled={busy} />
+      </Field>
+      <div className="field">
+        <span>Сколько раз в неделю</span>
         <div className="chips">
-          {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-            <button type="button" key={n} className={n === target ? "pill done" : "pill"} aria-pressed={n === target}
-              onClick={() => setTarget(n)} disabled={busy}>{n === 7 ? "каждый день" : n}</button>
+          {TARGETS.map((n) => (
+            <button type="button" key={n} className={n === target ? "pill on" : "pill"}
+              aria-pressed={n === target} onClick={() => setTarget(n)} disabled={busy}>
+              {targetLabel(n)}
+            </button>
           ))}
         </div>
       </div>
-    </Frame>
+      <div className="card-foot">Неделя считается выполненной, когда отметок не меньше цели.</div>
+    </Sheet>
   );
 }

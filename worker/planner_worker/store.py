@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from decimal import Decimal
@@ -7,6 +8,7 @@ from .fx import RateTable
 from .schemas import InboxRow, UserContext
 
 AUDIO_BUCKET = "audio"
+log = logging.getLogger(__name__)
 
 
 class Store:
@@ -34,7 +36,18 @@ class Store:
             expense_categories={c["name"].lower(): c["id"] for c in cats if c["type"] == "expense"},
             income_categories={c["name"].lower(): c["id"] for c in cats if c["type"] == "income"},
             habits={h["name"].lower(): h["id"] for h in habits},
+            corrections=self.corrections(user_id),
         )
+
+    def corrections(self, user_id: str, limit: int = 20) -> tuple[tuple[str, str], ...]:
+        """Что пользователь уже исправлял вручную — подмешиваем в few-shot промпта.
+        Без сети/таблицы работаем как раньше: пустой кортеж."""
+        try:
+            rows = self.sb.rpc("recent_corrections", {"p_user": user_id, "p_limit": limit}).execute().data or []
+        except Exception as e:  # noqa: BLE001 — подсказки необязательны, разбор должен идти и без них
+            log.warning("corrections unavailable: %s", type(e).__name__)
+            return ()
+        return tuple((r["text"], r["kind"]) for r in rows if r.get("text") and r.get("kind"))
 
     def rates_on(self, d: date) -> RateTable | None:
         rows = (self.sb.table("fx_rates").select("date,rates,source").lte("date", d.isoformat())

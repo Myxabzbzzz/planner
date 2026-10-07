@@ -2,7 +2,7 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 import { handleUpdate } from "./handlers.ts";
 import { parseAmount } from "./menu.ts";
 import { MENU_ROWS } from "./keyboard.ts";
-import type { Db, NewInbox, User } from "./db.ts";
+import type { Db, NewInbox, Queue, User } from "./db.ts";
 import type { Button, SendOpts, Tg } from "../_shared/telegram.ts";
 import { FakeMenuDb, HABIT_ID, TASK_ID } from "./testing.ts";
 
@@ -18,15 +18,21 @@ class MiniDb implements Db {
   async resolveTime(u: string, i: string, idx: number, choice: string) { this.times.push([u, i, idx, choice]); return true; }
   async findUser(tgId: number) { return tgId === ME ? this.user : null; }
   async createUser(): Promise<User> { throw new Error("unused"); }
-  async isInvited() { return false; }
+  async recordUpdate() { return true; }
+  async touchUser() {}
+  async claimInvite() { return false; }
   async invite() {}
-  async revoke() {}
+  async revoke() { return 0; }
   async onboard() {}
   async knownCurrency() { return true; }
   async workerOnline() { return true; }
-  async createInbox(row: NewInbox) { this.inbox.push(row); return "i1"; }
+  async createInbox(row: NewInbox) { this.inbox.push(row); return "11111111-1111-1111-1111-111111111111"; }
+  async setInboxReply() {}
   async deleteRecords() { return 0; }
   async resolveReview() { return false; }
+  async retryInbox() { return false; }
+  async cancelInbox() { return false; }
+  async queue(): Promise<Queue> { return { waiting: 0, needs_review: 0, failed: 0, oldest: null }; }
 }
 
 class RecTg implements Tg {
@@ -274,9 +280,9 @@ Deno.test("rt callback resolves time and edits message", async () => {
   const id = "40000000-0000-0000-0000-000000000001";
   await handleUpdate(cb(`rt:${id}:0:1500`), deps);
   assertEquals(db.times, [["u1", id, 0, "1500"]]);
-  assertEquals(tg.edited[0].text, "Принял: 📅 15:00");
+  assertEquals(tg.edited[0].text, "Принял: 📅 15:00 — записываю…");
   await handleUpdate(cb(`rt:${id}:1:none`), deps);
-  assertEquals(tg.edited[1].text, "Принял: ☑️ без времени");
+  assertEquals(tg.edited[1].text, "Принял: ☑️ без времени — записываю…");
 });
 
 Deno.test("rt callback rejects bad choice and bad id", async () => {
