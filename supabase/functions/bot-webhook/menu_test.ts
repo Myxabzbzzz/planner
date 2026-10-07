@@ -29,6 +29,7 @@ class MiniDb implements Db {
   async createInbox(row: NewInbox) { this.inbox.push(row); return "11111111-1111-1111-1111-111111111111"; }
   async setInboxReply() {}
   async deleteRecords() { return 0; }
+  async restoreRecords(_u: string, _i: string) { return 0; }
   async resolveReview() { return false; }
   async retryInbox() { return false; }
   async cancelInbox() { return false; }

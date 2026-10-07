@@ -46,6 +46,7 @@ export interface Db {
   createInbox(row: NewInbox): Promise<string>;
   setInboxReply(inboxId: string, messageId: number): Promise<void>;
   deleteRecords(userId: string, inboxId: string): Promise<number>;
+  restoreRecords(userId: string, inboxId: string): Promise<number>;
   resolveReview(userId: string, inboxId: string, idx: number, kind: string): Promise<boolean>;
   retryInbox(userId: string, inboxId: string): Promise<boolean>;
   cancelInbox(userId: string, inboxId: string): Promise<boolean>;
@@ -109,6 +110,9 @@ export function supabaseDb(sb: SupabaseClient): Db {
     },
     async deleteRecords(userId, inboxId) {
       return check(await sb.rpc("delete_inbox_records", { p_user: userId, p_inbox: inboxId })) as number;
+    },
+    async restoreRecords(userId, inboxId) {
+      return check(await sb.rpc("restore_inbox_records", { p_user: userId, p_inbox: inboxId })) as number;
     },
     async resolveReview(userId, inboxId, idx, kind) {
       return check(

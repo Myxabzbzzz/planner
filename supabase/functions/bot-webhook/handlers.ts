@@ -262,7 +262,25 @@ async function handleCallback(cq: any, d: Deps) {
     }
     const n = await d.db.deleteRecords(user.id, rest[0]);
     await d.tg.answerCallback(cq.id);
-    await d.tg.editMessage(chatId, messageId, n > 0 ? "🗑 Удалено." : "Нечего удалять.");
+    // Кнопка «Удалить всё» сносит сразу все записи одного сообщения и висит
+    // под каждой старой сводкой — поэтому к ней нужен путь назад.
+    await d.tg.editMessage(
+      chatId,
+      messageId,
+      n > 0 ? `🗑 Удалено записей: ${n}.` : "Нечего удалять.",
+      n > 0 ? [[{ text: "↩️ Вернуть", callback_data: `undel:${rest[0]}` }]] : undefined,
+    );
+    return;
+  }
+
+  if (action === "undel") {
+    if (!UUID_RE.test(rest[0] ?? "")) {
+      await d.tg.answerCallback(cq.id, "Уже неактуально");
+      return;
+    }
+    const n = await d.db.restoreRecords(user.id, rest[0]);
+    await d.tg.answerCallback(cq.id, n > 0 ? "Вернул" : "Возвращать нечего");
+    await d.tg.editMessage(chatId, messageId, n > 0 ? `↩️ Вернул записей: ${n}.` : "Возвращать уже нечего.");
     return;
   }
 

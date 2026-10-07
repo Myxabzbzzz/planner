@@ -79,6 +79,8 @@ class FakeDb implements Db {
     return INBOX_ID;
   }
   async deleteRecords(_u: string, _i: string) { return 2; }
+  restored: string[] = [];
+  async restoreRecords(_u: string, i: string) { this.restored.push(i); return 2; }
   async resolveTime() { return true; }
   async resolveReview(u: string, i: string, idx: number, kind: string) {
     this.reviews.push([u, i, idx, kind]);
@@ -420,4 +422,21 @@ Deno.test("#10 an offline ack says how much is already queued", async () => {
   db.queueData = { waiting: 12, needs_review: 0, failed: 0, oldest: "2026-10-01T00:00:00Z" };
   await handleUpdate(msg(ADMIN, { text: "кофе" }), deps);
   assert(tg.sent[0].text.includes("В очереди уже 12"));
+});
+
+Deno.test("массовое удаление из чата можно отменить", async () => {
+  const inbox = "11111111-2222-3333-4444-555555555555";
+  const { tg } = await runCallback(`del:${inbox}`);
+  const [, , text, buttons] = tg.edited.at(-1)!;
+  assertStringIncludes(text, "Удалено записей: 2");
+  assertEquals(buttons?.[0]?.[0]?.callback_data, `undel:${inbox}`);
+
+  const back = await runCallback(`undel:${inbox}`);
+  assertEquals(back.db.restored, [inbox]);
+  assertStringIncludes(back.tg.edited.at(-1)![2], "Вернул записей: 2");
+});
+
+Deno.test("отмена удаления не падает на мусорном id", async () => {
+  const { tg } = await runCallback("undel:не-uuid");
+  assertEquals(tg.answered.length > 0, true);
 });
