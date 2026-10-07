@@ -1,8 +1,16 @@
 import { useEffect } from "react";
 
+type Inset = { top: number; bottom: number; left: number; right: number };
+
 type WebApp = {
   initData: string;
   colorScheme: "light" | "dark";
+  themeParams?: Record<string, string>;
+  isFullscreen?: boolean;
+  safeAreaInset?: Inset;
+  contentSafeAreaInset?: Inset;
+  viewportHeight?: number;
+  viewportStableHeight?: number;
   ready(): void;
   expand(): void;
   setHeaderColor?(c: string): void;
@@ -10,7 +18,15 @@ type WebApp = {
   setBottomBarColor?(c: string): void;
   isVersionAtLeast?(v: string): boolean;
   disableVerticalSwipes?(): void;
-  HapticFeedback?: { selectionChanged(): void; notificationOccurred?(t: "success" | "error" | "warning"): void };
+  enableClosingConfirmation?(): void;
+  disableClosingConfirmation?(): void;
+  onEvent?(type: string, cb: () => void): void;
+  offEvent?(type: string, cb: () => void): void;
+  HapticFeedback?: {
+    selectionChanged?(): void;
+    impactOccurred?(s: "light" | "medium" | "heavy" | "rigid" | "soft"): void;
+    notificationOccurred?(t: "success" | "error" | "warning"): void;
+  };
   showConfirm?(message: string, cb: (ok: boolean) => void): void;
   close?(): void;
   BackButton?: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
@@ -18,43 +34,129 @@ type WebApp = {
 
 export const tg: WebApp | undefined = (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp;
 
-/** BEAR PLANNER chrome colour — matches --bg in styles.css, independent of the user's Telegram theme. */
-export const BRAND_BG = "#120E0B";
+const THEMES = { dark: "#0B0D10", light: "#FAF9F7" } as const;
 
-// Older clients only accept theme keys (hex arrived in Bot API 6.9) and the SDK throws on a hex there.
-function paint(set: ((c: string) => void) | undefined, color: string, fallback?: string) {
+/** Старые клиенты принимают в этих методах только ключи темы — hex там бросает. */
+function paint(set: ((c: string) => void) | undefined, color: string) {
   if (!set) return;
   try {
-    set.call(tg, tg?.isVersionAtLeast?.("6.9") ? color : fallback ?? color);
+    set.call(tg, tg?.isVersionAtLeast?.("6.9") ? color : "bg_color");
   } catch {
     // старый клиент — оставляем цвет темы
   }
 }
 
+function applyTheme(scheme: "light" | "dark") {
+  const root = document.documentElement;
+  root.dataset.theme = scheme;
+  const bg = THEMES[scheme];
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", bg);
+  paint(tg?.setHeaderColor, bg);
+  paint(tg?.setBackgroundColor, bg);
+  paint(tg?.setBottomBarColor, bg);
+}
+
+const px = (n: number | undefined) => `${Math.max(0, Math.round(n ?? 0))}px`;
+
+/**
+ * Безопасные зоны. `env(safe-area-inset-*)` не знает про шапку Telegram:
+ * в fullscreen она просто накрывает контент. Инсеты из Bot API 8.0 это учитывают,
+ * а на старых клиентах остаётся значение из CSS.
+ */
+function applyInsets() {
+  if (!tg) return;
+  const root = document.documentElement.style;
+  const top = (tg.contentSafeAreaInset?.top ?? 0) + (tg.safeAreaInset?.top ?? 0);
+  const bottom = (tg.contentSafeAreaInset?.bottom ?? 0) + (tg.safeAreaInset?.bottom ?? 0);
+  if (tg.safeAreaInset || tg.contentSafeAreaInset) {
+    root.setProperty("--sat", px(top));
+    root.setProperty("--sab", px(bottom));
+  }
+}
+
+/**
+ * Клавиатура. Док приклеен к низу, и на iOS софт-клавиатура его перекрывала:
+ * visualViewport даёт реальную высоту видимой области.
+ */
+function trackKeyboard() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const sync = () => {
+    const hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty("--kb", px(hidden));
+  };
+  vv.addEventListener("resize", sync);
+  vv.addEventListener("scroll", sync);
+  sync();
+}
+
 export function initTelegram() {
   tg?.ready();
   tg?.expand();
-  paint(tg?.setHeaderColor, BRAND_BG, "bg_color");
-  paint(tg?.setBackgroundColor, BRAND_BG, "bg_color");
-  paint(tg?.setBottomBarColor, BRAND_BG, "bg_color");
   tg?.disableVerticalSwipes?.();
+  applyTheme(tg?.colorScheme ?? "dark");
+  applyInsets();
+  trackKeyboard();
+  tg?.onEvent?.("themeChanged", () => applyTheme(tg?.colorScheme ?? "dark"));
+  tg?.onEvent?.("safeAreaChanged", applyInsets);
+  tg?.onEvent?.("contentSafeAreaChanged", applyInsets);
+  tg?.onEvent?.("fullscreenChanged", applyInsets);
 }
 
-export const haptic = () => tg?.HapticFeedback?.selectionChanged();
-
+export const haptic = () => tg?.HapticFeedback?.selectionChanged?.();
+export const tap = () => tg?.HapticFeedback?.impactOccurred?.("light");
+export const thud = () => tg?.HapticFeedback?.impactOccurred?.("medium");
 export const hapticResult = (ok: boolean) => tg?.HapticFeedback?.notificationOccurred?.(ok ? "success" : "error");
+
+/**
+ * Системная кнопка «Назад» и свайп назад на Android закрывают верхний слой,
+ * а не весь миниапп. Слои складываются в стек: закрывается последний открытый.
+ */
+const backStack: Array<() => void> = [];
+let backBound = false;
+
+function runTopBack() {
+  backStack[backStack.length - 1]?.();
+}
+
+function syncBackButton() {
+  const bb = tg?.BackButton;
+  if (!bb) return;
+  if (backStack.length > 0) {
+    if (!backBound) {
+      bb.onClick(runTopBack);
+      backBound = true;
+    }
+    bb.show();
+  } else {
+    if (backBound) {
+      bb.offClick(runTopBack);
+      backBound = false;
+    }
+    bb.hide();
+  }
+}
 
 export function useBackButton(onBack: (() => void) | null) {
   useEffect(() => {
-    const bb = tg?.BackButton;
-    if (!bb || !onBack) return;
-    bb.show();
-    bb.onClick(onBack);
+    if (!onBack) return;
+    backStack.push(onBack);
+    syncBackButton();
     return () => {
-      bb.offClick(onBack);
-      bb.hide();
+      const i = backStack.lastIndexOf(onBack);
+      if (i >= 0) backStack.splice(i, 1);
+      syncBackButton();
     };
   }, [onBack]);
+}
+
+/** Пока в шторке есть несохранённые правки, Telegram спросит перед закрытием. */
+export function useCloseGuard(dirty: boolean) {
+  useEffect(() => {
+    if (!dirty) return;
+    tg?.enableClosingConfirmation?.();
+    return () => tg?.disableClosingConfirmation?.();
+  }, [dirty]);
 }
 
 export function confirmDialog(message: string): Promise<boolean> {

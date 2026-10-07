@@ -1,42 +1,57 @@
-/** Geometric bear head: two ears, a broad head, a muzzle and a soft nose. */
-export function BearMark({ size = 40 }: { size?: number }) {
+import { useRef, useState } from "react";
+import { thud } from "../telegram";
+
+/**
+ * Марка: три полосы убывающей высоты. Читается как столбики прогресса —
+ * и это же полосы тигра. Единственная заметная отсылка; всё остальное мельче.
+ */
+export function Mark({ size = 28 }: { size?: number }) {
   return (
-    <svg className="bear-mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
-      <defs>
-        <radialGradient id="bm-coin" cx="35%" cy="25%" r="85%">
-          <stop offset="0" stopColor="#6A3A22" />
-          <stop offset=".55" stopColor="#3E2416" />
-          <stop offset="1" stopColor="#21140C" />
-        </radialGradient>
-        <linearGradient id="bm-honey" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#F0C57C" />
-          <stop offset="1" stopColor="#C88A36" />
-        </linearGradient>
-      </defs>
-      <circle cx="24" cy="24" r="23" fill="url(#bm-coin)" />
-      <circle cx="24" cy="24" r="22.25" fill="none" stroke="#D9A04A" strokeOpacity=".55" strokeWidth="1" />
-      <g fill="url(#bm-honey)">
-        <circle cx="14.6" cy="15.6" r="5.2" />
-        <circle cx="33.4" cy="15.6" r="5.2" />
-        <ellipse cx="24" cy="26.4" rx="12.6" ry="11.2" />
+    <svg className="mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
+      <rect width="48" height="48" rx="12" fill="var(--surface-2)" />
+      <g fill="var(--accent)">
+        <rect x="12" y="28" width="6" height="10" rx="3" />
+        <rect x="21" y="20" width="6" height="18" rx="3" />
+        <rect x="30" y="10" width="6" height="28" rx="3" />
       </g>
-      <g fill="#2A1810">
-        <circle cx="14.6" cy="15.6" r="2.3" />
-        <circle cx="33.4" cy="15.6" r="2.3" />
-        <circle cx="19" cy="23.6" r="1.45" />
-        <circle cx="29" cy="23.6" r="1.45" />
-        <ellipse cx="24" cy="31" rx="5.6" ry="4.4" fillOpacity=".9" />
-      </g>
-      <path d="M21.6 28.3h4.8a.9.9 0 0 1 .7 1.5l-2.4 2.6a.9.9 0 0 1-1.4 0l-2.4-2.6a.9.9 0 0 1 .7-1.5z" fill="#F0C57C" />
     </svg>
   );
 }
 
-export function Wordmark() {
+/**
+ * Пасхалка: долгий тап по марке — один янтарный блик-полоса через экран.
+ * Нигде не подсказывается и ничего не меняет.
+ */
+export function Masthead({ name, onProfile }: { name: string; onProfile: () => void }) {
+  const [sweep, setSweep] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  const start = () => {
+    timer.current = window.setTimeout(() => {
+      thud();
+      setSweep(true);
+      window.setTimeout(() => setSweep(false), 900);
+    }, 700);
+  };
+  const cancel = () => window.clearTimeout(timer.current);
+  const initial = name.trim().charAt(0).toUpperCase() || "?";
   return (
-    <span className="wordmark" aria-label="BEAR PLANNER">
-      <span className="wm-bear">BEAR</span>
-      <span className="wm-planner">PLANNER</span>
-    </span>
+    <header className="masthead">
+      <button
+        type="button"
+        aria-label="Планер"
+        onPointerDown={start}
+        onPointerUp={cancel}
+        onPointerLeave={cancel}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <Mark size={30} />
+      </button>
+      <span className="wordmark">
+        <span className="wm-name">Планер</span>
+        <span className="wm-sub">вся жизнь в одном месте</span>
+      </span>
+      <button type="button" className="avatar" onClick={onProfile} aria-label="Профиль">{initial}</button>
+      {sweep && <div className="stripe-sweep" aria-hidden="true" />}
+    </header>
   );
 }

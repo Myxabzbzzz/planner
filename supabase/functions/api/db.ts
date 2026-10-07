@@ -35,6 +35,17 @@ const ARG_NAMES: Record<string, string[]> = {
   update_habit: ["p_user", "p_id", "p_name", "p_target"],
   archive_habit: ["p_user", "p_id"],
   api_inbox_status: ["p_user", "p_id"],
+  api_profile: ["p_user", "p_months"],
+  api_settings: ["p_user"],
+  api_set_limit: ["p_user", "p_amount"],
+  api_set_notify: ["p_user", "p_kind", "p_on"],
+  set_habit_on: ["p_user", "p_habit", "p_date", "p_done"],
+  unarchive_habit: ["p_user", "p_id"],
+  create_task: ["p_user", "p_title", "p_due_date", "p_due_time"],
+  create_event: ["p_user", "p_title", "p_date", "p_time", "p_with_whom"],
+  create_note: ["p_user", "p_text", "p_kind"],
+  create_habit: ["p_user", "p_name", "p_target"],
+  create_transaction: ["p_user", "p_type", "p_amount", "p_title", "p_category", "p_date"],
 };
 
 export function supabaseApiDb(sb: SupabaseClient): ApiDb {

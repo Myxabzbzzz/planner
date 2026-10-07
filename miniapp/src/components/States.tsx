@@ -1,36 +1,49 @@
 import type { ReactNode } from "react";
-import { BearMark } from "./Brand";
+import { Mark } from "./Brand";
+import { IconCalm } from "./Icons";
 
-export const Card = ({ children, className = "" }: { children: ReactNode; className?: string }) =>
-  <section className={`card ${className}`}>{children}</section>;
+export const Card = ({ children, className = "" }: { children: ReactNode; className?: string }) => (
+  <section className={className ? `card ${className}` : "card"}>{children}</section>
+);
 
-export const Loading = () => (
-  <div className="skeletons">
-    <div className="skeleton big" />
-    <div className="skeleton" />
-    <div className="skeleton" />
+export const Loading = ({ hero = false }: { hero?: boolean }) => (
+  <div className="skeletons" role="status" aria-label="Загрузка">
+    {hero && <div className="sk big" />}
+    <div className="sk" />
+    <div className="sk" />
   </div>
 );
 
-export const ErrorCard = ({ onRetry }: { onRetry: () => void }) => (
+export const ErrorCard = ({ onRetry, text = "Не удалось загрузить" }: { onRetry: () => void; text?: string }) => (
   <Card className="center">
-    <p>Не удалось загрузить</p>
-    <button className="button" onClick={onRetry}>Повторить</button>
+    <p>{text}</p>
+    <button type="button" className="btn ghost block" onClick={onRetry}>Повторить</button>
   </Card>
 );
 
-export const Empty = ({ title, hint }: { title: string; hint?: string }) => (
-  <Card className="center muted">
+/**
+ * Пустое состояние всегда предлагает действие прямо здесь.
+ * Раньше оно отправляло в чат бота («скажи боту “кофе 40 000”»),
+ * хотя композер и кнопка «добавить» уже на экране.
+ */
+export const Empty = ({ title, hint, action }: {
+  title: string; hint?: string; action?: { label: string; onClick: () => void };
+}) => (
+  <Card className="center empty">
+    <div className="empty-ico"><IconCalm /></div>
     <p>{title}</p>
     {hint && <p className="hint">{hint}</p>}
+    {action && <button type="button" className="btn" onClick={action.onClick}>{action.label}</button>}
   </Card>
 );
 
-export const FullScreenMessage = ({ title, hint, action }: { title: string; hint?: string; action?: { label: string; onClick: () => void } }) => (
+export const FullScreenMessage = ({ title, hint, action }: {
+  title: string; hint?: string; action?: { label: string; onClick: () => void };
+}) => (
   <div className="fullscreen">
-    <BearMark size={64} />
+    <Mark size={56} />
     <h2>{title}</h2>
     {hint && <p className="hint">{hint}</p>}
-    {action && <button className="button" onClick={action.onClick}>{action.label}</button>}
+    {action && <button type="button" className="btn" onClick={action.onClick}>{action.label}</button>}
   </div>
 );

@@ -92,6 +92,53 @@ function notes() {
   ];
 }
 
+
+function profile(months: number) {
+  const { today, habits } = data();
+  const rm = seeded(555);
+  const monthsBack = Array.from({ length: months }, (_, i) => {
+    const d = new Date(Date.parse(today.slice(0, 7) + "-01T00:00:00Z"));
+    d.setUTCMonth(d.getUTCMonth() - (months - 1 - i));
+    return {
+      month: d.toISOString().slice(0, 7),
+      expense: Math.round(40000 + rm() * 55000),
+      income: Math.round(120000 + rm() * 60000),
+    };
+  });
+  const rw = seeded(1234);
+  const weeks = Array.from({ length: 12 }, (_, i) => {
+    const created = Math.round(2 + rw() * 9);
+    return { week: shift(today, -(11 - i) * 7), done: Math.round(created * (0.4 + rw() * 0.6)), created };
+  });
+  // Один генератор на весь ряд: отдельный seeded() на каждую клетку даёт
+  // крошечное первое значение и всю сетку делает пустой.
+  const rh = seeded(97);
+  const heat = Array.from({ length: 84 }, (_, i) => {
+    const weekday = (i + 5) % 7;
+    const slack = weekday >= 5 ? 0.45 : 0.15; // по выходным срывов больше
+    return {
+      date: shift(today, i - 83),
+      done: rh() < slack ? 0 : Math.max(1, Math.round(rh() * habits.length)),
+    };
+  });
+  return {
+    name: "Михаил", tz: TZ, base_currency: "RUB", since: shift(today, -214), days_known: 215,
+    active_days: 168, active_streak: 9,
+    tasks: { open: 7, overdue: 1, done_total: 142, done_30d: 31, created_30d: 38 },
+    events: { total: 96, done_total: 88, next_7d: 4 },
+    habits: { active: habits.length, best_streak: 14, logs_total: 318, week_done: 11, week_target: 23 },
+    notes: { total: 58, thoughts: 37, journals: 21, d30: 12 },
+    captures: { total: 412, done: 389, needs_review: 2, failed: 3 },
+    money: { limit: 90000, months: monthsBack },
+    weeks, heat, heat_total: habits.length,
+  };
+}
+
+const SETTINGS = {
+  name: "Михаил", tz: TZ, base_currency: "RUB", limit: 90000,
+  notify_reminders: true, notify_daily: true, notify_weekly: false,
+};
+
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 let polls = 0;
 
@@ -102,6 +149,9 @@ export const devFetch: typeof fetch = async (input, init) => {
   const d = data();
   if ((init?.method ?? "GET") === "POST") {
     if (p === "/inbox" || p === "/inbox/audio") { polls = 0; return json({ id: "dev1", worker_online: true }); }
+    if (["/tasks", "/events", "/notes", "/habits", "/transactions"].includes(p)) {
+      return json({ id: `dev-${Math.random().toString(36).slice(2, 8)}` });
+    }
     return json({});
   }
   // ?mock=noaccess previews the «Нет доступа» screen
@@ -134,6 +184,8 @@ export const devFetch: typeof fetch = async (input, init) => {
   }
   if (p === "/money") return json(money(url.searchParams.get("month") ?? d.today.slice(0, 7)));
   if (p === "/habits") return json({ habits: d.habits });
+  if (p === "/profile") return json(profile(Number(url.searchParams.get("months") ?? "6")));
+  if (p === "/settings") return json(SETTINGS);
   if (p === "/categories") return json({ expense: ["Продукты", "Кафе и рестораны", "Дом", "Транспорт", "Здоровье", "Подписки", "Подарки"], income: ["Зарплата", "Фриланс", "Подарки"] });
   if (p === "/notes") {
     const q = (url.searchParams.get("q") ?? "").toLowerCase();

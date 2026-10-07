@@ -24,9 +24,44 @@ export type MoneyResp = {
   operations: Operation[];
 };
 export type HabitDay = { date: string; done: boolean };
-export type HabitsResp = { habits: { id: string; name: string; target_per_week: number; days: HabitDay[]; streak: number; done_today: boolean }[] };
+export type Habit = {
+  id: string; name: string; target_per_week: number; days: HabitDay[]; streak: number; done_today: boolean;
+};
+export type HabitsResp = { habits: Habit[] };
 export type Note = { id: string; kind: "thought" | "journal"; text: string; created_at: string };
 export type NotesResp = { notes: Note[]; next_before: string | null };
 export type Categories = { expense: string[]; income: string[] };
 export type Sent = { id: string; worker_online: boolean };
 export type InboxStatus = { status: "pending" | "processing" | "done" | "failed" | "needs_review"; reply: string | null };
+export type Created = { id: string };
+
+export type Settings = {
+  name: string;
+  tz: string;
+  base_currency: string;
+  limit: number | null;
+  notify_reminders: boolean;
+  notify_daily: boolean;
+  notify_weekly: boolean;
+};
+export type NotifyKind = "reminders" | "daily" | "weekly";
+
+/** Профиль отдаёт только факты — уровень и награды считает `gamify.ts`. */
+export type Profile = {
+  name: string;
+  tz: string;
+  base_currency: string;
+  since: string;
+  days_known: number;
+  active_days: number;
+  active_streak: number;
+  tasks: { open: number; overdue: number; done_total: number; done_30d: number; created_30d: number };
+  events: { total: number; done_total: number; next_7d: number };
+  habits: { active: number; best_streak: number; logs_total: number; week_done: number; week_target: number };
+  notes: { total: number; thoughts: number; journals: number; d30: number };
+  captures: { total: number; done: number; needs_review: number; failed: number };
+  money: { limit: number | null; months: { month: string; expense: number; income: number }[] };
+  weeks: { week: string; done: number; created: number }[];
+  heat: { date: string; done: number }[];
+  heat_total: number;
+};

@@ -52,6 +52,13 @@ function route(path: string, q: URLSearchParams, userId: string): [string, unkno
     }
     case "/categories":
       return ["api_categories", [userId]];
+    case "/settings":
+      return ["api_settings", [userId]];
+    case "/profile": {
+      const months = Number(q.get("months") ?? "6");
+      if (!Number.isInteger(months) || months < 1 || months > 12) throw new BadRequest();
+      return ["api_profile", [userId, months]];
+    }
     case "/notes": {
       const query = (q.get("q") ?? "").slice(0, 100);
       const before = q.get("before");
@@ -131,7 +138,91 @@ function habitPatch(b: Record<string, unknown>, u: string, id: string): unknown[
   return [u, id, optTitle(b.name), target ?? null];
 }
 
+// ——— создание записей руками, без ИИ-воркера ———
+const reqTitle = (v: unknown): string => {
+  if (!isTitle(v)) throw new BadRequest();
+  return (v as string).trim();
+};
+const optDate = (v: unknown): string | null => {
+  if (v === undefined || v === null || v === "") return null;
+  if (typeof v !== "string" || !realDate(v)) throw new BadRequest();
+  return v;
+};
+const optTime = (v: unknown): string | null => {
+  if (v === undefined || v === null || v === "") return null;
+  if (typeof v !== "string" || !TIME.test(v)) throw new BadRequest();
+  return v;
+};
+
+function newTask(b: Record<string, unknown>, u: string): unknown[] {
+  const date = optDate(b.due_date), time = optTime(b.due_time);
+  if (time !== null && date === null) throw new BadRequest();
+  return [u, reqTitle(b.title), date, time];
+}
+
+function newEvent(b: Record<string, unknown>, u: string): unknown[] {
+  const date = optDate(b.date), time = optTime(b.time);
+  if (date === null || time === null) throw new BadRequest();
+  if (b.with_whom !== undefined && !(typeof b.with_whom === "string" && b.with_whom.trim().length <= 200)) {
+    throw new BadRequest();
+  }
+  return [u, reqTitle(b.title), date, time, b.with_whom ?? null];
+}
+
+function newNote(b: Record<string, unknown>, u: string): unknown[] {
+  const { text, kind } = b;
+  if (!(typeof text === "string" && text.trim() !== "" && text.trim().length <= 4000)) throw new BadRequest();
+  if (kind !== "thought" && kind !== "journal") throw new BadRequest();
+  return [u, text.trim(), kind];
+}
+
+function newHabit(b: Record<string, unknown>, u: string): unknown[] {
+  const { target } = b;
+  if (!(Number.isInteger(target) && (target as number) >= 1 && (target as number) <= 7)) throw new BadRequest();
+  return [u, reqTitle(b.name), target];
+}
+
+function newTransaction(b: Record<string, unknown>, u: string): unknown[] {
+  const { type, amount, title, category } = b;
+  if (type !== "expense" && type !== "income") throw new BadRequest();
+  if (!(typeof amount === "number" && Number.isFinite(amount) && amount > 0 && amount < 1e13)) throw new BadRequest();
+  if (title !== undefined && !(typeof title === "string" && title.trim().length <= 200)) throw new BadRequest();
+  if (category !== undefined && !(typeof category === "string" && category.length <= 50)) throw new BadRequest();
+  return [u, type, amount, typeof title === "string" ? title.trim() : null, category ?? null, optDate(b.date)];
+}
+
+const CREATE_ROUTES: Record<string, [string, (b: Record<string, unknown>, u: string) => unknown[]]> = {
+  "/tasks": ["create_task", newTask],
+  "/events": ["create_event", newEvent],
+  "/notes": ["create_note", newNote],
+  "/habits": ["create_habit", newHabit],
+  "/transactions": ["create_transaction", newTransaction],
+};
+
+function habitDay(b: Record<string, unknown>, u: string, id: string): unknown[] {
+  const date = optDate(b.date);
+  if (date === null) throw new BadRequest();
+  return [u, id, date, doneArg(b)];
+}
+
+function limitArg(b: Record<string, unknown>, u: string): unknown[] {
+  const { amount } = b;
+  if (!(typeof amount === "number" && Number.isFinite(amount) && amount >= 0 && amount < 1e13)) throw new BadRequest();
+  return [u, amount];
+}
+
+function notifyArg(b: Record<string, unknown>, u: string): unknown[] {
+  const { kind, on } = b;
+  if (kind !== "reminders" && kind !== "daily" && kind !== "weekly") throw new BadRequest();
+  if (typeof on !== "boolean") throw new BadRequest();
+  return [u, kind, on];
+}
+
 const POST_ROUTES: [RegExp, string, BodyParser][] = [
+  [/^\/settings\/limit$/, "api_set_limit", limitArg],
+  [/^\/settings\/notify$/, "api_set_notify", notifyArg],
+  [new RegExp(`^/habits/(${UUID})/day$`, "i"), "set_habit_on", habitDay],
+  [new RegExp(`^/habits/(${UUID})/unarchive$`, "i"), "unarchive_habit", (_b, u, id) => [u, id]],
   [new RegExp(`^/tasks/(${UUID})/done$`, "i"), "set_item_done", (b, u, id) => [u, id, "task", doneArg(b)]],
   [new RegExp(`^/events/(${UUID})/done$`, "i"), "set_item_done", (b, u, id) => [u, id, "event", doneArg(b)]],
   [new RegExp(`^/habits/(${UUID})/today$`, "i"), "set_habit_today", (b, u, id) => [u, id, doneArg(b)]],
@@ -158,9 +249,23 @@ async function postRoute(path: string, req: Request, userId: string): Promise<[s
       throw new BadRequest();
     }
     if (body === null || typeof body !== "object" || Array.isArray(body)) throw new BadRequest();
-    return [fn, parse(body as Record<string, unknown>, userId, m[1].toLowerCase())];
+    return [fn, parse(body as Record<string, unknown>, userId, (m[1] ?? "").toLowerCase())];
   }
   return null;
+}
+
+/** Создание: в ответ уходит id новой записи, а не просто ok. */
+async function createRoute(path: string, req: Request, userId: string): Promise<[string, unknown[]] | null> {
+  const hit = CREATE_ROUTES[path];
+  if (!hit) return null;
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    throw new BadRequest();
+  }
+  if (body === null || typeof body !== "object" || Array.isArray(body)) throw new BadRequest();
+  return [hit[0], hit[1](body as Record<string, unknown>, userId)];
 }
 
 const MAX_TEXT = 4000;
@@ -218,6 +323,11 @@ export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
     if (req.method === "POST" && path === "/inbox") return await postInboxText(req, user.id, auth.tgId, d.db);
     if (req.method === "POST" && path === "/inbox/audio") return await postInboxAudio(req, user.id, auth.tgId, d);
     if (req.method === "POST") {
+      const cr = await createRoute(path, req, user.id);
+      if (cr) {
+        const id = await d.db.call(cr[0], cr[1]);
+        return typeof id === "string" ? json(201, { id }) : json(404, { error: "not_found" });
+      }
       const pr = await postRoute(path, req, user.id);
       if (!pr) return json(404, { error: "not_found" });
       const ok = await d.db.call(pr[0], pr[1]);
