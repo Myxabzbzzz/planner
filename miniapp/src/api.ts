@@ -1,9 +1,9 @@
 import type { EventPatch, HabitPatch, NotePatch, TaskPatch } from "./itemEdit";
-import type { OpPatch } from "./opEdit";
+import type { OpEdit, OpPatch } from "./opEdit";
 import { baseMime } from "./recorder";
 import type {
-  Categories, Created, EventsResp, HabitsResp, InboxStatus, Me, MoneyResp, NotesResp, NotifyKind, Profile,
-  Sent, Settings, TasksResp, Today,
+  BudgetsResp, Categories, Created, CurrencyChange, EventsResp, HabitsResp, InboxStatus, Me, MoneyResp, NotesResp,
+  NotifyKind, OperationsResp, Profile, ReviewKind, ReviewsResp, Sent, Settings, TasksResp, Today,
 } from "./types";
 import type { NewEvent, NewHabit, NewNote, NewTask, NewTransaction } from "./newItem";
 
@@ -83,6 +83,28 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
 
     setHabitOn: (id: string, date: string, done: boolean) => post(`/habits/${id}/day`, { date, done }),
     unarchiveHabit: (id: string) => post(`/habits/${id}/unarchive`, {}),
+
+    // Удаление теперь мягкое — вернуть запись можно, пока висит «Отменить».
+    restoreTask: (id: string) => post(`/tasks/${id}/restore`, {}),
+    restoreEvent: (id: string) => post(`/events/${id}/restore`, {}),
+    restoreNote: (id: string) => post(`/notes/${id}/restore`, {}),
+    restoreTransaction: (id: string) => post(`/transactions/${id}/restore`, {}),
+
+    editTransaction: (id: string, patch: OpEdit) => post(`/transactions/${id}/edit`, patch),
+    operations: (month: string, before?: string) => get<OperationsResp>("/operations", { month, before }),
+
+    budgets: (month: string) => get<BudgetsResp>("/budgets", { month }),
+    setCategoryLimit: (category: string, amount: number) => post("/settings/category-limit", { category, amount }),
+    renameCategory: (id: string, name: string) => post(`/categories/${id}`, { name }),
+    deleteCategory: (id: string) => post(`/categories/${id}/delete`, {}),
+
+    reviews: () => get<ReviewsResp>("/reviews"),
+    answerReview: (inboxId: string, index: number, choice: string, kind: ReviewKind) =>
+      post(`/reviews/${inboxId}`, { index, choice, kind }),
+
+    changeCurrency: (currency: string) => postJson<CurrencyChange>("/settings/currency", { currency }),
+    exportData: () => get<unknown>("/account/export"),
+    deleteAccount: () => post("/account/delete", {}),
 
     profile: (months = 6) => get<Profile>("/profile", { months }),
     settings: () => get<Settings>("/settings"),

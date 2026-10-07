@@ -1302,3 +1302,51 @@ button.pill:active:not(:disabled) { transform: scale(.96); }
     transition-duration: .01ms !important;
   }
 }
+
+/* ——— полоска отмены удаления ——— */
+.undobar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--dock-h) + var(--kb) + 10px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 616px;
+  margin: 0 auto;
+  padding: 10px 10px 10px 16px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+  box-shadow: var(--shadow);
+  font-size: 14.5px;
+  animation: rise var(--mid) var(--ease);
+}
+
+.undo-btn {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--r-xs);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.undo-btn:active:not(:disabled) { transform: scale(.96); }
+.undo-btn:disabled { opacity: .5; }
+
+/* карточка «ИИ ждёт ответа» — единственное, что выделяется цветом на «Сегодня» */
+.card.ask {
+  border-color: var(--accent-ring);
+  background: var(--accent-dim);
+}
+
+.ask-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+}

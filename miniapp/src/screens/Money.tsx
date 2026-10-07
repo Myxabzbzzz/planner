@@ -19,8 +19,8 @@ function groupByDay(ops: Operation[]) {
   return [...map.entries()];
 }
 
-export function Money({ api, me, refresh = 0, onAdd, onSettings }: {
-  api: Api; me: Me; refresh?: number; onAdd: () => void; onSettings: () => void;
+export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
+  api: Api; me: Me; refresh?: number; onAdd: () => void; onSettings: () => void; onBudgets: () => void;
 }) {
   const thisMonth = currentMonth(me.tz);
   const [month, setMonth] = useState(thisMonth);
@@ -93,7 +93,12 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings }: {
         <>
           {shares.length > 0 && (
             <Card>
-              <h3>Куда уходит</h3>
+              <div className="card-head">
+                <h3 className="grow">Куда уходит</h3>
+                <button type="button" className="btn quiet" style={{ minHeight: 32, padding: 0 }} onClick={onBudgets}>
+                  Лимиты
+                </button>
+              </div>
               <ShareBar shares={shares} />
               <RankedBars shares={shares} currency={cur} />
             </Card>

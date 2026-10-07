@@ -1,0 +1,75 @@
+name: Deploy Mini App to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Один деплой за раз; текущий не отменяем, чтобы не оставить Pages в полусобранном виде.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build miniapp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: miniapp/package-lock.json
+
+      - uses: actions/configure-pages@v5
+
+      - name: Install dependencies
+        working-directory: miniapp
+        run: npm ci
+
+      - name: Type-check
+        working-directory: miniapp
+        run: npx tsc --noEmit
+
+      # Pages обслуживает приложение по адресу https://<user>.github.io/<repo>/,
+      # а не из корня домена, поэтому Vite нужен base = /<repo>/.
+      # vite.config.ts мы не меняем — base передаётся флагом, имя репозитория
+      # берётся из github.repository, а не прописано руками.
+      # VITE_API_URL Vite сам подхватывает из miniapp/.env.production.
+      - name: Build with Pages base path
+        working-directory: miniapp
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          echo "Building with --base=/${REPO_NAME}/"
+          npx vite build --base="/${REPO_NAME}/"
+
+      - name: Sanity-check the bundle
+        working-directory: miniapp
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          grep -q "/${REPO_NAME}/assets/" dist/index.html \
+            || { echo "::error::dist/index.html не ссылается на /${REPO_NAME}/assets/"; exit 1; }
+          grep -rql "supabase.co/functions/v1/api" dist/assets \
+            || { echo "::error::VITE_API_URL не попал в бандл — проверь miniapp/.env.production"; exit 1; }
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: miniapp/dist
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

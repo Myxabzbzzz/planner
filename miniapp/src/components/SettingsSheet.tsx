@@ -19,11 +19,12 @@ const NOTIFY: { key: NotifyKind; label: string; hint: string }[] = [
  * в кнопках чата, хотя лимит — центральная цифра экрана «Деньги»:
  * увидеть его было можно, а изменить — нет.
  */
-export function SettingsSheet({ api, settings, onClose, onChanged }: {
+export function SettingsSheet({ api, settings, onClose, onChanged, onAccount }: {
   api: Api;
   settings: Settings;
   onClose: () => void;
   onChanged: (s: Settings) => void;
+  onAccount: () => void;
 }) {
   const [limit, setLimit] = useState(settings.limit === null ? "" : fmtNumber(settings.limit));
   const [busy, setBusy] = useState(false);
@@ -79,18 +80,18 @@ export function SettingsSheet({ api, settings, onClose, onChanged }: {
         );
       })}
 
-      <div className="field" style={{ marginTop: 24 }}><span>Эти настройки меняются в чате бота</span></div>
+      <div className="field" style={{ marginTop: 24 }}><span>Аккаунт</span></div>
+      <button type="button" className="row" style={{ width: "100%" }} onClick={onAccount} disabled={busy}>
+        <span className="grow row-title" style={{ minHeight: 0 }}>
+          Валюта, выгрузка, удаление
+          <span className="row-sub">базовая валюта сейчас — {settings.base_currency}</span>
+        </span>
+      </button>
       <div className="row">
         <span className="grow">Часовой пояс</span>
         <span className="meta">{settings.tz}</span>
       </div>
-      <div className="row">
-        <span className="grow">Базовая валюта</span>
-        <span className="meta">{settings.base_currency}</span>
-      </div>
-      <div className="card-foot">
-        Часовой пояс — в «⚙️ Настройки» у бота. Базовая валюта выбирается один раз при первом запуске.
-      </div>
+      <div className="card-foot">Часовой пояс меняется в «⚙️ Настройки» у бота.</div>
 
       {error && <div className="sub danger">{error}</div>}
       {saved && !error && <div className="sub">Сохранено.</div>}

@@ -46,6 +46,21 @@ const ARG_NAMES: Record<string, string[]> = {
   create_note: ["p_user", "p_text", "p_kind"],
   create_habit: ["p_user", "p_name", "p_target"],
   create_transaction: ["p_user", "p_type", "p_amount", "p_title", "p_category", "p_date"],
+  restore_item: ["p_user", "p_id", "p_kind"],
+  restore_note: ["p_user", "p_id"],
+  restore_transaction: ["p_user", "p_id"],
+  edit_transaction: ["p_user", "p_id", "p_amount", "p_title", "p_category", "p_date", "p_type", "p_currency"],
+  api_operations: ["p_user", "p_month", "p_before"],
+  api_budgets: ["p_user", "p_month"],
+  set_category_limit: ["p_user", "p_category", "p_amount"],
+  rename_category: ["p_user", "p_id", "p_name"],
+  delete_category: ["p_user", "p_id"],
+  api_reviews: ["p_user"],
+  resolve_review: ["p_user", "p_inbox", "p_idx", "p_kind"],
+  resolve_time: ["p_user", "p_inbox", "p_idx", "p_choice"],
+  change_base_currency: ["p_user", "p_cur"],
+  export_data: ["p_user"],
+  delete_account: ["p_user"],
 };
 
 export function supabaseApiDb(sb: SupabaseClient): ApiDb {

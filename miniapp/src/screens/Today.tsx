@@ -5,7 +5,7 @@ import { Check } from "../components/Check";
 import { EventSheet, TaskSheet } from "../components/ItemSheets";
 import { Meter, Ring } from "../components/Meter";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
-import { IconTick } from "../components/Icons";
+import { IconChevron, IconTick } from "../components/Icons";
 import { fmtAmount, fmtDayTitle, todayIso } from "../format";
 import { useLoad } from "../load";
 import { useToggles } from "../useToggles";
@@ -15,8 +15,9 @@ import type { Me, Today as TodayData } from "../types";
  * Один хронологический список вместо двух карточек «Встречи» и «Задачи»:
  * день читается сверху вниз, как он и происходит.
  */
-export function Today({ api, me, refresh = 0, onAdd, onSettings }: {
+export function Today({ api, me, refresh = 0, onAdd, onSettings, pending = 0, onReviews }: {
   api: Api; me: Me; refresh?: number; onAdd: () => void; onSettings: () => void;
+  pending?: number; onReviews: () => void;
 }) {
   const { data, error, loading, reload } = useLoad(() => api.today(), [api], refresh);
   const { over, toggle, reset } = useToggles();
@@ -43,6 +44,22 @@ export function Today({ api, me, refresh = 0, onAdd, onSettings }: {
   return (
     <>
       <p className="dateline">{fmtDayTitle(todayIso(me.tz))}</p>
+
+      {/* Пока вопрос не отвечен, запись не сохранена — это первое, что надо увидеть */}
+      {pending > 0 && (
+        <button type="button" className="tapcard" onClick={onReviews}>
+          <Card className="ask">
+            <div className="row" style={{ padding: 0, borderTop: 0 }}>
+              <span className="ask-dot" aria-hidden="true" />
+              <span className="grow">
+                {pending === 1 ? "ИИ ждёт ответа на вопрос" : `ИИ ждёт ответа: ${pending} вопроса`}
+                <span className="row-sub">Пока не ответишь, запись не сохранится</span>
+              </span>
+              <IconChevron dir="right" />
+            </div>
+          </Card>
+        </button>
+      )}
 
       <Card>
         <div className="level">

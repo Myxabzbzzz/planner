@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  miniapp:
+    name: Mini App (type-check, build, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: miniapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: miniapp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `npm run build` = `tsc --noEmit && vite build` — сразу и типы, и сборка.
+      - name: Type-check and build
+        run: npm run build
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+  worker:
+    name: Worker (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: worker/pyproject.toml
+
+      # mlx-whisper и laya из pyproject работают только на Apple Silicon,
+      # а в коде они импортируются лениво (planner_worker/stt.py,
+      # planner_worker/classifier.py) — тестам они не нужны. Поэтому пакет
+      # ставим без зависимостей и доустанавливаем кроссплатформенные вручную:
+      # это ровно то, что лежит в рабочем worker/.venv.
+      - name: Install worker (без Apple-only зависимостей)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . --no-deps
+          pip install 'httpx>=0.27' 'pydantic>=2.7' 'supabase>=2.10' 'python-dotenv>=1.0' numpy 'pytest>=8'
+
+      - name: pytest
+        run: pytest
+
+  edge-functions:
+    # Эти Deno-тесты лежат в репозитории, но ни разу не запускались.
+    # Джоба может быть красной — падения специально ничем не замаскированы
+    # (ни continue-on-error, ни `|| true`), чтобы было видно, что именно сломано.
+    name: Edge Functions (Deno-тесты — первый запуск, может упасть)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: deno test
+        run: deno test --allow-env --allow-net supabase/functions/

@@ -134,6 +134,41 @@ function profile(months: number) {
   };
 }
 
+const REVIEWS = {
+  reviews: [
+    {
+      inbox_id: "aaaaaaaa-1111-2222-3333-444444444444", index: 0, kind: "type",
+      question: "Это трата или просто мысль?", source_text: "такси 400",
+      options: [
+        { key: "expense", label: "💸 Расход" },
+        { key: "note", label: "💡 Мысль" },
+        { key: "drop", label: "🗑 Пропустить" },
+      ],
+      created_at: "2026-10-07T09:12:00",
+    },
+    {
+      inbox_id: "bbbbbbbb-1111-2222-3333-444444444444", index: 0, kind: "time",
+      question: "Во сколько встреча с Андреем?", source_text: "завтра встреча с Андреем",
+      options: [
+        { key: "1000", label: "10:00" },
+        { key: "1500", label: "15:00" },
+        { key: "none", label: "Без времени" },
+      ],
+      created_at: "2026-10-06T18:40:00",
+    },
+  ],
+};
+
+function budgets(month: string) {
+  const m = money(month);
+  const limits: Record<string, number> = { "Продукты": 25000, "Кафе и рестораны": 12000, "Транспорт": 8000 };
+  return {
+    base_currency: "RUB",
+    overall: { limit: 90000, spent: m.expense },
+    categories: m.by_category.map((c) => ({ name: c.name, limit: limits[c.name] ?? null, spent: c.amount })),
+  };
+}
+
 const SETTINGS = {
   name: "Михаил", tz: TZ, base_currency: "RUB", limit: 90000,
   notify_reminders: true, notify_daily: true, notify_weekly: false,
@@ -152,6 +187,7 @@ export const devFetch: typeof fetch = async (input, init) => {
     if (["/tasks", "/events", "/notes", "/habits", "/transactions"].includes(p)) {
       return json({ id: `dev-${Math.random().toString(36).slice(2, 8)}` });
     }
+    if (p === "/settings/currency") return json({ converted: 142, skipped: 3, from: "RUB", to: "UZS" });
     return json({});
   }
   // ?mock=noaccess previews the «Нет доступа» screen
@@ -186,6 +222,12 @@ export const devFetch: typeof fetch = async (input, init) => {
   if (p === "/habits") return json({ habits: d.habits });
   if (p === "/profile") return json(profile(Number(url.searchParams.get("months") ?? "6")));
   if (p === "/settings") return json(SETTINGS);
+  if (p === "/reviews") return json(REVIEWS);
+  if (p === "/budgets") return json(budgets(url.searchParams.get("month") ?? d.today.slice(0, 7)));
+  if (p === "/operations") {
+    return json({ operations: money(url.searchParams.get("month") ?? d.today.slice(0, 7)).operations, next_before: null });
+  }
+  if (p === "/account/export") return json({ exported_at: new Date().toISOString(), tasks: d.tasks, habits: d.habits });
   if (p === "/categories") return json({ expense: ["Продукты", "Кафе и рестораны", "Дом", "Транспорт", "Здоровье", "Подписки", "Подарки"], income: ["Зарплата", "Фриланс", "Подарки"] });
   if (p === "/notes") {
     const q = (url.searchParams.get("q") ?? "").toLowerCase();

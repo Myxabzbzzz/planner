@@ -65,3 +65,29 @@ export type Profile = {
   heat: { date: string; done: number }[];
   heat_total: number;
 };
+
+export type OperationsResp = { operations: Operation[]; next_before: string | null };
+
+export type Budget = { name: string; limit: number | null; spent: number };
+export type BudgetsResp = {
+  base_currency: string;
+  overall: { limit: number | null; spent: number };
+  categories: Budget[];
+};
+
+/** Открытый вопрос ИИ: раньше ответить на него можно было только в чате. */
+export type ReviewOption = { key: string; label: string };
+/** «type» — что это за запись, «time» — во сколько; у них разные RPC. */
+export type ReviewKind = "type" | "time";
+export type Review = {
+  inbox_id: string;
+  index: number;
+  kind: ReviewKind;
+  question: string;
+  source_text: string;
+  options: ReviewOption[];
+  created_at: string;
+};
+export type ReviewsResp = { reviews: Review[] };
+
+export type CurrencyChange = { converted: number; skipped: number; from: string; to: string };

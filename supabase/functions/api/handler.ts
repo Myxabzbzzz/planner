@@ -74,6 +74,22 @@ function route(path: string, q: URLSearchParams, userId: string): [string, unkno
       return ["api_categories", [userId]];
     case "/settings":
       return ["api_settings", [userId]];
+    case "/reviews":
+      return ["api_reviews", [userId]];
+    case "/account/export":
+      return ["export_data", [userId]];
+    case "/budgets": {
+      const month = q.get("month") ?? "";
+      if (!MONTH.test(month)) throw new BadRequest();
+      return ["api_budgets", [userId, month]];
+    }
+    case "/operations": {
+      const month = q.get("month") ?? "";
+      if (!MONTH.test(month)) throw new BadRequest();
+      const before = q.get("before");
+      if (before && !CURSOR.test(before)) throw new BadRequest();
+      return ["api_operations", [userId, month, before || null]];
+    }
     case "/profile": {
       const months = Number(q.get("months") ?? "6");
       if (!Number.isInteger(months) || months < 1 || months > 12) throw new BadRequest();
@@ -238,7 +254,53 @@ function notifyArg(b: Record<string, unknown>, u: string): unknown[] {
   return [u, kind, on];
 }
 
+function opEdit(b: Record<string, unknown>, u: string, id: string): unknown[] {
+  requireSome(b, ["amount", "title", "category", "date", "type", "currency"]);
+  const { amount, title, category, date, type, currency } = b;
+  if (amount !== undefined && !(typeof amount === "number" && Number.isFinite(amount) && amount > 0 && amount < 1e13)) {
+    throw new BadRequest();
+  }
+  if (title !== undefined && !(typeof title === "string" && title.trim().length <= 200)) throw new BadRequest();
+  if (category !== undefined && !(typeof category === "string" && category.length <= 50)) throw new BadRequest();
+  if (type !== undefined && type !== "expense" && type !== "income") throw new BadRequest();
+  if (currency !== undefined && !(typeof currency === "string" && /^[A-Z]{3}$/.test(currency))) throw new BadRequest();
+  return [
+    u, id, amount ?? null, typeof title === "string" ? title.trim() : null, category ?? null,
+    optDate(date), type ?? null, currency ?? null,
+  ];
+}
+
+function categoryLimit(b: Record<string, unknown>, u: string): unknown[] {
+  const { category, amount } = b;
+  if (!(typeof category === "string" && category.trim() !== "" && category.length <= 50)) throw new BadRequest();
+  if (!(typeof amount === "number" && Number.isFinite(amount) && amount >= 0 && amount < 1e13)) throw new BadRequest();
+  return [u, category.trim(), amount];
+}
+
+/** Вопрос бывает двух видов: «что это» и «во сколько» — у них разные RPC. */
+const REVIEW_KINDS = ["type", "time"] as const;
+
+function reviewAnswer(b: Record<string, unknown>): { fn: string; idx: number; choice: string } {
+  const { index, choice, kind } = b;
+  if (!Number.isInteger(index) || (index as number) < 0 || (index as number) > 50) throw new BadRequest();
+  if (!(typeof choice === "string" && choice.length > 0 && choice.length <= 32)) throw new BadRequest();
+  if (kind !== undefined && !REVIEW_KINDS.includes(kind as typeof REVIEW_KINDS[number])) throw new BadRequest();
+  return { fn: kind === "time" ? "resolve_time" : "resolve_review", idx: index as number, choice };
+}
+
 const POST_ROUTES: [RegExp, string, BodyParser][] = [
+  [new RegExp(`^/tasks/(${UUID})/restore$`, "i"), "restore_item", (_b, u, id) => [u, id, "task"]],
+  [new RegExp(`^/events/(${UUID})/restore$`, "i"), "restore_item", (_b, u, id) => [u, id, "event"]],
+  [new RegExp(`^/notes/(${UUID})/restore$`, "i"), "restore_note", (_b, u, id) => [u, id]],
+  [new RegExp(`^/transactions/(${UUID})/restore$`, "i"), "restore_transaction", (_b, u, id) => [u, id]],
+  [new RegExp(`^/transactions/(${UUID})/edit$`, "i"), "edit_transaction", opEdit],
+  [new RegExp(`^/categories/(${UUID})$`, "i"), "rename_category", (b, u, id) => {
+    if (!isTitle(b.name) || (b.name as string).trim().length > 50) throw new BadRequest();
+    return [u, id, (b.name as string).trim()];
+  }],
+  [new RegExp(`^/categories/(${UUID})/delete$`, "i"), "delete_category", (_b, u, id) => [u, id]],
+  [/^\/settings\/category-limit$/, "set_category_limit", categoryLimit],
+  [/^\/account\/delete$/, "delete_account", (_b, u) => [u]],
   [/^\/settings\/limit$/, "api_set_limit", limitArg],
   [/^\/settings\/notify$/, "api_set_notify", notifyArg],
   [new RegExp(`^/habits/(${UUID})/day$`, "i"), "set_habit_on", habitDay],
@@ -272,6 +334,17 @@ async function postRoute(path: string, req: Request, userId: string): Promise<[s
     return [fn, parse(body as Record<string, unknown>, userId, (m[1] ?? "").toLowerCase())];
   }
   return null;
+}
+
+async function readJson(req: Request): Promise<Record<string, unknown>> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    throw new BadRequest();
+  }
+  if (body === null || typeof body !== "object" || Array.isArray(body)) throw new BadRequest();
+  return body as Record<string, unknown>;
 }
 
 /** Создание: в ответ уходит id новой записи, а не просто ok. */
@@ -366,6 +439,18 @@ async function handle(req: Request, d: ApiDeps): Promise<Response> {
     if (req.method === "POST" && path === "/inbox") return await postInboxText(req, user.id, auth.tgId, d.db);
     if (req.method === "POST" && path === "/inbox/audio") return await postInboxAudio(req, user.id, auth.tgId, d);
     if (req.method === "POST") {
+      const rev = new RegExp(`^/reviews/(${UUID})$`, "i").exec(path);
+      if (rev) {
+        const { fn, idx, choice } = reviewAnswer(await readJson(req));
+        const ok = await d.db.call(fn, [user.id, rev[1].toLowerCase(), idx, choice]);
+        return ok === true ? json(200, { ok: true }) : json(404, { error: "not_found" });
+      }
+      if (path === "/settings/currency") {
+        const cur = (await readJson(req)).currency;
+        if (!(typeof cur === "string" && /^[A-Z]{3}$/.test(cur))) throw new BadRequest();
+        const res = await d.db.call("change_base_currency", [user.id, cur]);
+        return res === null ? json(404, { error: "not_found" }) : json(200, res);
+      }
       const cr = await createRoute(path, req, user.id);
       if (cr) {
         const id = await d.db.call(cr[0], cr[1]);

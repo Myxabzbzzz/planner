@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import type { Api } from "../api";
 import { buildEventPatch, buildHabitPatch, buildNotePatch, buildTaskPatch, splitDue, type NoteKind } from "../itemEdit";
 import { saveError } from "../saveError";
-import { confirmDialog, hapticResult } from "../telegram";
+import { hapticResult } from "../telegram";
+import { useUndo } from "../undo";
 import { Sheet } from "./Sheet";
 
 type Base<T> = { api: Api; item: T; onClose: () => void; onSaved: () => void };
@@ -56,6 +57,7 @@ export function TaskSheet({ api, item, onClose, onSaved }: Base<{ id: string; ti
   const [date, setDate] = useState(was.date);
   const [time, setTime] = useState(was.time);
   const { busy, error, run } = useRun(onSaved);
+  const undo = useUndo();
   const patch = buildTaskPatch(item, { title, date, time });
   const dirty = patch !== null;
   return (
@@ -63,7 +65,10 @@ export function TaskSheet({ api, item, onClose, onSaved }: Base<{ id: string; ti
       <Actions busy={busy} error={error} canSave={!!patch && patch !== "invalid"}
         onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateTask(item.id, patch)); }}
         removeLabel="Удалить задачу"
-        onRemove={async () => { if (await confirmDialog("Удалить задачу?")) void run(() => api.deleteTask(item.id)); }} />
+        onRemove={() => void run(async () => {
+          await api.deleteTask(item.id);
+          undo.offer("Задача удалена", () => api.restoreTask(item.id));
+        })} />
     }>
       <Field label="Что сделать">
         <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
@@ -99,13 +104,17 @@ export function EventSheet({ api, item, onClose, onSaved }: Base<{
   const [time, setTime] = useState(item.time);
   const [withWhom, setWithWhom] = useState(item.with_whom ?? "");
   const { busy, error, run } = useRun(onSaved);
+  const undo = useUndo();
   const patch = buildEventPatch(item, { title, date, time, withWhom });
   return (
     <Sheet title="Встреча" busy={busy} dirty={patch !== null} onClose={onClose} footer={
       <Actions busy={busy} error={error} canSave={!!patch && patch !== "invalid"}
         onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateEvent(item.id, patch)); }}
         removeLabel="Удалить встречу"
-        onRemove={async () => { if (await confirmDialog("Удалить встречу?")) void run(() => api.deleteEvent(item.id)); }} />
+        onRemove={() => void run(async () => {
+          await api.deleteEvent(item.id);
+          undo.offer("Встреча удалена", () => api.restoreEvent(item.id));
+        })} />
     }>
       <Field label="Название">
         <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
@@ -136,13 +145,17 @@ export function NoteSheet({ api, item, onClose, onSaved }: Base<{ id: string; te
   const [text, setText] = useState(item.text);
   const [kind, setKind] = useState<NoteKind>(item.kind);
   const { busy, error, run } = useRun(onSaved);
+  const undo = useUndo();
   const patch = buildNotePatch(item, { text, kind });
   return (
     <Sheet title="Заметка" busy={busy} dirty={patch !== null} onClose={onClose} footer={
       <Actions busy={busy} error={error} canSave={!!patch && patch !== "invalid"}
         onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateNote(item.id, patch)); }}
         removeLabel="Удалить заметку"
-        onRemove={async () => { if (await confirmDialog("Удалить заметку?")) void run(() => api.deleteNote(item.id)); }} />
+        onRemove={() => void run(async () => {
+          await api.deleteNote(item.id);
+          undo.offer("Заметка удалена", () => api.restoreNote(item.id));
+        })} />
     }>
       <Field label="Текст">
         <textarea rows={6} value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} disabled={busy} />
@@ -171,17 +184,17 @@ export function HabitSheet({ api, item, onClose, onSaved }: Base<{
   const [name, setName] = useState(item.name);
   const [target, setTarget] = useState(item.target_per_week);
   const { busy, error, run } = useRun(onSaved);
+  const undo = useUndo();
   const patch = buildHabitPatch(item, { name, target });
   return (
     <Sheet title="Привычка" busy={busy} dirty={patch !== null} onClose={onClose} footer={
       <Actions busy={busy} error={error} canSave={!!patch && patch !== "invalid"}
         onSave={() => { if (patch && patch !== "invalid") void run(() => api.updateHabit(item.id, patch)); }}
         removeLabel="Убрать из списка"
-        onRemove={async () => {
-          if (await confirmDialog("Убрать привычку? Отметки сохранятся — её можно вернуть, добавив заново.")) {
-            void run(() => api.archiveHabit(item.id));
-          }
-        }} />
+        onRemove={() => void run(async () => {
+          await api.archiveHabit(item.id);
+          undo.offer("Привычка убрана", () => api.unarchiveHabit(item.id));
+        })} />
     }>
       <Field label="Название">
         <input value={name} maxLength={200} onChange={(e) => setName(e.target.value)} disabled={busy} />

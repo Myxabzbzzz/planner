@@ -34,6 +34,28 @@ Telegram-бот + Mini App «вся жизнь в одном месте» с л�
 
 В боте: ⚙️ Настройки → 📲 Двойной тап — пошаговая инструкция с личным токеном для приложения «Команды».
 
+## Деплой
+
+Полный runbook — [docs/deploy.md](docs/deploy.md).
+
+Коротко:
+
+- **Mini App** едет на GitHub Pages сам: push в `main` → `.github/workflows/pages.yml`.
+  Pages отдаёт приложение из `/<repo>/`, поэтому workflow передаёт Vite правильный
+  `base` на сборке. Адрес приложения потом нужно положить в `MINIAPP_URL`.
+- **Облако** (миграции + Edge Functions) деплоится руками:
+
+      SUPABASE_PROJECT_REF=<ref> scripts/deploy-supabase.sh --dry-run
+      SUPABASE_PROJECT_REF=<ref> scripts/deploy-supabase.sh
+
+  Перед `db push` скрипт покажет, что будет применено, и попросит набрать
+  подтверждение — база живая.
+- **Секреты, вебхук Telegram и секреты в Vault** скрипт не ставит: что именно
+  задать и кто это читает — в [docs/deploy.md](docs/deploy.md).
+
+CI (`.github/workflows/ci.yml`) на каждый push и PR в `main` собирает и тестирует
+Mini App, гоняет `pytest` воркера и Deno-тесты Edge Functions.
+
 ## Лицензия
 
 Все права защищены. Код опубликован только для портфолио, использовать его без разрешения автора нельзя. Подробности в [LICENSE](LICENSE).

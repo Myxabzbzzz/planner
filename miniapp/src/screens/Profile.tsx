@@ -27,8 +27,8 @@ function BadgeCard({ b }: { b: Badge }) {
  * серия не обрывается до конца дня, пропуск нигде не осуждается, награды
  * показывают сделанное, а не отнятое.
  */
-export function Profile({ api, refresh = 0, onSettings }: {
-  api: Api; refresh?: number; onSettings: () => void;
+export function Profile({ api, refresh = 0, onSettings, onAccount }: {
+  api: Api; refresh?: number; onSettings: () => void; onAccount: () => void;
 }) {
   const { data, error, loading, reload } = useLoad(() => api.profile(6), [api], refresh);
   if (loading && !data) return <Loading hero />;
@@ -175,6 +175,11 @@ export function Profile({ api, refresh = 0, onSettings }: {
           <span style={{ color: "var(--fg-3)" }}><IconGear /></span>
           <span className="grow row-title" style={{ minHeight: 0 }}>Настройки</span>
           <span className="meta">лимит, уведомления</span>
+        </button>
+        <button type="button" className="row" style={{ width: "100%", padding: "8px 16px" }} onClick={onAccount}>
+          <span style={{ color: "var(--fg-3)" }}><IconLock /></span>
+          <span className="grow row-title" style={{ minHeight: 0 }}>Аккаунт</span>
+          <span className="meta">валюта, выгрузка</span>
         </button>
       </Card>
     </>

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { makeApi } from "./api";
+import { AccountSheet } from "./components/AccountSheet";
 import { Masthead } from "./components/Brand";
+import { BudgetsSheet } from "./components/BudgetsSheet";
 import { Composer } from "./components/Composer";
 import { IconHabits, IconMoney, IconNotes, IconTasks, IconToday } from "./components/Icons";
 import { NewSheet, type NewKind } from "./components/NewSheet";
@@ -12,11 +14,14 @@ import { Habits } from "./screens/Habits";
 import { Money } from "./screens/Money";
 import { Notes } from "./screens/Notes";
 import { Profile } from "./screens/Profile";
+import { Reviews } from "./screens/Reviews";
 import { Tasks } from "./screens/Tasks";
 import { Today } from "./screens/Today";
 import { screenForState } from "./state";
 import { tg, useBackButton } from "./telegram";
 import type { Settings } from "./types";
+import { UndoProvider } from "./undo";
+import { currentMonth } from "./format";
 import { DEV_BASE, devFetch } from "./devMock";
 
 // Dev-only: вне Telegram нет initData, поэтому в обычном браузере поднимается фейковый бэкенд.
@@ -32,7 +37,8 @@ const TABS = [
 ];
 
 const TITLES: Record<string, string> = {
-  today: "Сегодня", tasks: "Задачи", money: "Деньги", habits: "Привычки", notes: "Заметки", profile: "Профиль",
+  today: "Сегодня", tasks: "Задачи", money: "Деньги", habits: "Привычки", notes: "Заметки",
+  profile: "Профиль", reviews: "Уточнить",
 };
 
 export default function App() {
@@ -48,6 +54,11 @@ export default function App() {
   const [adding, setAdding] = useState<NewKind | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [budgetsOpen, setBudgetsOpen] = useState(false);
+  // Открытые вопросы ИИ: бейдж на вкладке и отдельный экран вместо «открой чат».
+  const reviews = useLoad(() => api.reviews().catch(() => ({ reviews: [] })), [api], refresh);
+  const pending = reviews.data?.reviews.length ?? 0;
   const bump = () => setRefresh((n) => n + 1);
   // «+» в доке предлагает то, что подходит открытому экрану
   const ADD_FOR: Record<string, NewKind> = {
@@ -55,7 +66,7 @@ export default function App() {
   };
 
   // Профиль — отдельный слой: системная «Назад» возвращает на вкладку, а не закрывает миниапп.
-  useBackButton(tab === "profile" ? () => setTab("today") : null);
+  useBackButton(tab === "profile" || tab === "reviews" ? () => setTab("today") : null);
 
   // Миниапп без VITE_API_URL раньше падал внутри `new URL("")` и показывал «Нет связи».
   if (!DEV_MOCK && !apiUrl) {
@@ -94,28 +105,34 @@ export default function App() {
   };
 
   return (
-    <>
+    <UndoProvider onRestored={bump}>
       <main className="page">
         <Masthead name={me.data.name} onProfile={() => setTab(tab === "profile" ? "today" : "profile")} />
         <h1>{TITLES[tab]}</h1>
 
         {tab === "today" && (
-          <Today api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("task")} onSettings={openSettings} />
+          <Today api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("task")}
+            onSettings={openSettings} pending={pending} onReviews={() => setTab("reviews")} />
         )}
         {tab === "tasks" && <Tasks api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("task")} />}
         {tab === "money" && (
-          <Money api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("expense")} onSettings={openSettings} />
+            <Money api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("expense")}
+            onSettings={openSettings} onBudgets={() => setBudgetsOpen(true)} />
         )}
         {tab === "habits" && <Habits api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("habit")} />}
         {tab === "notes" && <Notes api={api} refresh={refresh} onAdd={() => setAdding("note")} />}
-        {tab === "profile" && <Profile api={api} refresh={refresh} onSettings={openSettings} />}
+        {tab === "profile" && (
+          <Profile api={api} refresh={refresh} onSettings={openSettings} onAccount={() => setAccountOpen(true)} />
+        )}
+        {tab === "reviews" && <Reviews api={api} refresh={refresh} onDone={bump} />}
       </main>
 
       <div className="dock">
         <div className="dock-inner">
           <Composer api={api} onDone={bump} onAdd={() => setAdding(ADD_FOR[tab] ?? "task")} />
         </div>
-        <TabBar tabs={TABS} active={tab} onChange={setTab} />
+        <TabBar tabs={TABS.map((t) => (t.key === "today" ? { ...t, badge: pending > 0 } : t))}
+          active={tab} onChange={setTab} />
       </div>
 
       {adding !== null && (
@@ -135,8 +152,19 @@ export default function App() {
           settings={settings}
           onClose={() => setSettingsOpen(false)}
           onChanged={(s) => { setSettings(s); bump(); }}
+          onAccount={() => { setSettingsOpen(false); setAccountOpen(true); }}
         />
       )}
-    </>
+
+      {accountOpen && settings !== null && (
+        <AccountSheet api={api} settings={settings} onClose={() => setAccountOpen(false)}
+          onChanged={(s) => { setSettings(s); bump(); }} />
+      )}
+
+      {budgetsOpen && (
+        <BudgetsSheet api={api} month={currentMonth(me.data.tz)} onClose={() => setBudgetsOpen(false)}
+          onChanged={bump} />
+      )}
+    </UndoProvider>
   );
 }
