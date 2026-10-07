@@ -66,10 +66,8 @@ jobs:
         run: pytest
 
   edge-functions:
-    # Эти Deno-тесты лежат в репозитории, но ни разу не запускались.
-    # Джоба может быть красной — падения специально ничем не замаскированы
-    # (ни continue-on-error, ни `|| true`), чтобы было видно, что именно сломано.
-    name: Edge Functions (Deno-тесты — первый запуск, может упасть)
+    # Падения ничем не замаскированы — ни continue-on-error, ни `|| true`.
+    name: Edge Functions (Deno)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
