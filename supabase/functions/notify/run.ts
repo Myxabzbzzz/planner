@@ -25,6 +25,8 @@ export interface NotifyDb {
   sleepingQueues(): Promise<SleepingQueue[]>;
   markQueueWarned(userIds: string[]): Promise<void>;
   purgeUpdates(): Promise<void>;
+  purgeDeleted(before: string): Promise<void>;
+  purgeRateEvents(before: string): Promise<void>;
 }
 
 const GONE = /bot was blocked|user is deactivated|chat not found/i;
@@ -115,11 +117,25 @@ export async function runNotify(d: { db: NotifyDb; tg: Tg; miniappUrl?: string }
     }
   }
 
-  // чистим журнал обработанных апдейтов (#13) — notify уже ходит раз в минуту
+  // Уборка. notify и так ходит раз в минуту, отдельный cron заводить незачем.
+  // Каждая чистка в своём try: падение одной не должно отменять остальные
+  // и тем более не должно ронять напоминания выше.
   try {
     await d.db.purgeUpdates();
   } catch (e) {
     console.error("purge updates failed:", errText(e));
+  }
+  try {
+    // Корзина живёт 30 дней: «Отменить» работает секунды, но человек может
+    // хватиться и через неделю — а бесконечно копить удалённое ни к чему.
+    await d.db.purgeDeleted(new Date(Date.now() - 30 * 86_400_000).toISOString());
+  } catch (e) {
+    console.error("purge deleted failed:", errText(e));
+  }
+  try {
+    await d.db.purgeRateEvents(new Date(Date.now() - 86_400_000).toISOString());
+  } catch (e) {
+    console.error("purge rate events failed:", errText(e));
   }
 
   return { reminders, digests, pings, queues };

@@ -33,6 +33,10 @@ class FakeDb implements NotifyDb {
   async sleepingQueues() { return this.sleeping; }
   async markQueueWarned(ids: string[]) { this.warned.push(ids); }
   async purgeUpdates() { this.purged++; }
+  purgedDeleted: string[] = [];
+  purgedRate: string[] = [];
+  async purgeDeleted(before: string) { this.purgedDeleted.push(before); }
+  async purgeRateEvents(before: string) { this.purgedRate.push(before); }
 }
 
 class FakeTg implements Tg {
@@ -141,4 +145,22 @@ Deno.test("the processed-updates log is purged on every run", async () => {
   const db = new FakeDb();
   await runNotify({ db, tg: new FakeTg() });
   assertEquals(db.purged, 1);
+});
+
+Deno.test("уборка: корзина 30 дней, журнал лимитов сутки, падение одной не рушит остальные", async () => {
+  const db = new FakeDb();
+  const tg = new FakeTg();
+  await runNotify({ db, tg });
+  assertEquals(db.purgedDeleted.length, 1);
+  assertEquals(db.purgedRate.length, 1);
+  const ageDays = (iso: string) => Math.round((Date.now() - Date.parse(iso)) / 86_400_000);
+  assertEquals(ageDays(db.purgedDeleted[0]), 30);
+  assertEquals(ageDays(db.purgedRate[0]), 1);
+
+  // падение уборки не должно отменять напоминания
+  const broken = new FakeDb();
+  broken.purgeDeleted = () => Promise.reject(new Error("нет связи"));
+  const out = await runNotify({ db: broken, tg: new FakeTg() });
+  assertEquals(typeof out.reminders, "number");
+  assertEquals(broken.purgedRate.length, 1);
 });

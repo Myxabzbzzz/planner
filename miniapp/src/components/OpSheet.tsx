@@ -42,7 +42,7 @@ export function OpSheet({ api, op, base, onClose, onSaved }: {
   }, [api]);
 
   const patch = buildEdit(op, base, form);
-  const options = cats ? cats[form.type] : [];
+  const options = cats ? cats[form.type].map((c) => c.name) : [];
   const choices = options.includes(form.category) ? options : [form.category, ...options];
   const currencies = COMMON.includes(form.currency) ? COMMON : [form.currency, ...COMMON];
 

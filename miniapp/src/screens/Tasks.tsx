@@ -119,10 +119,10 @@ export function Tasks({ api, me, refresh = 0, onAdd }: {
                 </div>
               );
             })}
-            {/* api_tasks отдаёт максимум 100 задач — честно говорим, что список обрезан */}
-            {tasks.data.tasks.length >= 100 && (
+            {/* Список обрезан сотней — говорим, сколько всего, а не просто «есть ещё» */}
+            {(tasks.data.total ?? 0) > tasks.data.tasks.length && (
               <div className="card-foot" style={{ padding: "8px 16px 0" }}>
-                Показаны первые 100. Уточни поиском в чате бота.
+                Показаны {tasks.data.tasks.length} из {tasks.data.total}. Остальные — поиском в чате бота.
               </div>
             )}
           </Card>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Api } from "../api";
 import { DayBars, RankedBars, ShareBar } from "../components/Charts";
 import { IconChevron } from "../components/Icons";
@@ -10,8 +10,6 @@ import { currentMonth, fmtAmount, fmtDayTitle, fmtRateNote, monthTitle, shiftMon
 import { useLoad } from "../load";
 import { haptic } from "../telegram";
 import type { Me, Operation } from "../types";
-
-const PAGE = 40;
 
 function groupByDay(ops: Operation[]) {
   const map = new Map<string, Operation[]>();
@@ -26,11 +24,33 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
   const [month, setMonth] = useState(thisMonth);
   const { data, error, loading, reload } = useLoad(() => api.money(month), [api, month], refresh);
   const [editing, setEditing] = useState<Operation | null>(null);
-  const [shown, setShown] = useState(PAGE);
+  // Догруженные страницы операций: сервер отдаёт первые 200 и курсор на остальное.
+  const [more, setMore] = useState<Operation[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const go = (d: number) => {
     haptic();
-    setShown(PAGE);
     setMonth((m) => shiftMonth(m, d));
+  };
+
+  // Новый месяц или обновление — догруженное больше не актуально.
+  useEffect(() => {
+    setMore([]);
+    setCursor(data?.operations_next_before ?? null);
+  }, [data]);
+
+  const loadMore = async () => {
+    if (cursor === null || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await api.operations(month, cursor);
+      setMore((prev) => [...prev, ...page.operations]);
+      setCursor(page.next_before);
+    } catch {
+      // курсор не трогаем — можно нажать ещё раз
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const header = (
@@ -53,7 +73,8 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
   const shares = categoryShares(data.by_category);
   const today = month === thisMonth ? Number(todayIso(me.tz).slice(8, 10)) : undefined;
   const left = data.limit !== null ? data.limit - data.expense : null;
-  const ops = data.operations.slice(0, shown);
+  const ops = [...data.operations, ...more];
+  const opsTotal = data.operations_total ?? ops.length;
 
   return (
     <>
@@ -130,17 +151,12 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
                 ))}
               </div>
             ))}
-            {/* Раньше список операций обрывался молча на 200 без всякой кнопки */}
-            {data.operations.length > shown && (
+            {/* Раньше список молча обрывался на 200 — без кнопки и без счётчика */}
+            {cursor !== null && (
               <div style={{ padding: "12px 16px 0" }}>
-                <button type="button" className="btn ghost wide" onClick={() => setShown((n) => n + PAGE)}>
-                  Показать ещё
+                <button type="button" className="btn ghost wide" disabled={loadingMore} onClick={() => void loadMore()}>
+                  {loadingMore ? "Загрузка…" : `Показать ещё · ${ops.length} из ${opsTotal}`}
                 </button>
-              </div>
-            )}
-            {data.operations.length >= 200 && shown >= data.operations.length && (
-              <div className="card-foot" style={{ padding: "8px 16px 0" }}>
-                Показаны последние 200 операций месяца. Суммы и графики выше считаются по всем.
               </div>
             )}
           </Card>

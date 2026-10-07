@@ -109,7 +109,7 @@ export function NewSheet({ api, tz, currency, kind, onClose, onSaved }: {
     }
   }
 
-  const options = cats ? cats[pick === "income" ? "income" : "expense"] : [];
+  const options = cats ? cats[pick === "income" ? "income" : "expense"].map((c) => c.name) : [];
 
   return (
     <Sheet title={TITLES[pick]} busy={busy} dirty={dirty} onClose={onClose} footer={

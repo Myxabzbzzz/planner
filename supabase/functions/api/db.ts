@@ -61,6 +61,7 @@ const ARG_NAMES: Record<string, string[]> = {
   change_base_currency: ["p_user", "p_cur"],
   export_data: ["p_user"],
   delete_account: ["p_user"],
+  rate_limit: ["p_user", "p_action", "p_limit", "p_window"],
 };
 
 export function supabaseApiDb(sb: SupabaseClient): ApiDb {

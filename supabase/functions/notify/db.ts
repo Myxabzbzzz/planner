@@ -21,5 +21,7 @@ export function supabaseNotifyDb(sb: SupabaseClient): NotifyDb {
     sleepingQueues: async () => check(await sb.rpc("sleeping_queues")) as SleepingQueue[],
     markQueueWarned: async (ids) => { check(await sb.rpc("mark_queue_warned", { p_users: ids })); },
     purgeUpdates: async () => { check(await sb.rpc("purge_tg_updates")); },
+    purgeDeleted: async (before: string) => { check(await sb.rpc("purge_deleted", { p_before: before })); },
+    purgeRateEvents: async (before: string) => { check(await sb.rpc("purge_rate_events", { p_before: before })); },
   };
 }

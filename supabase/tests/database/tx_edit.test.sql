@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(20);
 
 insert into public.users (id, tg_id, name, is_allowed) values
   ('00000000-0000-0000-0000-0000000000d1', 91, 'A', true),
@@ -37,9 +37,26 @@ select throws_ok($$select public.update_transaction('00000000-0000-0000-0000-000
 select is(public.update_transaction('00000000-0000-0000-0000-0000000000d2', '90000000-0000-0000-0000-000000000002', 1, null, null), false, 'cannot edit others');
 select is(public.delete_transaction('00000000-0000-0000-0000-0000000000d2', '90000000-0000-0000-0000-000000000002'), false, 'cannot delete others');
 select is(public.delete_transaction('00000000-0000-0000-0000-0000000000d1', '90000000-0000-0000-0000-000000000002'), true, 'delete own');
-select is((select count(*)::int from public.transactions where id = '90000000-0000-0000-0000-000000000002'), 0, 'deleted');
+-- удаление стало мягким: строка остаётся, но помечена и исчезает из выдач
+select is((select count(*)::int from public.transactions
+            where id = '90000000-0000-0000-0000-000000000002' and deleted_at is not null), 1, 'soft deleted');
+-- у пользователя есть и другие операции: важно, что исчезла именно удалённая
+select is((select count(*)::int from jsonb_array_elements(
+             public.api_money('00000000-0000-0000-0000-0000000000d1',
+                              to_char(current_date, 'YYYY-MM'))->'operations') e
+            where e->>'id' = '90000000-0000-0000-0000-000000000002'), 0, 'hidden from operations');
+select is(public.restore_transaction('00000000-0000-0000-0000-0000000000d1', '90000000-0000-0000-0000-000000000002'), true, 'restored');
+select is((select count(*)::int from public.transactions
+            where id = '90000000-0000-0000-0000-000000000002' and deleted_at is null), 1, 'back');
 -- categories list
-select is(public.api_categories('00000000-0000-0000-0000-0000000000d1')->'income', '["другое", "зарплата"]'::jsonb, 'income categories sorted');
+-- api_categories теперь отдаёт id рядом с именем: без него нельзя переименовать или удалить
+select is((select jsonb_agg(e->>'name' order by ord)
+             from jsonb_array_elements(public.api_categories('00000000-0000-0000-0000-0000000000d1')->'income')
+                  with ordinality as t(e, ord)),
+          '["другое", "зарплата"]'::jsonb, 'income categories sorted');
+select is((select bool_and((e->>'id') is not null)
+             from jsonb_array_elements(public.api_categories('00000000-0000-0000-0000-0000000000d1')->'income') e),
+          true, 'categories carry ids');
 select is(has_function_privilege('authenticated', 'public.update_transaction(uuid, uuid, numeric, text, text)', 'execute'), false, 'no client access');
 
 select * from finish();

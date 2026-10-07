@@ -363,6 +363,28 @@ async function createRoute(path: string, req: Request, userId: string): Promise<
 
 const MAX_TEXT = 4000;
 
+/**
+ * Лимиты на то, что реально дорого: каждая запись в инбокс — это строка в очереди
+ * воркера, а голосовая ещё и до 2 МБ в Storage. Утёкшая initData жила сутки и
+ * ничем не ограничивалась — можно было забить и очередь, и хранилище.
+ * Пороги щедрые для человека и тесные для скрипта.
+ */
+const LIMITS: Record<string, { limit: number; window: string }> = {
+  inbox: { limit: 40, window: "10 minutes" },
+  audio: { limit: 15, window: "10 minutes" },
+  write: { limit: 300, window: "10 minutes" },
+};
+
+/** false — лимит исчерпан. Сбой самой проверки не должен ломать приложение. */
+async function allow(db: ApiDb, userId: string, action: keyof typeof LIMITS): Promise<boolean> {
+  const { limit, window } = LIMITS[action];
+  try {
+    return await db.call("rate_limit", [userId, action, limit, window]) !== false;
+  } catch {
+    return true;
+  }
+}
+
 async function createAndReport(db: ApiDb, row: InboxInsert): Promise<Response> {
   const id = await db.createInbox(row);
   return json(201, { id, worker_online: await db.workerOnline().catch(() => false) });
@@ -438,8 +460,17 @@ async function handle(req: Request, d: ApiDeps): Promise<Response> {
   try {
     const user = await d.db.userByTg(auth.tgId);
     if (!user || !user.is_allowed || !user.onboarded_at) return json(403, { error: "forbidden" });
-    if (req.method === "POST" && path === "/inbox") return await postInboxText(req, user.id, auth.tgId, d.db);
-    if (req.method === "POST" && path === "/inbox/audio") return await postInboxAudio(req, user.id, auth.tgId, d);
+    if (req.method === "POST" && path === "/inbox") {
+      if (!await allow(d.db, user.id, "inbox")) return json(429, { error: "too_many" });
+      return await postInboxText(req, user.id, auth.tgId, d.db);
+    }
+    if (req.method === "POST" && path === "/inbox/audio") {
+      if (!await allow(d.db, user.id, "audio")) return json(429, { error: "too_many" });
+      return await postInboxAudio(req, user.id, auth.tgId, d);
+    }
+    if (req.method === "POST" && !await allow(d.db, user.id, "write")) {
+      return json(429, { error: "too_many" });
+    }
     if (req.method === "POST") {
       const rev = new RegExp(`^/reviews/(${UUID})$`, "i").exec(path);
       if (rev) {

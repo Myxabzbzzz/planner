@@ -14,7 +14,8 @@ export type TaskItem = {
   /** Новая схема отдаёт флаг явно; у старой его нет — тогда работает запасной разбор по 23:59. */
   due_has_time?: boolean;
 };
-export type TasksResp = { tasks: TaskItem[] };
+/** `total` — сколько задач под фильтром всего; список обрезан сотней. */
+export type TasksResp = { tasks: TaskItem[]; total?: number };
 export type EventItem = { id: string; title: string; time: string; with_whom: string | null; done: boolean };
 export type EventsResp = { days: { date: string; events: EventItem[] }[] };
 export type Operation = {
@@ -26,6 +27,9 @@ export type MoneyResp = {
   by_category: { name: string; amount: number }[];
   by_day: { date: string; expense: number }[];
   operations: Operation[];
+  /** Сколько операций в месяце всего и курсор на продолжение, если список обрезан. */
+  operations_total?: number;
+  operations_next_before?: string | null;
 };
 export type HabitDay = { date: string; done: boolean };
 export type Habit = {
@@ -34,7 +38,8 @@ export type Habit = {
 export type HabitsResp = { habits: Habit[] };
 export type Note = { id: string; kind: "thought" | "journal"; text: string; created_at: string };
 export type NotesResp = { notes: Note[]; next_before: string | null };
-export type Categories = { expense: string[]; income: string[] };
+export type Category = { id: string; name: string };
+export type Categories = { expense: Category[]; income: Category[] };
 export type Sent = { id: string; worker_online: boolean };
 export type InboxStatus = { status: "pending" | "processing" | "done" | "failed" | "needs_review"; reply: string | null };
 export type Created = { id: string };

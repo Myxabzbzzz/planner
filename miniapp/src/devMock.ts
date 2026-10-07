@@ -78,6 +78,7 @@ function money(month: string) {
   return {
     base_currency: "RUB", month, expense, income: 145000 + 18500, limit: 90000,
     by_category, by_day, operations,
+    operations_total: operations.length, operations_next_before: null,
   };
 }
 
@@ -243,7 +244,7 @@ export const devFetch: typeof fetch = async (input, init) => {
       : f === "nodue" ? open.filter((t) => !t.due)
       : f === "upcoming" ? open.filter((t) => t.due && t.due.slice(0, 10) > d.today)
       : open.filter((t) => t.due && t.due.slice(0, 10) <= d.today);
-    return json({ tasks: list });
+    return json({ tasks: list, total: list.length });
   }
   if (p === "/events") {
     return json({ days: [
@@ -262,7 +263,13 @@ export const devFetch: typeof fetch = async (input, init) => {
     return json({ operations: money(url.searchParams.get("month") ?? d.today.slice(0, 7)).operations, next_before: null });
   }
   if (p === "/account/export") return json({ exported_at: new Date().toISOString(), tasks: d.tasks, habits: d.habits });
-  if (p === "/categories") return json({ expense: ["Продукты", "Кафе и рестораны", "Дом", "Транспорт", "Здоровье", "Подписки", "Подарки"], income: ["Зарплата", "Фриланс", "Подарки"] });
+  if (p === "/categories") {
+    const cat = (names: string[]) => names.map((name, i) => ({ id: `c${i}-0000-0000-0000-00000000000${i}`, name }));
+    return json({
+      expense: cat(["Продукты", "Кафе и рестораны", "Дом", "Транспорт", "Здоровье", "Подписки", "Подарки"]),
+      income: cat(["Зарплата", "Фриланс", "Подарки"]),
+    });
+  }
   if (p === "/notes") {
     const q = (url.searchParams.get("q") ?? "").toLowerCase();
     return json({ notes: notes().filter((n) => n.text.toLowerCase().includes(q)), next_before: null });
