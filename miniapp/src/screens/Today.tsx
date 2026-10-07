@@ -15,8 +15,8 @@ import type { Me, Today as TodayData } from "../types";
  * Один хронологический список вместо двух карточек «Встречи» и «Задачи»:
  * день читается сверху вниз, как он и происходит.
  */
-export function Today({ api, me, refresh = 0, onAdd, onMoney }: {
-  api: Api; me: Me; refresh?: number; onAdd: () => void; onMoney: () => void;
+export function Today({ api, me, refresh = 0, onAdd, onSettings }: {
+  api: Api; me: Me; refresh?: number; onAdd: () => void; onSettings: () => void;
 }) {
   const { data, error, loading, reload } = useLoad(() => api.today(), [api], refresh);
   const { over, toggle, reset } = useToggles();
@@ -67,7 +67,7 @@ export function Today({ api, me, refresh = 0, onAdd, onMoney }: {
           </>
         ) : (
           <div className="card-foot">
-            <button type="button" className="btn quiet" onClick={onMoney} style={{ padding: 0 }}>
+            <button type="button" className="btn quiet" onClick={onSettings} style={{ padding: 0 }}>
               Задать лимит на месяц
             </button>
           </div>

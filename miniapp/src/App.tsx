@@ -49,6 +49,10 @@ export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const bump = () => setRefresh((n) => n + 1);
+  // «+» в доке предлагает то, что подходит открытому экрану
+  const ADD_FOR: Record<string, NewKind> = {
+    today: "task", tasks: "task", money: "expense", habits: "habit", notes: "note", profile: "task",
+  };
 
   // Профиль — отдельный слой: системная «Назад» возвращает на вкладку, а не закрывает миниапп.
   useBackButton(tab === "profile" ? () => setTab("today") : null);
@@ -96,7 +100,7 @@ export default function App() {
         <h1>{TITLES[tab]}</h1>
 
         {tab === "today" && (
-          <Today api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("task")} onMoney={openSettings} />
+          <Today api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("task")} onSettings={openSettings} />
         )}
         {tab === "tasks" && <Tasks api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("task")} />}
         {tab === "money" && (
@@ -109,7 +113,7 @@ export default function App() {
 
       <div className="dock">
         <div className="dock-inner">
-          <Composer api={api} onDone={bump} onAdd={() => setAdding("task")} />
+          <Composer api={api} onDone={bump} onAdd={() => setAdding(ADD_FOR[tab] ?? "task")} />
         </div>
         <TabBar tabs={TABS} active={tab} onChange={setTab} />
       </div>
