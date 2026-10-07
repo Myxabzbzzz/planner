@@ -163,3 +163,35 @@ def test_past_time_message_without_today_option_late_evening(ctx):
                        starts_at=datetime(2026, 10, 1, 8, 0, tzinfo=ZoneInfo("Asia/Tashkent")))
     _, buttons = past_time_message("i1", 2, it, late)
     assert buttons[0] == [{"text": "Завтра 08:00", "callback_data": "rt:i1:2:0800"}]
+
+
+def test_habit_log_uses_the_named_day(ctx):
+    """«вчера сделал зарядку» — отметка за вчера, а не за день разбора."""
+    from datetime import date
+    _, row = to_row(it(ctx, kind="habit_done", habit="зарядка",
+                       source_text="вчера (2026-09-30) сделал зарядку",
+                       occurred_on=date(2026, 9, 30)), ctx, "i1", None)
+    assert row["date"] == "2026-09-30"
+
+
+def test_habit_log_falls_back_to_due_at(ctx):
+    """Модель иногда кладёт день в due_at — берём и его."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    _, row = to_row(it(ctx, kind="habit_done", habit="чтение", source_text="вчера читал",
+                       due_at=datetime(2026, 9, 30, 21, 0, tzinfo=ZoneInfo("Asia/Tashkent"))), ctx, "i1", None)
+    assert row["date"] == "2026-09-30"
+
+
+def test_habit_log_clamps_future_and_ancient_days(ctx):
+    from datetime import date
+    _, future = to_row(it(ctx, kind="habit_done", habit="зарядка", occurred_on=date(2026, 12, 1)), ctx, "i1", None)
+    assert future["date"] == "2026-10-01"
+    _, ancient = to_row(it(ctx, kind="habit_done", habit="зарядка", occurred_on=date(2000, 1, 1)), ctx, "i1", None)
+    assert ancient["date"] == "2025-10-01"
+
+
+def test_habit_line_shows_a_past_day(ctx):
+    from datetime import date
+    line = render_line(it(ctx, kind="habit_done", habit="зарядка", occurred_on=date(2026, 9, 30)), None, ctx)
+    assert line == "🔁 зарядка — отмечено за 30.09"

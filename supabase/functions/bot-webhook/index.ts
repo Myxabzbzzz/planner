@@ -26,5 +26,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("update failed", update?.update_id, e);
   }
+  // 200 всегда: иначе Telegram повторит апдейт, а идемпотентность внутри handleUpdate
+  // отбросит повтор — и пользователь не получит вообще никакого ответа.
   return new Response("ok");
 });

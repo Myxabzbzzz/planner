@@ -108,3 +108,62 @@ def test_sweep_keeps_audio_of_rows_still_waiting():
                      {"status": "done", "audio_ref": "storage:u1/old.m4a"}]
     assert Store(sb).sweep_audio(NOW) == 1
     assert sb.bucket.removed == ["u1/old.m4a"]
+
+
+class FakeRpcSb:
+    """Минимальный клиент для load_context: таблицы + rpc."""
+
+    def __init__(self, rpc_result, rpc_error=None):
+        self.rpc_result, self.rpc_error = rpc_result, rpc_error
+        self.rpc_calls: list[tuple[str, dict]] = []
+        self.rows = {
+            "users": [{"tz": "Asia/Tashkent", "base_currency": "UZS"}],
+            "categories": [{"id": "c1", "name": "Еда", "type": "expense"},
+                           {"id": "c2", "name": "Зарплата", "type": "income"}],
+            "habits": [{"id": "h1", "name": "Зарядка"}],
+        }
+
+    def table(self, name):
+        return _Q(self.rows[name])
+
+    def rpc(self, fn, params):
+        self.rpc_calls.append((fn, params))
+        if self.rpc_error:
+            raise self.rpc_error
+        return _Q(self.rpc_result)
+
+
+class _Q:
+    def __init__(self, data):
+        self.data = data
+
+    def select(self, *_a, **_k):
+        return self
+
+    def eq(self, *_a):
+        return self
+
+    def is_(self, *_a):
+        return self
+
+    def single(self):
+        self.data = self.data[0]
+        return self
+
+    def execute(self):
+        return self
+
+
+def test_load_context_carries_user_corrections():
+    sb = FakeRpcSb([{"text": "кофе 40к", "kind": "expense"}, {"text": "", "kind": "note"},
+                    {"text": "зал", "kind": None}])
+    ctx = Store(sb).load_context("u1", NOW)
+    assert ctx.corrections == (("кофе 40к", "expense"),)
+    assert sb.rpc_calls == [("recent_corrections", {"p_user": "u1", "p_limit": 20})]
+    assert ctx.habits == {"зарядка": "h1"}
+
+
+def test_load_context_survives_missing_corrections():
+    sb = FakeRpcSb(None, rpc_error=RuntimeError("no such function"))
+    ctx = Store(sb).load_context("u1", NOW)
+    assert ctx.corrections == ()

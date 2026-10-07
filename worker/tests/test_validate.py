@@ -184,3 +184,32 @@ def test_future_money_date_is_an_error(ctx):
     assert len(errs) == 1 and errs[0].startswith(FUTURE)
     today = localize(item(kind="expense", title="Кофе", amount=40000, source_text="кофе 40 000"), ctx)
     assert check_item(today, ctx, None) == []
+
+
+def test_day_part_counts_as_a_named_time(ctx):
+    """«завтра вечером встреча» — время названо словом, спрашивать «во сколько?» не надо."""
+    it = localize(item(kind="event", source_text="завтра (2026-10-02) вечером (19:00) встреча с Андреем",
+                       starts_at=datetime(2026, 10, 2, 19, 0)), ctx)
+    assert it.kind == "event"
+    assert check_item(it, ctx, None) == []
+
+
+def test_day_part_survives_lost_annotation(ctx):
+    """Даже если модель скопировала фрагмент без аннотаций, «вечером» — это время."""
+    it = localize(item(kind="event", source_text="завтра вечером встреча",
+                       starts_at=datetime(2026, 10, 2, 19, 0)), ctx)
+    assert it.kind == "event"
+    assert check_item(it, ctx, None) == []
+
+
+def test_task_keeps_word_time_instead_of_23_59(ctx):
+    it = localize(item(kind="task", title="Оплатить интернет",
+                       source_text="завтра вечером (19:00) оплатить интернет",
+                       due_at=datetime(2026, 10, 2, 19, 0)), ctx)
+    assert (it.due_at.hour, it.due_at.minute) == (19, 0)
+
+
+def test_task_without_time_still_gets_23_59(ctx):
+    it = localize(item(kind="task", title="Отчёт", source_text="до пятницы (2026-10-02) сдать отчёт",
+                       due_at=datetime(2026, 10, 2, 12, 0)), ctx)
+    assert (it.due_at.hour, it.due_at.minute) == (23, 59)

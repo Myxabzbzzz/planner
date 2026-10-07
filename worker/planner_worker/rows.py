@@ -1,12 +1,31 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
+from zoneinfo import ZoneInfo
 
 from .fx import FxApplied
 from .schemas import ExtractedItem, UserContext
 
+HABIT_MAX_BACKDATE = timedelta(days=365)
+
 
 def _utc(v: datetime | None) -> str | None:
     return v.astimezone(timezone.utc).isoformat() if v else None
+
+
+def habit_date(item: ExtractedItem, ctx: UserContext) -> date:
+    """День отметки привычки — тот, который назвал пользователь («вчера сделал зарядку»),
+    а не день разбора. Будущее приводим к сегодня, слишком давнее — к границе в год."""
+    tz = ZoneInfo(ctx.tz)
+    today = ctx.now.date()
+    named = item.occurred_on
+    if named is None:
+        for v in (item.due_at, item.starts_at):
+            if v is not None:
+                named = v.astimezone(tz).date()
+                break
+    if named is None:
+        return today
+    return min(max(named, today - HABIT_MAX_BACKDATE), today)
 
 
 def to_row(item: ExtractedItem, ctx: UserContext, inbox_id: str, fx: FxApplied | None) -> tuple[str, dict]:
@@ -34,5 +53,5 @@ def to_row(item: ExtractedItem, ctx: UserContext, inbox_id: str, fx: FxApplied |
         return "notes", {**base, "kind": "thought" if k == "note" else "journal", "text": item.title}
     if k == "habit_done":
         return "habit_logs", {**base, "habit_id": ctx.habits[item.habit.strip().lower()],
-                              "date": ctx.now.date().isoformat()}
+                              "date": habit_date(item, ctx).isoformat()}
     return "habits", {"user_id": ctx.user_id, "name": item.title.strip(), "inbox_id": inbox_id, "archived_at": None}

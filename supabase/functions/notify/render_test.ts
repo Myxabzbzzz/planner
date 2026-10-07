@@ -1,8 +1,17 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { type Daily, plural, renderDaily, renderReminder, renderWeekly, type Weekly } from "./render.ts";
+import {
+  type Daily,
+  plural,
+  renderDaily,
+  renderReminder,
+  renderReviewPing,
+  renderSleeping,
+  renderWeekly,
+  type Weekly,
+} from "./render.ts";
 
 const DAILY: Daily = {
-  date: "2026-10-03", base_currency: "UZS", tasks_done: 3, events_done: 2,
+  date: "2026-10-03", base_currency: "UZS", tasks_done: 3, events_done: 2, events_past: 0,
   tasks_left: ["Оплатить интернет", "Купить молоко"], tasks_left_more: 0,
   spent: 280000, month_spent: 300000, limit: 5000000,
   habits: [{ name: "зарядка", done: true }, { name: "чтение", done: false }],
@@ -16,12 +25,46 @@ Deno.test("plural", () => {
 });
 
 Deno.test("reminder text", () => {
-  assertEquals(renderReminder({ item_id: "i", chat_id: 1, title: "Встреча с Амиром", local_time: "15:00", minutes_left: 30 }),
-    "⏰ Через 30 минут — Встреча с Амиром (15:00)");
-  assertEquals(renderReminder({ item_id: "i", chat_id: 1, title: "Созвон", local_time: "15:00", minutes_left: 26 }),
-    "⏰ Через 26 мин — Созвон (15:00)");
-  assertEquals(renderReminder({ item_id: "i", chat_id: 1, title: "Созвон", local_time: "15:00", minutes_left: 12 }),
-    "⏰ Через 12 мин — Созвон (15:00)");
+  const ev = { item_id: "i", chat_id: 1, kind: "event" as const, title: "Встреча с Амиром", local_time: "15:00", minutes_left: 30 };
+  assertEquals(renderReminder(ev), "⏰ Через 30 минут — Встреча с Амиром (15:00)");
+  assertEquals(renderReminder({ ...ev, title: "Созвон", minutes_left: 26 }), "⏰ Через 26 мин — Созвон (15:00)");
+  assertEquals(renderReminder({ ...ev, title: "Созвон", minutes_left: 12 }), "⏰ Через 12 мин — Созвон (15:00)");
+});
+
+// #14: задачи со сроком раньше не напоминали вообще
+Deno.test("reminder text for tasks", () => {
+  const task = { item_id: "i", chat_id: 1, kind: "task" as const, title: "Оплатить интернет" };
+  assertEquals(renderReminder({ ...task, local_time: "18:00", minutes_left: 30 }),
+    "⏰ Через 30 мин срок — ☑️ Оплатить интернет (до 18:00)");
+  assertEquals(renderReminder({ ...task, local_time: null, minutes_left: 800 }),
+    "⏰ Сегодня срок — ☑️ Оплатить интернет");
+});
+
+// #8
+Deno.test("review ping", () => {
+  assertEquals(renderReviewPing({ inbox_id: "i", user_id: "u", chat_id: 1, pending: 1, sample: "кофе 40 000" }),
+    "❓ Остался без ответа вопрос про «кофе 40 000» — ответь на сообщение выше или убери запись.");
+  assertEquals(renderReviewPing({ inbox_id: "i", user_id: "u", chat_id: 1, pending: 3, sample: null }),
+    "❓ Остались без ответа 3 вопроса (например, про записи) — ответь выше или убери запись.");
+});
+
+// #10
+Deno.test("sleeping queue notice", () => {
+  assertEquals(renderSleeping({ user_id: "u", chat_id: 1, queued: 1, oldest_hours: 7 }),
+    "😴 ИИ ещё спит. В очереди 1 запись, самая старая ждёт 7 ч. " +
+      "Всё разберу, как только он проснётся — ничего не потеряется.");
+  assertEquals(
+    renderSleeping({ user_id: "u", chat_id: 1, queued: 40, oldest_hours: 170 }).includes("40 записей"),
+    true,
+  );
+  assertEquals(renderSleeping({ user_id: "u", chat_id: 1, queued: 40, oldest_hours: 170 }).includes("7 дн."), true);
+});
+
+// #31: прошедшие, но не отмеченные встречи больше не считаются сделанными
+Deno.test("daily digest separates past unmarked events", () => {
+  const lines = renderDaily({ ...DAILY, events_done: 1, events_past: 2 }).split("\n");
+  assertEquals(lines[1], "✅ Сделано: 3 задачи · 1 встреча");
+  assertEquals(lines[2], "📅 Прошли, но не отмечены: 2 встречи");
 });
 
 Deno.test("daily digest full", () => {
@@ -50,8 +93,8 @@ Deno.test("daily digest more tasks and over limit", () => {
 const WEEKLY: Weekly = {
   from: "2026-09-28", to: "2026-10-04", base_currency: "UZS", expense: 1200000, prev_expense: 1411765, income: 380000,
   top_categories: [{ name: "кафе", amount: 400000 }, { name: "подписки", amount: 250000 }, { name: "такси", amount: 200000 }],
-  tasks_done: 12, events_done: 5,
-  habits: [{ name: "зарядка", done_days: 6, streak: 4 }, { name: "чтение", done_days: 3, streak: 0 }],
+  tasks_done: 12, events_done: 5, events_past: 0,
+  habits: [{ name: "зарядка", done_days: 6, streak: 4, target: 7 }, { name: "чтение", done_days: 3, streak: 0, target: 3 }],
   next_events: 4, next_tasks: 3,
 };
 
@@ -61,7 +104,7 @@ Deno.test("weekly digest", () => {
     "💸 Расходы 1 200 000 сум (−15% к прошлой) · доходы 380 000 сум",
     "Топ: кафе 400 000 · подписки 250 000 · такси 200 000",
     "✅ Задач сделано: 12 · встреч: 5",
-    "🔁 зарядка 6/7 🔥4 · чтение 3/7",
+    "🔁 зарядка 6/7 🔥4 · чтение 3/3 🎯",
     "📅 Впереди: 4 встречи, 3 задачи со сроком",
   ].join("\n"));
 });
@@ -71,6 +114,11 @@ Deno.test("weekly digest without previous week and spending", () => {
     next_events: 0, next_tasks: 0 });
   assertEquals(t, ["📊 Неделя 28.09 – 04.10", "💸 Трат не было", "✅ Задач сделано: 12 · встреч: 5", "📅 Впереди пока пусто"].join("\n"));
   assertEquals(renderWeekly({ ...WEEKLY, prev_expense: 0 }).split("\n")[1], "💸 Расходы 1 200 000 сум · доходы 380 000 сум");
+});
+
+Deno.test("weekly digest mentions past unmarked events", () => {
+  const line = renderWeekly({ ...WEEKLY, events_past: 3 }).split("\n")[3];
+  assertEquals(line, "✅ Задач сделано: 12 · встреч: 5 (ещё 3 прошли без отметки)");
 });
 
 Deno.test("weekly digest omits zero parts of the look-ahead", () => {

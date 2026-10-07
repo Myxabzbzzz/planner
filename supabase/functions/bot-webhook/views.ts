@@ -30,7 +30,13 @@ export function renderToday(s: TodaySummary): View {
   }
   blocks.push(money);
   if (s.habits.length) {
-    blocks.push("🔁 Привычки: " + s.habits.map((h) => `${h.done ? "✅" : "▫️"} ${h.name}`).join(" · "));
+    blocks.push(
+      "🔁 Привычки: " +
+        s.habits.map((h) =>
+          `${h.done ? "✅" : "▫️"} ${h.name}` +
+          (h.target_per_week < 7 ? ` (${weekProgress(h.week_done, h.target_per_week)})` : "")
+        ).join(" · "),
+    );
   }
   const todo = s.habits.filter((h) => !h.done).map((h) => ({ text: `✔️ ${h.name}`, callback_data: `hab:${h.id}:t` }));
   return { text: blocks.join("\n\n"), buttons: todo.length ? chunk(todo, 2) : undefined };
@@ -63,9 +69,17 @@ export function renderMoney(s: MoneySummary): View {
   return { text: blocks.join("\n\n") };
 }
 
+/** #18: цель `target_per_week` раньше хранилась и нигде не показывалась, а прогресс считался как `/7`. */
+export function weekProgress(done: number, target: number): string {
+  return `${done}/${target}${done >= target ? " 🎯" : ""}`;
+}
+
 export function renderHabits(s: HabitsSummary): View {
   if (!s.habits.length) return { text: "🔁 Привычки\n\nПривычек пока нет. Скажи «хочу трекать зарядку»." };
-  const lines = s.habits.map((h) => `${h.name} — ${h.week.map((d) => (d ? "✅" : "▫️")).join("")} · серия ${h.streak}`);
+  const lines = s.habits.map((h) =>
+    `${h.name} — ${h.week.map((d) => (d ? "✅" : "▫️")).join("")} · ${weekProgress(h.week_done, h.target_per_week)}` +
+    (h.streak > 0 ? ` · серия ${h.streak}` : "")
+  );
   const todo = s.habits.filter((h) => !h.done_today).map((h) => ({ text: `✔️ ${h.name}`, callback_data: `hab:${h.id}:h` }));
   return { text: `🔁 Привычки\n\n${lines.join("\n")}`, buttons: todo.length ? chunk(todo, 2) : undefined };
 }

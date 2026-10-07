@@ -7,8 +7,8 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 from .classifier import decide
-from .format import (KIND_LABELS, future_message, past_time_message, render_line, render_summary, review_message,
-                     summary_buttons, time_message)
+from .format import (KIND_LABELS, failure_buttons, future_message, past_time_message, render_line, render_summary,
+                     review_message, summary_buttons, time_message)
 from .fx import FxApplied, FxError, RateTable, convert
 from .llm import ExtractionError
 from .rows import to_row
@@ -28,6 +28,19 @@ PAST_GRACE = timedelta(minutes=15)
 
 def chat_text(row: InboxRow, text: str) -> str:
     return PREFIXES.get(row.source, "") + text
+
+
+def _norm(text: str) -> str:
+    return " ".join((text or "").split()).lower()
+
+
+def remembered_kind(item: ExtractedItem, ctx: UserContext) -> bool:
+    """Пользователь уже сам сказал, чем считать такую формулировку, и модель согласна —
+    спрашивать второй раз значит не учиться."""
+    key = _norm(item.source_text)
+    if not key:
+        return False
+    return any(kind == item.kind and _norm(text) == key for text, kind in ctx.corrections)
 
 class Pipeline:
     def __init__(self, store, tg, stt, extractor, classifier, fetch_rates: Callable[[], RateTable],
@@ -70,7 +83,8 @@ class Pipeline:
                 review.append(self._review_entry(it, "past", None))
                 continue
             cls = self.classifier.classify(it.source_text) if self.classifier else None
-            if not decide(it, cls, self.threshold):
+            # #36: про эту формулировку уже спрашивали и получили ответ — второй раз не спрашиваем
+            if not decide(it, cls, self.threshold) and not remembered_kind(it, ctx):
                 review.append(self._review_entry(it, "laya", cls))
                 continue
             try:
@@ -111,21 +125,20 @@ class Pipeline:
         return True
 
     def _transcribe(self, row: InboxRow) -> str:
-        if row.audio_ref.startswith(STORAGE):
-            key = row.audio_ref[len(STORAGE):]
-            path = self.store.download_audio(key, self.tmp_dir)
-            try:
-                text = self.stt.transcribe(path)
-            finally:
-                path.unlink(missing_ok=True)
-            self.store.set_text(row.id, text)  # повтор не распознаёт заново
-            self.store.remove_audio(key)
-            return text
-        path = self.tg.download(row.audio_ref, self.tmp_dir)
+        key = row.audio_ref[len(STORAGE):] if row.audio_ref.startswith(STORAGE) else None
+        path = (self.store.download_audio(key, self.tmp_dir) if key
+                else self.tg.download(row.audio_ref, self.tmp_dir))
         try:
-            return self.stt.transcribe(path)
+            text = self.stt.transcribe(path)
         finally:
             path.unlink(missing_ok=True)
+        # расшифровку сохраняем всегда: повтор не распознаёт заново, а при ошибке
+        # её видно пользователю — минута речи не теряется
+        self.store.set_text(row.id, text)
+        row.text = text
+        if key:
+            self.store.remove_audio(key)
+        return text
 
     def _known_currencies(self, ctx: UserContext) -> set[str] | None:
         table = self.store.rates_on(ctx.now.date())
@@ -177,10 +190,13 @@ class Pipeline:
         pending = row.result["pending_review"]
         saved: list[str] = []
         warnings: list[str] = []
+        dropped = 0
         for entry in pending:
             forced = entry.get("forced_kind")
             if not forced or entry.get("resolved"):
                 continue
+            if forced == "drop":
+                dropped += 1
             try:
                 self._review_entry_save(entry, forced, ctx, row.id, saved, warnings)
             except FxError as e:
@@ -195,7 +211,11 @@ class Pipeline:
 
         status = "needs_review" if any(not e.get("resolved") for e in pending) else "done"
         self.store.finish(row.id, status, {**row.result, "pending_review": pending})
+        # бот обещал «записываю…» — финальное подтверждение обязано прийти отсюда,
+        # даже если в итоге всё пропустили
         parts = ([render_summary(saved, 0)] if saved else []) + warnings
+        if not parts and dropped:
+            parts = [f"🗑 Пропустил {dropped}." if dropped > 1 else "🗑 Пропустил."]
         if parts:
             self._best_effort(self.tg.send, row.reply_chat_id, "\n\n".join(parts),
                               summary_buttons(row.id) if saved else None)
@@ -249,12 +269,13 @@ def reply(tg, row: InboxRow, text: str, buttons=None) -> None:
 
 
 def error_reply(tg, row: InboxRow, text: str) -> None:
-    if row.source in PREFIXES:
-        text = chat_text(row, text)
-        if row.text:
-            quote = row.text[:100] + ("…" if len(row.text) > 100 else "")
-            text += f"\n«{quote}»"
-    reply(tg, row, text)
+    """Минута речи не должна пропасть: расшифровку показываем всегда, из любого источника,
+    и даём вернуть запись в очередь одной кнопкой."""
+    text = chat_text(row, text)
+    if row.text:
+        quote = row.text[:600] + ("…" if len(row.text) > 600 else "")
+        text += f"\n\nЧто я услышал:\n«{quote}»"
+    reply(tg, row, text, failure_buttons(row.id))
 
 
 def _drop_audio(store, row: InboxRow) -> None:

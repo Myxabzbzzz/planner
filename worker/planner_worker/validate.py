@@ -3,11 +3,13 @@ from datetime import timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from .prompts import WEEKDAY_RE, join_thousand_dots, split_number_lists
+from .prompts import DATE_WORD_RE, DAY_PART_RE, WEEKDAY_RE, join_thousand_dots, split_number_lists
 from .schemas import ExtractedItem, UserContext
 
 NO_TIME = "у встречи не названо время"
 FUTURE = "дата операции ещё не наступила"
+# всё, что уже произошло: «в понедельник потратил», «в понедельник сделал зарядку»
+PAST_KINDS = ("expense", "income", "habit_done")
 CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 _ANNOTATION_RE = re.compile(r"\((?:\d{4}-\d{2}-\d{2}|\d{2}:\d{2})\)")
 _CLOCK_RE = re.compile(r"(?<!\d)\d{1,2}:\d{2}(?!\d)")
@@ -56,7 +58,7 @@ def localize(item: ExtractedItem, ctx: UserContext, strict: bool = True) -> Extr
     if item.kind in ("expense", "income") and item.occurred_on is None:
         upd["occurred_on"] = ctx.now.date()
     on = upd.get("occurred_on", item.occurred_on)
-    if item.kind in ("expense", "income") and on and 0 < (on - ctx.now.date()).days < 7 \
+    if item.kind in PAST_KINDS and on and 0 < (on - ctx.now.date()).days < 7 \
             and WEEKDAY_RE.search(item.source_text):
         upd["occurred_on"] = on - timedelta(days=7)  # «в понедельник потратил» — прошедший понедельник
     if item.kind in ("expense", "income") and item.amount is not None:
@@ -80,11 +82,14 @@ def _plain_number_in(amount: float, text: str) -> bool:
 
 
 def _has_date(text: str) -> bool:
-    return bool(_DATE_IN_TEXT_RE.search(text))
+    """Дата названа: число, аннотация или слово «завтра»/«в пятницу»."""
+    return bool(_DATE_IN_TEXT_RE.search(text) or DATE_WORD_RE.search(text))
 
 
 def _has_clock(text: str) -> bool:
-    return bool(_CLOCK_RE.search(text))
+    """Время названо: «19:30», аннотация «(19:00)» или словом — «вечером», «утром».
+    Часть дня — это ответ, а не повод спрашивать «во сколько?»."""
+    return bool(_CLOCK_RE.search(text) or DAY_PART_RE.search(text))
 
 
 def check_item(

@@ -17,7 +17,7 @@ SYSTEM = """Ты — парсер личного планера. Раздели 
 - expense — уже потраченные деньги. amount — число. currency — ISO-код ТОЛЬКО если валюта названа явно («доллар»→USD, «рубль»→RUB, «сум»→UZS, «тенге»→KZT, «евро»→EUR), иначе null. category — одна из категорий пользователя.
 - income — полученные деньги, поля как у expense.
 - note — мысль, идея, заметка. journal — запись о прожитом дне, настроении, событиях.
-- habit_done — пользователь сделал свою привычку; habit — точное название из списка привычек.
+- habit_done — пользователь сделал свою привычку; habit — точное название из списка привычек. occurred_on — день, когда он её сделал («вчера сделал зарядку» → вчерашняя дата); если день не назван — не заполняй.
 - habit_new — пользователь хочет начать отслеживать новую привычку; title — её короткое название.
 
 Правила:
@@ -31,9 +31,11 @@ SYSTEM = """Ты — парсер личного планера. Раздели 
 - Для дней недели и относительных дат бери дату из строки «Календарь» — ближайший будущий такой день (сегодняшний день недели = сегодня).
 - Если после слова стоит дата в скобках (YYYY-MM-DD) — используй именно её; у трат и доходов это occurred_on.
 - Если после времени стоит время в скобках (ЧЧ:ММ) — используй именно его. Если время не названо — не придумывай его.
-- Если после суммы стоит число в скобках («25 тыщ (25000)») — это точная сумма, amount — именно это число.
+- Если после суммы стоит число в скобках («25 тыщ (25000)», «два косаря (2000)») — это точная сумма, amount — именно это число.
+- Если после суммы стоит «(валюта XXX)» — currency именно XXX, даже если слово валюты разговорное («200 баксов (валюта USD)» → currency USD).
 - Несколько сумм подряд («потратил 290 и 60 и ещё 100») — отдельная запись на каждую сумму; суммы никогда не складывай.
 - Суммы: «40 000» → 40000, «22,4» → 22.4, «пятьсот» → 500, «2к» → 2000.
+- Регулярность («каждый день», «каждое утро», «по утрам», «три раза в неделю», «начинаю бегать») — это habit_new, а не task.
 - Вопросы и просьбы к самому боту («можешь написать код?», «что такое инфляция?», «расскажи анекдот», «привет») — не записи: items: []. Но свои идеи и размышления с вопросом («а что если открыть кофейню?») — note.
 - Ничего не выдумывай. Если записей нет — items: [].
 """
@@ -50,6 +52,8 @@ _WEEKDAY_STEMS = [
 ]
 _DATE_WORDS = r"послезавтра|позавчера|завтра|вчера|сегодня|" + "|".join(p for _, p in _WEEKDAY_STEMS)
 _DATE_RE = re.compile(rf"(?<!\w)({_DATE_WORDS})(?!\w)(?!\s*\(\d{{4}}-\d{{2}}-\d{{2}}\))", re.IGNORECASE)
+# те же слова, но без запрета на уже проставленную аннотацию — для проверок в validate
+DATE_WORD_RE = re.compile(rf"(?<!\w)(?:{_DATE_WORDS})(?!\w)", re.IGNORECASE)
 WEEKDAY_RE = re.compile(r"(?<!\w)(?:" + "|".join(p for _, p in _WEEKDAY_STEMS) + r")(?!\w)", re.IGNORECASE)
 _LAST_RE = re.compile(r"прошл\w*\s+$", re.IGNORECASE)
 _NUM_WORDS = {"один": 1, "одну": 1, "одного": 1, "два": 2, "две": 2, "пару": 2, "три": 3, "четыре": 4, "пять": 5,
@@ -212,7 +216,9 @@ def annotate_dates(text: str, today: date) -> str:
 
 
 _TIME_RE = re.compile(
-    r"(?<!\w)(?:в|к)\s+(?:(?P<word>час|полдень|полночь)|пол(?P<half>первого|второго|третьего|четв[её]ртого|пятого"
+    r"(?<!\w)(?:в|к|ко)\s+(?:(?P<word>час|полдень|полночь)"
+    # «в пол девятого», «в полдевятого», «в половине девятого», «в пол-девятого»
+    r"|пол(?:овин[ауые])?\s*-?\s*(?P<half>первого|второго|третьего|четв[её]ртого|пятого"
     r"|шестого|седьмого|восьмого|девятого|десятого|одиннадцатого|двенадцатого)"
     r"|(?P<h>\d{1,2})(?:[:.](?P<m>\d{2}))?(?:\s+час(?:а|ов)?)?(?:\s+(?P<suf>утра|дня|вечера|ночи))?)"
     r"(?!\w)(?![:.]\d)(?!\s*\(\d{2}:\d{2}\))",
@@ -259,6 +265,42 @@ def annotate_times(text: str) -> str:
     return _BARE_TIME_RE.sub(rep, _TIME_RE.sub(rep, text))
 
 
+# «завтра вечером встреча» — человек назвал время, просто словом. Без этого встреча
+# уходила в «нужно уточнить», хотя уточнять нечего: вечер — это 19:00.
+# порядок важен: длинные варианты раньше коротких («поздно вечером» до «вечером»)
+_DAY_PARTS: list[tuple[str, tuple[int, int]]] = [
+    (r"рано\s+утром", (7, 0)),
+    (r"поздно\s+вечером", (22, 0)),
+    (r"ближе\s+к\s+вечеру", (19, 0)),
+    (r"после\s+обеда", (15, 0)),
+    (r"с\s+утра", (9, 0)),
+    (r"в\s+обед", (13, 0)),
+    (r"к\s+вечеру", (19, 0)),
+    (r"утром", (9, 0)),
+    (r"вечером", (19, 0)),
+    (r"дн[ёе]м(?!\s+рожден)", (13, 0)),
+    (r"ноч[ьюи]ю?", (22, 0)),
+]
+DAY_PART_RE = re.compile(r"(?<!\w)(?:" + "|".join(p for p, _ in _DAY_PARTS) + r")(?!\w)", re.IGNORECASE)
+_DAY_PART_RE = DAY_PART_RE
+_DAY_PART_TIMES = [(re.compile(rf"^(?:{p})$", re.IGNORECASE), hm) for p, hm in _DAY_PARTS]
+_NEAR_CLOCK_RE = re.compile(r"(?<!\d)\d{1,2}:\d{2}(?!\d)")
+
+
+def annotate_day_parts(text: str) -> str:
+    """«вечером» → «вечером (19:00)». Если рядом уже есть точное время — не трогаем."""
+    def rep(m: re.Match) -> str:
+        around = text[max(0, m.start() - 30):m.end() + 30]
+        if _NEAR_CLOCK_RE.search(around):
+            return m.group(0)
+        for pat, hm in _DAY_PART_TIMES:
+            if pat.match(m.group(0)):
+                return f"{m.group(0)} ({hm[0]:02d}:{hm[1]:02d})"
+        return m.group(0)
+
+    return _DAY_PART_RE.sub(rep, text)
+
+
 _AMOUNT_RE = re.compile(
     r"(?<![\w.,])(?P<n>\d+(?:[.,]\d+)?|полтор[аы])"
     r"(?:\s*(?P<word>тыщ[аиу]?|тысяч[аиу]?|тыс\.?|млн\.?|миллион(?:а|ов)?)(?![а-яё])"
@@ -280,6 +322,168 @@ def annotate_amounts(text: str) -> str:
         return f"{m.group(0)} ({int(value) if value == int(value) else value})"
 
     return _AMOUNT_RE.sub(rep, text)
+
+
+_CARDINALS: dict[str, float] = {
+    "полтора": 1.5, "полторы": 1.5,
+    "один": 1, "одна": 1, "одну": 1, "одного": 1, "два": 2, "две": 2, "двух": 2, "три": 3, "тр[ёе]х": 3,
+    "четыре": 4, "четыр[ёе]х": 4, "пять": 5, "пяти": 5, "шесть": 6, "шести": 6, "семь": 7, "семи": 7,
+    "восемь": 8, "восьми": 8, "девять": 9, "девяти": 9, "десять": 10, "десяти": 10,
+    "одиннадцать": 11, "двенадцать": 12, "тринадцать": 13, "четырнадцать": 14, "пятнадцать": 15,
+    "шестнадцать": 16, "семнадцать": 17, "восемнадцать": 18, "девятнадцать": 19,
+    "двадцать": 20, "двадцати": 20, "тридцать": 30, "тридцати": 30, "сорок": 40, "сорока": 40,
+    "пятьдесят": 50, "пятидесяти": 50, "шестьдесят": 60, "семьдесят": 70, "восемьдесят": 80,
+    "девяносто": 90, "девяноста": 90,
+    "сто": 100, "ста": 100, "двести": 200, "двухсот": 200, "триста": 300, "тр[ёе]хсот": 300,
+    "четыреста": 400, "пятьсот": 500, "пятисот": 500, "шестьсот": 600, "семьсот": 700,
+    "восемьсот": 800, "девятьсот": 900,
+}
+_CARD_ALT = "|".join(sorted(_CARDINALS, key=len, reverse=True))
+_MULT_ALT = r"тысяч[аиу]?|тыщ[аиу]?|тыс\.?|млн\.?|миллион(?:а|ов)?"
+# разговорные названия валют — нужны, чтобы «пятьсот сум» тоже считалось суммой
+_CUR_WORD = (r"сум(?:ов|а|ы|у|ах)?|сўм|руб(?:л\w*|\.?)|долл\w*|бакс\w*|евро|тенге|тг|юан\w*|лир\w*|дирхам\w*"
+             r"|usd|eur|rub|uzs|kzt|cny|try|aed")
+_WORD_NUM_RE = re.compile(
+    rf"(?<![\w(])(?P<num>(?:{_CARD_ALT})(?:\s+(?:{_CARD_ALT}))*)"
+    rf"(?:\s+(?P<mult>{_MULT_ALT}))?(?!\w)(?!\s*\()",
+    re.IGNORECASE,
+)
+_CUR_AFTER_RE = re.compile(rf"^\s*(?:{_CUR_WORD})(?!\w)|^\s*[$€₽₸]", re.IGNORECASE)
+_CARD_LOOKUP = [(re.compile(rf"^(?:{w})$", re.IGNORECASE), v) for w, v in _CARDINALS.items()]
+
+
+def _card_value(phrase: str) -> float | None:
+    """«сто пятьдесят» → 150. Складываем разряды, как в русском языке."""
+    total = 0.0
+    seen = False
+    for word in phrase.split():
+        for pat, v in _CARD_LOOKUP:
+            if pat.match(word):
+                total += v
+                seen = True
+                break
+        else:
+            return None
+    return total if seen else None
+
+
+def _fmt_money(value: float) -> str:
+    return str(int(value)) if value == int(value) else str(round(value, 2))
+
+
+def annotate_word_numbers(text: str) -> str:
+    """«двести тысяч» → «двести тысяч (200000)», «пятьсот сум» → «пятьсот (500) сум».
+    Трогаем только суммы: есть множитель (тысяч/млн) или сразу за числом название валюты."""
+    def rep(m: re.Match) -> str:
+        value = _card_value(m.group("num"))
+        if value is None:
+            return m.group(0)
+        mult = (m.group("mult") or "").lower()
+        if mult:
+            value *= 1_000_000 if mult.startswith(("млн", "миллион")) else 1000
+        elif not _CUR_AFTER_RE.match(text[m.end():m.end() + 16]):
+            return m.group(0)  # «через два дня», «три задачи» — не сумма
+        return f"{m.group(0)} ({_fmt_money(value)})"
+
+    return _WORD_NUM_RE.sub(rep, text)
+
+
+# Разговорные суммы. «лимон» и «штука» сознательно не включены: «купил два лимона»
+# и «две штуки» — чаще про предметы, чем про деньги.
+_SLANG_AMOUNTS: list[tuple[str, int]] = [
+    (r"косар(?:ь|я|ей|ика|иков)?", 1000),
+    (r"стольник(?:а|ов)?", 100),
+    (r"полтинник(?:а|ов)?", 50),
+    (r"полтос(?:а|ы|ов)?", 50),
+    (r"пятихатк[аиу]|пятих[аи]", 500),
+    (r"червонец|червонц(?:а|ев)", 10),
+]
+_SLANG_RE = re.compile(
+    rf"(?<![\w(])(?:(?P<n>\d{{1,3}}|{_CARD_ALT})\s+)?"
+    r"(?P<w>" + "|".join(p for p, _ in _SLANG_AMOUNTS) + r")(?!\w)(?!\s*\()",
+    re.IGNORECASE,
+)
+_SLANG_LOOKUP = [(re.compile(rf"^(?:{p})$", re.IGNORECASE), v) for p, v in _SLANG_AMOUNTS]
+
+
+def annotate_slang_amounts(text: str) -> str:
+    """«два косаря» → «два косаря (2000)», «полтос» → «полтос (50)»."""
+    def rep(m: re.Match) -> str:
+        unit = next((v for pat, v in _SLANG_LOOKUP if pat.match(m.group("w"))), None)
+        if unit is None:
+            return m.group(0)
+        raw = (m.group("n") or "").strip()
+        n = 1.0
+        if raw:
+            n = float(raw) if raw.isdigit() else (_card_value(raw) or 0)
+            if not n:
+                return m.group(0)
+        return f"{m.group(0)} ({_fmt_money(n * unit)})"
+
+    return _SLANG_RE.sub(rep, text)
+
+
+_CURRENCY_ALIASES: list[tuple[str, str]] = [
+    (r"бакс(?:ов|а|ы|у)?|доллар(?:ов|а|ы|у|ах)?|долл\.?|usd|\$", "USD"),
+    (r"евро|eur|€", "EUR"),
+    (r"рубл(?:ей|я|и|ь|ях)|руб\.?|rub|₽", "RUB"),
+    (r"тенге|kzt|₸", "KZT"),
+    (r"сум(?:ов|а|ы|у|ах)?|сўм|uzs", "UZS"),
+    (r"юан(?:ей|я|и|ь)?|cny", "CNY"),
+    (r"дирхам(?:ов|а|ы)?|aed", "AED"),
+]
+# символы валют липнут к цифре («200$»), поэтому для них границы слова не требуем
+_CURRENCY_RE = re.compile(
+    r"(?:(?<!\w)(?<!валюта )(?P<w>" + "|".join(p for p, _ in _CURRENCY_ALIASES) + r")(?!\w)|(?P<s>[$€₽₸]))"
+    r"(?!\s*\(валюта)",
+    re.IGNORECASE,
+)
+_SYMBOL_CODES = {"$": "USD", "€": "EUR", "₽": "RUB", "₸": "KZT"}
+_CURRENCY_LOOKUP = [(re.compile(rf"^(?:{p})$", re.IGNORECASE), c) for p, c in _CURRENCY_ALIASES]
+
+
+def annotate_currency(text: str) -> str:
+    """«200 баксов» → «200 баксов (валюта USD)»: разговорное название валюты модель
+    угадывать не должна — код подставляет ISO-код сам."""
+    def rep(m: re.Match) -> str:
+        if m.group("s"):
+            return f"{m.group(0)} (валюта {_SYMBOL_CODES[m.group('s')]})"
+        code = next((c for pat, c in _CURRENCY_LOOKUP if pat.match(m.group("w"))), None)
+        return m.group(0) if code is None else f"{m.group(0)} (валюта {code})"
+
+    return _CURRENCY_RE.sub(rep, text)
+
+
+def annotate_message(text: str, now: datetime) -> str:
+    """Весь препроцессинг сообщения: даты, время, суммы и валюты считает код,
+    модель только переносит готовые значения в JSON."""
+    text = annotate_in_time(split_number_lists(join_thousand_dots(text)), now)
+    text = annotate_day_parts(annotate_times(annotate_dates(text, now.date())))
+    return annotate_currency(annotate_slang_amounts(annotate_word_numbers(annotate_amounts(text))))
+
+
+MAX_CORRECTIONS = 10
+
+
+def corrections_block(pairs) -> str:
+    """Прошлые уточнения пользователя — лучший пример того, как он сам думает о своих записях."""
+    lines = []
+    seen: set[str] = set()
+    for raw_text, kind in pairs:
+        t = " ".join(str(raw_text or "").split())[:120]
+        if not t or not kind:
+            continue
+        key = t.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        lines.append(f'- «{t}» → {kind}')
+        if len(lines) >= MAX_CORRECTIONS:
+            break
+    if not lines:
+        return ""
+    return ("Пользователь уже исправлял разбор таких формулировок — считай это его правилами:\n"
+            + "\n".join(lines) + "\n")
 
 
 _ONLY_NUMBERS_RE = re.compile(r"[\d\s.,]*\d[\d\s.,]*")
@@ -307,10 +511,12 @@ def build_extract_messages(
         user += f"Пользователь уточнил: это запись типа {hint_kind}. Верни ровно одну запись этого типа.\n"
     if _ONLY_NUMBERS_RE.fullmatch(text.strip()):
         user += "Сообщение состоит только из чисел — это траты (expense), по одной записи на каждое число, title «Трата».\n"
+    block = corrections_block(ctx.corrections)
+    if block:
+        user += block
     if feedback:
         user += "Прошлый разбор содержал ошибки, исправь их:\n- " + "\n- ".join(feedback) + "\n"
-    text = annotate_in_time(split_number_lists(join_thousand_dots(text)), ctx.now)
-    user += f"\nСообщение:\n{annotate_amounts(annotate_times(annotate_dates(text, today)))}"
+    user += f"\nСообщение:\n{annotate_message(text, ctx.now)}"
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
 

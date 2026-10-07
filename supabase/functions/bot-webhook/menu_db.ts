@@ -8,7 +8,7 @@ export type TodaySummary = {
   month_spent: number;
   limit: number | null;
   tasks_more: number;
-  habits: { id: string; name: string; done: boolean }[];
+  habits: { id: string; name: string; done: boolean; target_per_week: number; week_done: number }[];
 };
 export type TasksSummary = { tasks: { id: string; title: string; due: string | null; overdue: boolean }[]; total: number };
 export type MoneySummary = {
@@ -20,7 +20,15 @@ export type MoneySummary = {
   limit: number | null;
 };
 export type HabitsSummary = {
-  habits: { id: string; name: string; week: boolean[]; streak: number; done_today: boolean }[];
+  habits: {
+    id: string;
+    name: string;
+    week: boolean[];
+    streak: number;
+    done_today: boolean;
+    target_per_week: number;
+    week_done: number;
+  }[];
 };
 export type SettingsSummary = { tz: string; base_currency: string; limit: number | null; capture_token: string;
   notify_reminders: boolean; notify_daily: boolean; notify_weekly: boolean;

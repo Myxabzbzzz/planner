@@ -336,3 +336,109 @@ def test_annotate_times_skips_day_counts():
     for s in ["3 дня назад (2026-09-28) такси", "через 3 дня (2026-10-04) сдать", "за 3 дня потратил 500", "на 3 дня в Самарканд"]:
         assert annotate_times(s) == s
     assert annotate_times("в 3 дня встреча") == "в 3 дня (15:00) встреча"
+
+
+# ---------- понимание: словесные и разговорные суммы, валюты, части дня ----------
+
+
+def test_annotate_half_hour_with_space():
+    from planner_worker.prompts import annotate_times
+    assert annotate_times("встреча в пол девятого") == "встреча в пол девятого (08:30)"
+    assert annotate_times("в полдевятого зал") == "в полдевятого (08:30) зал"
+    assert annotate_times("в половине девятого") == "в половине девятого (08:30)"
+    assert annotate_times("в пол-девятого") == "в пол-девятого (08:30)"
+    assert annotate_times("в пол второго") == "в пол второго (13:30)"
+    assert annotate_times("обед в полдень") == "обед в полдень (12:00)"
+    once = annotate_times("в пол девятого")
+    assert annotate_times(once) == once
+
+
+def test_annotate_day_parts():
+    from planner_worker.prompts import annotate_day_parts
+    assert annotate_day_parts("завтра вечером встреча") == "завтра вечером (19:00) встреча"
+    assert annotate_day_parts("утром зарядка") == "утром (09:00) зарядка"
+    assert annotate_day_parts("рано утром самолёт") == "рано утром (07:00) самолёт"
+    assert annotate_day_parts("поздно вечером созвон") == "поздно вечером (22:00) созвон"
+    assert annotate_day_parts("после обеда стоматолог") == "после обеда (15:00) стоматолог"
+    assert annotate_day_parts("в обед кофе") == "в обед (13:00) кофе"
+    assert annotate_day_parts("днём встреча") == "днём (13:00) встреча"
+    assert annotate_day_parts("ночью поезд") == "ночью (22:00) поезд"
+
+
+def test_annotate_day_parts_keeps_explicit_time_and_is_idempotent():
+    from planner_worker.prompts import annotate_day_parts
+    assert annotate_day_parts("завтра вечером в 20:30 встреча") == "завтра вечером в 20:30 встреча"
+    assert annotate_day_parts("подарок на днём рождения") == "подарок на днём рождения"
+    once = annotate_day_parts("вечером кино")
+    assert annotate_day_parts(once) == once
+
+
+def test_annotate_word_numbers():
+    from planner_worker.prompts import annotate_word_numbers
+    assert annotate_word_numbers("потратил двести тысяч на мебель") == \
+        "потратил двести тысяч (200000) на мебель"
+    assert annotate_word_numbers("сто пятьдесят тысяч за ремонт") == "сто пятьдесят тысяч (150000) за ремонт"
+    assert annotate_word_numbers("два миллиона за машину") == "два миллиона (2000000) за машину"
+    assert annotate_word_numbers("полтора миллиона") == "полтора миллиона (1500000)"
+    assert annotate_word_numbers("пятьсот сум за пакет") == "пятьсот (500) сум за пакет"
+    assert annotate_word_numbers("двести долларов") == "двести (200) долларов"
+    once = annotate_word_numbers("двести тысяч")
+    assert annotate_word_numbers(once) == once
+
+
+def test_annotate_word_numbers_ignores_non_money():
+    from planner_worker.prompts import annotate_word_numbers
+    assert annotate_word_numbers("через два дня встреча") == "через два дня встреча"
+    assert annotate_word_numbers("три задачи на завтра") == "три задачи на завтра"
+    assert annotate_word_numbers("кофе 40 000") == "кофе 40 000"
+
+
+def test_annotate_slang_amounts():
+    from planner_worker.prompts import annotate_slang_amounts
+    assert annotate_slang_amounts("отдал два косаря за такси") == "отдал два косаря (2000) за такси"
+    assert annotate_slang_amounts("косарь на обед") == "косарь (1000) на обед"
+    assert annotate_slang_amounts("потратил полтос") == "потратил полтос (50)"
+    assert annotate_slang_amounts("стольник на кофе") == "стольник (100) на кофе"
+    assert annotate_slang_amounts("пятихатка за книгу") == "пятихатка (500) за книгу"
+    assert annotate_slang_amounts("5 косарей") == "5 косарей (5000)"
+    # «лимон» и «штука» не трогаем — это чаще предметы
+    assert annotate_slang_amounts("купил два лимона") == "купил два лимона"
+    once = annotate_slang_amounts("полтос")
+    assert annotate_slang_amounts(once) == once
+
+
+def test_annotate_currency():
+    from planner_worker.prompts import annotate_currency
+    assert annotate_currency("потратил 200 баксов") == "потратил 200 баксов (валюта USD)"
+    assert annotate_currency("скинул маме 200 долларов") == "скинул маме 200 долларов (валюта USD)"
+    assert annotate_currency("40 000 сум") == "40 000 сум (валюта UZS)"
+    assert annotate_currency("2000 рублей") == "2000 рублей (валюта RUB)"
+    assert annotate_currency("5000 тенге") == "5000 тенге (валюта KZT)"
+    assert annotate_currency("30 евро") == "30 евро (валюта EUR)"
+    assert annotate_currency("200$") == "200$ (валюта USD)"
+    # «сумма» — не валюта
+    assert annotate_currency("какая сумма вышла") == "какая сумма вышла"
+    once = annotate_currency("200 баксов")
+    assert annotate_currency(once) == once
+
+
+def test_messages_annotate_understanding(ctx):
+    user = build_extract_messages("завтра вечером встреча с Андреем, отдал два косаря за такси", ctx)[1]["content"]
+    assert "вечером (19:00)" in user
+    assert "два косаря (2000)" in user
+
+
+def test_messages_include_user_corrections(ctx):
+    import dataclasses
+    c = dataclasses.replace(ctx, corrections=(("кофе 40к", "expense"), ("Кофе 40к", "note"), ("зал", "habit_new")))
+    user = build_extract_messages("кофе 40к", c)[1]["content"]
+    assert "его правилами" in user
+    assert "«кофе 40к» → expense" in user
+    assert "«зал» → habit_new" in user
+    # дедуп без учёта регистра: второй вариант того же текста не попадает
+    assert "→ note" not in user
+
+
+def test_messages_without_corrections_are_unchanged(ctx):
+    user = build_extract_messages("кофе 40к", ctx)[1]["content"]
+    assert "его правилами" not in user

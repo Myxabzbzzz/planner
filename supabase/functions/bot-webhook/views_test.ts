@@ -36,14 +36,17 @@ Deno.test("renderToday full", () => {
     spent_today: 30000,
     month_spent: 30000,
     limit: 5000000, tasks_more: 0,
-    habits: [{ id: H1, name: "зарядка", done: false }, { id: "x", name: "чтение", done: true }],
+    habits: [
+      { id: H1, name: "зарядка", done: false, target_per_week: 7, week_done: 4 },
+      { id: "x", name: "чтение", done: true, target_per_week: 3, week_done: 3 },
+    ],
   });
   assertEquals(v.text, [
     "📅 Сегодня",
     "Встречи:\n• 15:00 Встреча с Андреем\n• ✓ 11:00 Созвон",
     "Задачи:\n• Оплатить интернет\n• ⚠️ Сдать отчёт (просрочено)",
     "💸 Потрачено сегодня: 30 000 сум\nЛимит на месяц: осталось 4 970 000 сум из 5 000 000 сум",
-    "🔁 Привычки: ▫️ зарядка · ✅ чтение",
+    "🔁 Привычки: ▫️ зарядка · ✅ чтение (3/3 🎯)",
   ].join("\n\n"));
   assertEquals(v.buttons, [[{ text: "✔️ зарядка", callback_data: `hab:${H1}:t` }]]);
 });
@@ -97,11 +100,21 @@ Deno.test("renderMoney", () => {
 
 Deno.test("renderHabits", () => {
   const v = renderHabits({ habits: [
-    { id: H1, name: "зарядка", week: [true, true, false, true, true, true, false], streak: 3, done_today: false },
+    { id: H1, name: "зарядка", week: [true, true, false, true, true, true, false], streak: 3, done_today: false,
+      target_per_week: 7, week_done: 5 },
   ] });
-  assertEquals(v.text, "🔁 Привычки\n\nзарядка — ✅✅▫️✅✅✅▫️ · серия 3");
+  assertEquals(v.text, "🔁 Привычки\n\nзарядка — ✅✅▫️✅✅✅▫️ · 5/7 · серия 3");
   assertEquals(v.buttons, [[{ text: "✔️ зарядка", callback_data: `hab:${H1}:h` }]]);
   assertEquals(renderHabits({ habits: [] }).text, "🔁 Привычки\n\nПривычек пока нет. Скажи «хочу трекать зарядку».");
+});
+
+// #18: цель на неделю хранилась и нигде не показывалась
+Deno.test("renderHabits shows progress against the habit's own weekly target", () => {
+  const v = renderHabits({ habits: [
+    { id: H1, name: "зал", week: [true, false, true, false, true, false, false], streak: 0, done_today: false,
+      target_per_week: 3, week_done: 3 },
+  ] });
+  assertEquals(v.text, "🔁 Привычки\n\nзал — ✅▫️✅▫️✅▫️▫️ · 3/3 🎯");
 });
 
 Deno.test("renderSettings and tzChoice", () => {
