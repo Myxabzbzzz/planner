@@ -51,8 +51,9 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <label className="field"><span>{label}</span>{children}</label>
 );
 
-export function TaskSheet({ api, item, onClose, onSaved }: Base<{ id: string; title: string; due: string | null }>) {
-  const was = splitDue(item.due);
+export function TaskSheet({ api, item, onClose, onSaved }:
+  Base<{ id: string; title: string; due: string | null; due_has_time?: boolean }>) {
+  const was = splitDue(item.due, item.due_has_time);
   const [title, setTitle] = useState(item.title);
   const [date, setDate] = useState(was.date);
   const [time, setTime] = useState(was.time);

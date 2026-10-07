@@ -2,14 +2,18 @@ export type Me = { name: string; tz: string; base_currency: string };
 export type Today = {
   base_currency: string;
   events: { id: string; title: string; time: string; date: string; with_whom: string | null; done: boolean }[];
-  tasks: { id: string; title: string; due: string; overdue: boolean }[];
+  tasks: { id: string; title: string; due: string; overdue: boolean; due_has_time?: boolean }[];
   tasks_more: number;
   spent_today: number;
   month_spent: number;
   limit: number | null;
   habits: { id: string; name: string; done: boolean }[];
 };
-export type TaskItem = { id: string; title: string; due: string | null; overdue: boolean; done_at: string | null };
+export type TaskItem = {
+  id: string; title: string; due: string | null; overdue: boolean; done_at: string | null;
+  /** Новая схема отдаёт флаг явно; у старой его нет — тогда работает запасной разбор по 23:59. */
+  due_has_time?: boolean;
+};
 export type TasksResp = { tasks: TaskItem[] };
 export type EventItem = { id: string; title: string; time: string; with_whom: string | null; done: boolean };
 export type EventsResp = { days: { date: string; events: EventItem[] }[] };

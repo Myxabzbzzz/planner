@@ -63,11 +63,13 @@ export function Today({ api, me, refresh = 0, onAdd, onSettings, pending = 0, on
 
       <Card>
         <div className="level">
-          <Ring value={progress.total === 0 ? 0 : progress.done / progress.total} size={62} width={6}
-            label={`Сделано ${progress.done} из ${progress.total}`}>
-            <span className="num" style={{ font: "600 16px/1 var(--display)" }}>{progress.done}</span>
-            <span className="hint" style={{ fontSize: 10 }}>из {progress.total}</span>
-          </Ring>
+          {progress.total > 0 && (
+            <Ring value={progress.done / progress.total} size={62} width={6}
+              label={`Сделано ${progress.done} из ${progress.total}`}>
+              <span className="num" style={{ font: "600 16px/1 var(--display)" }}>{progress.done}</span>
+              <span className="hint" style={{ fontSize: 10 }}>из {progress.total}</span>
+            </Ring>
+          )}
           <div className="grow">
             <div className="hero-label">Потрачено сегодня</div>
             <div className="hero-num sm">{fmtAmount(data.spent_today, cur)}</div>

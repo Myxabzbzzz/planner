@@ -91,10 +91,11 @@ export function relDay(isoDate: string, todayIsoDate: string): string | null {
 }
 
 /** Подпись срока в списке: «Сегодня», «Завтра», иначе «09.10», плюс время, если оно задано. */
-export function dueLabel(due: string, todayIsoDate: string): string {
+export function dueLabel(due: string, todayIsoDate: string, hasTime?: boolean): string {
   const time = due.slice(11, 16);
   const day = relDay(due, todayIsoDate) ?? fmtShortDate(due);
-  return time === "" || time === "23:59" ? day : `${day} ${time}`;
+  const show = time !== "" && (hasTime !== undefined ? hasTime : time !== "23:59");
+  return show ? `${day} ${time}` : day;
 }
 
 /** «3 дня», «5 дней» — для подписей серий и стажа. */

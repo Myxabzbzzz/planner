@@ -174,6 +174,9 @@ const SETTINGS = {
   notify_reminders: true, notify_daily: true, notify_weekly: false,
 };
 
+/** ?mock=empty — как выглядит приложение у человека в первый день. */
+const isEmpty = () => location.search.includes("mock=empty");
+
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 let polls = 0;
 
@@ -193,6 +196,37 @@ export const devFetch: typeof fetch = async (input, init) => {
   // ?mock=noaccess previews the «Нет доступа» screen
   if (p === "/me" && location.search.includes("mock=noaccess")) return new Response("", { status: 403 });
   if (p === "/me") return json({ name: "Михаил", tz: TZ, base_currency: "RUB" });
+  if (isEmpty()) {
+    if (p === "/today") {
+      return json({
+        base_currency: "RUB", events: [], tasks: [], tasks_more: 0,
+        spent_today: 0, month_spent: 0, limit: null, habits: [],
+      });
+    }
+    if (p === "/tasks") return json({ tasks: [] });
+    if (p === "/events") return json({ days: [] });
+    if (p === "/habits") return json({ habits: [] });
+    if (p === "/notes") return json({ notes: [], next_before: null });
+    if (p === "/reviews") return json({ reviews: [] });
+    if (p === "/money") {
+      return json({
+        base_currency: "RUB", month: url.searchParams.get("month") ?? d.today.slice(0, 7),
+        expense: 0, income: 0, limit: null, by_category: [], by_day: [], operations: [],
+      });
+    }
+    if (p === "/profile") {
+      return json({
+        name: "Михаил", tz: TZ, base_currency: "RUB", since: d.today, days_known: 1,
+        active_days: 0, active_streak: 0,
+        tasks: { open: 0, overdue: 0, done_total: 0, done_30d: 0, created_30d: 0 },
+        events: { total: 0, done_total: 0, next_7d: 0 },
+        habits: { active: 0, best_streak: 0, logs_total: 0, week_done: 0, week_target: 0 },
+        notes: { total: 0, thoughts: 0, journals: 0, d30: 0 },
+        captures: { total: 0, done: 0, needs_review: 0, failed: 0 },
+        money: { limit: null, months: [] }, weeks: [], heat: [], heat_total: 0,
+      });
+    }
+  }
   if (p === "/today") {
     return json({
       base_currency: "RUB",

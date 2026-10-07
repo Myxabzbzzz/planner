@@ -10,16 +10,25 @@ export type AgendaRow =
   | { kind: "event"; key: string; at: string | null; item: Today["events"][number] }
   | { kind: "task"; key: string; at: string | null; item: Today["tasks"][number] };
 
-/** Срок «23:59» означает «в течение дня», а не «к полуночи» — времени не показываем. */
-export const taskTime = (due: string): string | null => {
+/**
+ * Время срока, если оно вообще было задано.
+ *
+ * Раньше «23:59» было магическим значением «без времени» — из-за этого задачу
+ * ровно на 23:59 поставить было нельзя, а хак дублировался в SQL, воркере и
+ * клиенте. Теперь сервер отдаёт `due_has_time`; разбор по 23:59 оставлен
+ * запасным путём, чтобы клиент пережил старую базу.
+ */
+export const taskTime = (due: string, hasTime?: boolean): string | null => {
   const t = due.slice(11, 16);
-  return t === "" || t === "23:59" ? null : t;
+  if (t === "") return null;
+  if (hasTime !== undefined) return hasTime ? t : null;
+  return t === "23:59" ? null : t;
 };
 
 export function buildAgenda(data: Pick<Today, "events" | "tasks">): AgendaRow[] {
   const rows: AgendaRow[] = [
     ...data.events.map((e): AgendaRow => ({ kind: "event", key: `e:${e.id}`, at: e.time || null, item: e })),
-    ...data.tasks.map((t): AgendaRow => ({ kind: "task", key: `t:${t.id}`, at: taskTime(t.due), item: t })),
+    ...data.tasks.map((t): AgendaRow => ({ kind: "task", key: `t:${t.id}`, at: taskTime(t.due, t.due_has_time), item: t })),
   ];
   return rows
     .map((r, i) => ({ r, i }))

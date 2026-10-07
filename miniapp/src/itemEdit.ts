@@ -16,10 +16,11 @@ type Result<P> = P | null | "invalid";
 const okTitle = (s: string) => s !== "" && s.length <= 200;
 const done = <P extends object>(p: P): Result<P> => (Object.keys(p).length ? p : null);
 
-/** Срок задачи из API «YYYY-MM-DDTHH:MM»; 23:59 — это «без времени». */
-export function splitDue(due: string | null): { date: string; time: string } {
+/** Срок задачи из API «YYYY-MM-DDTHH:MM». Флаг важнее старого хака с 23:59. */
+export function splitDue(due: string | null, hasTime?: boolean): { date: string; time: string } {
   if (!due) return { date: "", time: "" };
   const [date, time] = due.split("T");
+  if (hasTime !== undefined) return { date, time: hasTime ? (time ?? "") : "" };
   return { date, time: time === "23:59" ? "" : time };
 }
 

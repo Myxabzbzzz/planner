@@ -114,7 +114,7 @@ export function Tasks({ api, me, refresh = 0, onAdd }: {
                     {t.title}
                   </button>
                   {t.due && filter !== "done" && (
-                    <span className={t.overdue && !done ? "meta danger" : "meta"}>{dueLabel(t.due, today)}</span>
+                    <span className={t.overdue && !done ? "meta danger" : "meta"}>{dueLabel(t.due, today, t.due_has_time)}</span>
                   )}
                 </div>
               );

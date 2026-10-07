@@ -90,14 +90,24 @@ function trackKeyboard() {
   sync();
 }
 
+/**
+ * `?theme=dark` / `?theme=light` перебивает тему Telegram.
+ * Вне Telegram SDK всегда сообщает «light», поэтому без этого посмотреть
+ * тёмную тему в обычном браузере было нечем.
+ */
+function forcedTheme(): "light" | "dark" | null {
+  const v = new URLSearchParams(location.search).get("theme");
+  return v === "dark" || v === "light" ? v : null;
+}
+
 export function initTelegram() {
   tg?.ready();
   tg?.expand();
   tg?.disableVerticalSwipes?.();
-  applyTheme(tg?.colorScheme ?? "dark");
+  applyTheme(forcedTheme() ?? tg?.colorScheme ?? "dark");
   applyInsets();
   trackKeyboard();
-  tg?.onEvent?.("themeChanged", () => applyTheme(tg?.colorScheme ?? "dark"));
+  tg?.onEvent?.("themeChanged", () => applyTheme(forcedTheme() ?? tg?.colorScheme ?? "dark"));
   tg?.onEvent?.("safeAreaChanged", applyInsets);
   tg?.onEvent?.("contentSafeAreaChanged", applyInsets);
   tg?.onEvent?.("fullscreenChanged", applyInsets);
