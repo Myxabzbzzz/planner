@@ -90,13 +90,15 @@ class FakeDb implements Db {
 
 class FakeTg implements Tg {
   sent: Array<{ chatId: number; text: string; buttons?: Button[][] }> = [];
-  edited: Array<{ chatId: number; messageId: number; text: string }> = [];
+  edited: Array<{ chatId: number; messageId: number; text: string; buttons?: Button[][] }> = [];
   answered: string[] = [];
   async sendMessage(chatId: number, text: string, buttons?: Button[][]) {
     this.sent.push({ chatId, text, buttons });
     return { message_id: 500 + this.sent.length };
   }
-  async editMessage(chatId: number, messageId: number, text: string) { this.edited.push({ chatId, messageId, text }); }
+  async editMessage(chatId: number, messageId: number, text: string, buttons?: Button[][]) {
+    this.edited.push({ chatId, messageId, text, buttons });
+  }
   async answerCallback(id: string) { this.answered.push(id); }
   deleted: Array<[number, number]> = [];
   async deleteMessage(chatId: number, messageId: number) { this.deleted.push([chatId, messageId]); }
@@ -425,18 +427,24 @@ Deno.test("#10 an offline ack says how much is already queued", async () => {
 });
 
 Deno.test("массовое удаление из чата можно отменить", async () => {
+  const { db, tg, deps } = setup();
+  onboarded(db);
   const inbox = "11111111-2222-3333-4444-555555555555";
-  const { tg } = await runCallback(`del:${inbox}`);
-  const [, , text, buttons] = tg.edited.at(-1)!;
-  assertStringIncludes(text, "Удалено записей: 2");
-  assertEquals(buttons?.[0]?.[0]?.callback_data, `undel:${inbox}`);
 
-  const back = await runCallback(`undel:${inbox}`);
-  assertEquals(back.db.restored, [inbox]);
-  assertStringIncludes(back.tg.edited.at(-1)![2], "Вернул записей: 2");
+  await handleUpdate(cb(`del:${inbox}`), deps);
+  const removed = tg.edited.at(-1)!;
+  assert(removed.text.includes("Удалено записей: 2"), removed.text);
+  assertEquals(removed.buttons?.[0]?.[0]?.callback_data, `undel:${inbox}`);
+
+  await handleUpdate(cb(`undel:${inbox}`), deps);
+  assertEquals(db.restored, [inbox]);
+  assert(tg.edited.at(-1)!.text.includes("Вернул записей: 2"));
 });
 
 Deno.test("отмена удаления не падает на мусорном id", async () => {
-  const { tg } = await runCallback("undel:не-uuid");
-  assertEquals(tg.answered.length > 0, true);
+  const { db, tg, deps } = setup();
+  onboarded(db);
+  await handleUpdate(cb("undel:не-uuid"), deps);
+  assertEquals(db.restored, []);
+  assert(tg.answered.length > 0);
 });

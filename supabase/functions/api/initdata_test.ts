@@ -6,7 +6,7 @@ const NOW = 1_790_900_000;
 
 Deno.test("valid initData yields telegram id", async () => {
   const init = await signInitData({ auth_date: String(NOW - 60), user: JSON.stringify({ id: 482570103 }), query_id: "q" }, TOKEN);
-  assertEquals(await verifyInitData(init, TOKEN, NOW), { tgId: 482570103 });
+  assertEquals(await verifyInitData(init, TOKEN, NOW), { tgId: 482570103, authDate: NOW - 60 });
 });
 
 Deno.test("tampered user is rejected", async () => {

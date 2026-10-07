@@ -50,6 +50,7 @@ class FakeTg implements Tg {
   }
   async editMessage() {}
   async answerCallback() {}
+  async deleteMessage() {}
 }
 
 const rem = (id: string, chat: number): Reminder => ({

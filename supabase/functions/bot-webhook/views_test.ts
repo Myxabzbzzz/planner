@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   fmtAmount, fmtNumber, renderHabits, renderMoney, renderNotify, renderSettings, renderTapGuide, renderTasks, renderToday, renderToken, tzChoice,
 } from "./views.ts";

@@ -270,12 +270,23 @@ Deno.test("tap:new rotates token and queues a new file", async () => {
   assert(tg.edited[0].text.startsWith("⏳ Собираю команду"));
 });
 
-Deno.test("tap:manual sends html guide with token", async () => {
+Deno.test("tap:manual показывает инструкцию, но не сам токен", async () => {
   const { tg, deps } = setup();
   await handleUpdate(cb("tap:manual"), deps);
   assertEquals(tg.sent[0].opts?.html, true);
   assert(tg.sent[0].text.includes("https://x.supabase.co/functions/v1/capture"));
+  // токен — как пароль, и в истории чата ему не место
+  assert(!tg.sent[0].text.includes("a".repeat(64)), "токен не должен печататься в инструкции");
+});
+
+Deno.test("tap:token присылает токен отдельным сообщением, которое можно стереть", async () => {
+  const { tg, deps } = setup();
+  await handleUpdate(cb("tap:token"), deps);
   assert(tg.sent[0].text.includes("a".repeat(64)));
+  assertEquals(tg.sent[0].buttons?.[0]?.[0]?.callback_data, "tap:hide");
+
+  await handleUpdate(cb("tap:hide"), deps);
+  assertEquals(tg.deleted.length, 1);
 });
 
 Deno.test("rt callback resolves time and edits message", async () => {

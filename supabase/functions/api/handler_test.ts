@@ -21,7 +21,21 @@ class FakeApiDb implements ApiDb {
     this.removed.push(path);
   }
   async userByTg(_tg: number) { return this.user; }
+  /**
+   * Проверка лимита — не бизнес-вызов, и в ожиданиях тестов ей делать нечего.
+   * Поэтому `call` разбирает её сам, а всё остальное уходит в `rpc`,
+   * который тесты и подменяют.
+   */
+  rateChecks: Array<[string, number, string]> = [];
+  rateAllows = true;
   async call(fn: string, args: unknown[]): Promise<unknown> {
+    if (fn === "rate_limit") {
+      this.rateChecks.push([args[1] as string, args[2] as number, args[3] as string]);
+      return this.rateAllows;
+    }
+    return await this.rpc(fn, args);
+  }
+  async rpc(fn: string, args: unknown[]): Promise<unknown> {
     this.calls.push([fn, args]);
     return { fn };
   }
@@ -99,7 +113,7 @@ Deno.test("404 unknown route, 405 non-GET, 500 on db error", async () => {
   assertEquals((await run(await req("/nope"))).status, 404);
   assertEquals((await run(await req("/today", { method: "PUT" }))).status, 405);
   const db = new FakeApiDb();
-  db.call = () => Promise.reject(new Error("boom"));
+  db.rpc = () => Promise.reject(new Error("boom"));
   const r = await run(await req("/today"), db);
   assertEquals([r.status, r.body], [500, { error: "server" }]);
 });
@@ -117,7 +131,7 @@ Deno.test("impossible calendar dates are 400", async () => {
 
 Deno.test("db error is 500 and its message is logged", async () => {
   const db = new FakeApiDb();
-  db.call = () => Promise.reject(Object.assign(new Error("relation boom"), { code: "42P01" }));
+  db.rpc = () => Promise.reject(Object.assign(new Error("relation boom"), { code: "42P01" }));
   const orig = console.error;
   const logged: unknown[][] = [];
   console.error = (...a: unknown[]) => { logged.push(a); };
@@ -135,7 +149,7 @@ Deno.test("db error is 500 and its message is logged", async () => {
 const ID = "20000000-0000-0000-0000-000000000001";
 
 Deno.test("POST marks map to rpc and return ok", async () => {
-  const mk = () => { const db = new FakeApiDb(); db.call = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(true); }; return db; };
+  const mk = () => { const db = new FakeApiDb(); db.rpc = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(true); }; return db; };
   let r = await run(await req(`/tasks/${ID}/done`, { method: "POST", body: { done: true } }), mk());
   assertEquals([r.status, r.body], [200, { ok: true }]);
   assertEquals(r.db.calls, [["set_item_done", ["u1", ID, "task", true]]]);
@@ -147,7 +161,7 @@ Deno.test("POST marks map to rpc and return ok", async () => {
 
 Deno.test("POST errors: not found, bad body, bad id, wrong method, unauthenticated", async () => {
   const db = new FakeApiDb();
-  db.call = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(false); };
+  db.rpc = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(false); };
   assertEquals((await run(await req(`/tasks/${ID}/done`, { method: "POST", body: { done: true } }), db)).status, 404);
   assertEquals((await run(await req(`/tasks/${ID}/done`, { method: "POST", body: { done: "yes" } }))).status, 400);
   assertEquals((await run(await req(`/tasks/not-a-uuid/done`, { method: "POST", body: { done: true } }))).status, 404);
@@ -163,7 +177,7 @@ Deno.test("CORS allows POST", async () => {
 });
 
 Deno.test("transactions: edit, delete and categories", async () => {
-  const mk = () => { const db = new FakeApiDb(); db.call = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(true); }; return db; };
+  const mk = () => { const db = new FakeApiDb(); db.rpc = (fn, args) => { db.calls.push([fn, args]); return Promise.resolve(true); }; return db; };
   let r = await run(await req(`/transactions/${ID}`, { method: "POST", body: { amount: 200 } }), mk());
   assertEquals([r.status, r.body], [200, { ok: true }]);
   assertEquals(r.db.calls, [["update_transaction", ["u1", ID, 200, null, null]]]);
@@ -181,16 +195,16 @@ Deno.test("transactions: bad bodies are 400, missing row 404, db validation erro
     assertEquals((await run(await req(`/transactions/${ID}`, { method: "POST", body }))).status, 400, JSON.stringify(body));
   }
   const missing = new FakeApiDb();
-  missing.call = () => Promise.resolve(false);
+  missing.rpc = () => Promise.resolve(false);
   assertEquals((await run(await req(`/transactions/${ID}`, { method: "POST", body: { amount: 1 } }), missing)).status, 404);
   assertEquals((await run(await req(`/transactions/${ID}/delete`, { method: "POST", body: {} }), missing)).status, 404);
   const bad = new FakeApiDb();
-  bad.call = () => Promise.reject({ code: "P0001", message: "bad category" });
+  bad.rpc = () => Promise.reject({ code: "P0001", message: "bad category" });
   assertEquals((await run(await req(`/transactions/${ID}`, { method: "POST", body: { category: "нет такой" } }), bad)).status, 400);
 });
 
 class TrueDb extends FakeApiDb {
-  override async call(fn: string, args: unknown[]): Promise<unknown> {
+  override async rpc(fn: string, args: unknown[]): Promise<unknown> {
     this.calls.push([fn, args]);
     return true;
   }
@@ -260,7 +274,7 @@ Deno.test("GET /inbox/<id> returns own status, null is 404", async () => {
   const id = "3f2c1a2b-1111-2222-3333-444455556666";
   assertEquals((await run(await req(`/inbox/${id}`))).db.calls, [["api_inbox_status", ["u1", id]]]);
   class NullDb extends FakeApiDb {
-    override async call(fn: string, args: unknown[]) { this.calls.push([fn, args]); return null; }
+    override async rpc(fn: string, args: unknown[]) { this.calls.push([fn, args]); return null; }
   }
   assertEquals((await run(await req(`/inbox/${id}`), new NullDb())).status, 404);
   assertEquals((await run(await req("/inbox/not-a-uuid"))).status, 404);
@@ -311,7 +325,7 @@ Deno.test("GET /profile and /settings map to rpc, months validated", async () =>
 
 Deno.test("POST /tasks creates and answers 201 with the new id", async () => {
   const db = new FakeApiDb();
-  db.call = async (fn: string, args: unknown[]) => {
+  db.rpc = async (fn: string, args: unknown[]) => {
     db.calls.push([fn, args]);
     return "new-task-id";
   };
@@ -323,7 +337,7 @@ Deno.test("POST /tasks creates and answers 201 with the new id", async () => {
 Deno.test("POST /tasks trims, keeps due date and time, rejects time without a date", async () => {
   const mk = async (body: unknown) => {
     const db = new FakeApiDb();
-    db.call = async (fn: string, args: unknown[]) => {
+    db.rpc = async (fn: string, args: unknown[]) => {
       db.calls.push([fn, args]);
       return "id";
     };
@@ -339,7 +353,7 @@ Deno.test("POST /tasks trims, keeps due date and time, rejects time without a da
 Deno.test("POST /events requires a real date and time", async () => {
   const mk = async (body: unknown) => {
     const db = new FakeApiDb();
-    db.call = async (fn: string, args: unknown[]) => {
+    db.rpc = async (fn: string, args: unknown[]) => {
       db.calls.push([fn, args]);
       return "id";
     };
@@ -354,7 +368,7 @@ Deno.test("POST /events requires a real date and time", async () => {
 Deno.test("POST /notes, /habits, /transactions validate their payloads", async () => {
   const mk = async (path: string, body: unknown) => {
     const db = new FakeApiDb();
-    db.call = async (fn: string, args: unknown[]) => {
+    db.rpc = async (fn: string, args: unknown[]) => {
       db.calls.push([fn, args]);
       return "id";
     };
@@ -399,13 +413,23 @@ Deno.test("мутации требуют более свежей сессии, �
   const stale = await run(await req("/tasks", { method: "POST", body: { title: "x" }, init: await old(12 * 3600) }));
   assertEquals([stale.status, stale.body], [401, { error: "stale_session" }]);
 
-  // 2 часа: обычная запись проходит
-  assertEquals((await run(await req("/tasks", { method: "POST", body: { title: "x" }, init: await old(2 * 3600) }))).status, 201);
+  // 2 часа: обычная запись проходит (создание отвечает id, поэтому двойник отдаёт строку)
+  const creating = new FakeApiDb();
+  creating.rpc = () => Promise.resolve("new-id");
+  assertEquals(
+    (await run(await req("/tasks", { method: "POST", body: { title: "x" }, init: await old(2 * 3600) }), creating)).status,
+    201,
+  );
   // ...а удаление требует совсем свежей
   const id = "3f2c1a2b-1111-2222-3333-444455556666";
   const del = await run(await req(`/tasks/${id}/delete`, { method: "POST", body: {}, init: await old(2 * 3600) }));
   assertEquals([del.status, del.body], [401, { error: "stale_session" }]);
-  assertEquals((await run(await req(`/tasks/${id}/delete`, { method: "POST", body: {}, init: await old(60) }))).status, 200);
+  const deleting = new FakeApiDb();
+  deleting.rpc = () => Promise.resolve(true);
+  assertEquals(
+    (await run(await req(`/tasks/${id}/delete`, { method: "POST", body: {}, init: await old(60) }), deleting)).status,
+    200,
+  );
 });
 
 Deno.test("просроченная совсем и подделанная подпись — разные ответы", async () => {
@@ -430,4 +454,54 @@ Deno.test("выгрузка всех данных тоже требует све
   assertEquals((await run(await req("/account/export", { init: fresh }))).db.calls, [["export_data", ["u1"]]]);
   // обычное чтение двухчасовой давности по-прежнему работает
   assertEquals((await run(await req("/today", { init: twoHours }))).status, 200);
+});
+
+Deno.test("лимит запросов: инбокс, голос и запись считаются раздельно", async () => {
+  const db = new FakeApiDb();
+  await run(await req("/inbox", { method: "POST", body: { text: "привет" } }), db);
+  await run(await req("/tasks", { method: "POST", body: { title: "x" } }), db);
+  assertEquals(db.rateChecks.map((c) => c[0]), ["inbox", "write"]);
+  // окна и пороги заданы явно, а не «на глаз»
+  assertEquals(db.rateChecks[0][2], "10 minutes");
+
+  const audio = new FakeApiDb();
+  await run(new Request("https://x.supabase.co/functions/v1/api/inbox/audio", {
+    method: "POST",
+    headers: {
+      "x-init-data": await signInitData({ auth_date: String(NOW - 10), user: JSON.stringify({ id: 7 }) }, TOKEN),
+      "content-type": "audio/mp4",
+    },
+    body: new Uint8Array([1, 2, 3]),
+  }), audio);
+  assertEquals(audio.rateChecks.map((c) => c[0]), ["audio"]);
+});
+
+Deno.test("исчерпанный лимит — 429, и запись в инбокс не создаётся", async () => {
+  const db = new FakeApiDb();
+  db.rateAllows = false;
+  const r = await run(await req("/inbox", { method: "POST", body: { text: "привет" } }), db);
+  assertEquals([r.status, r.body], [429, { error: "too_many" }]);
+  assertEquals(db.inbox.length, 0);
+
+  const w = new FakeApiDb();
+  w.rateAllows = false;
+  assertEquals((await run(await req("/tasks", { method: "POST", body: { title: "x" } }), w)).status, 429);
+  assertEquals(w.calls, []);
+});
+
+Deno.test("чтение лимитом не ограничено — сводку можно открывать сколько угодно", async () => {
+  const db = new FakeApiDb();
+  db.rateAllows = false;
+  assertEquals((await run(await req("/today"), db)).status, 200);
+  assertEquals(db.rateChecks, []);
+});
+
+Deno.test("сбой самой проверки лимита не ломает приложение", async () => {
+  const db = new FakeApiDb();
+  db.rpc = (fn: string, args: unknown[]) => {
+    if (fn === "rate_limit") return Promise.reject(new Error("нет связи"));
+    db.calls.push([fn, args]);
+    return Promise.resolve({ fn });
+  };
+  assertEquals((await run(await req("/inbox", { method: "POST", body: { text: "привет" } }), db)).status, 201);
 });
