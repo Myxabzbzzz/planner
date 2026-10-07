@@ -7,14 +7,14 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 from .classifier import decide
-from .format import (KIND_LABELS, past_time_message, render_line, render_summary, review_message, summary_buttons,
-                     time_message)
+from .format import (KIND_LABELS, future_message, past_time_message, render_line, render_summary, review_message,
+                     summary_buttons, time_message)
 from .fx import FxApplied, FxError, RateTable, convert
 from .llm import ExtractionError
 from .rows import to_row
 from .router import is_question
 from .schemas import ExtractedItem, InboxRow, UserContext
-from .validate import NO_TIME, check_item, localize
+from .validate import FUTURE, NO_TIME, check_item, localize
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +62,8 @@ class Pipeline:
         self.store.clear_records(row.id)  # retried main pass must not duplicate records
         for it, errs in checked:
             if errs:
-                reason = "time" if errs == [NO_TIME] else "; ".join(errs)
+                reason = ("time" if errs == [NO_TIME] else "future" if all(e.startswith(FUTURE) for e in errs)
+                          else "; ".join(errs))
                 review.append(self._review_entry(it, reason, None))
                 continue
             if self._past_today(it, ctx):
@@ -87,6 +88,7 @@ class Pipeline:
             it = ExtractedItem.model_validate(entry["item"])
             msg, buttons = (time_message(row.id, idx, it, ctx) if entry["reason"] == "time"
                             else past_time_message(row.id, idx, it, ctx) if entry["reason"] == "past"
+                            else future_message(row.id, idx, it) if entry["reason"] == "future"
                             else review_message(row.id, idx, it, entry["reason"]))
             self._best_effort(self.tg.send, row.reply_chat_id, msg, buttons)
 
@@ -219,6 +221,10 @@ class Pipeline:
         if (entry.get("reason") == "time" and forced in ("event", "task")) or \
                 (entry.get("reason") == "past" and entry.get("forced_time")):
             saved.append(self._save(self._apply_time_choice(entry, forced, ctx), ctx, inbox_id))
+            return
+        if entry.get("reason") == "future" and forced in ("expense", "income"):
+            it = ExtractedItem.model_validate(entry["item"]).model_copy(update={"kind": forced})
+            saved.append(self._save(localize(it, ctx).model_copy(update={"occurred_on": ctx.now.date()}), ctx, inbox_id))
             return
         # пользователь сам выбрал тип — не переделываем встречу в задачу и не требуем времени
         it = localize(ExtractedItem.model_validate(entry["item"]).model_copy(update={"kind": forced}), ctx, strict=False)

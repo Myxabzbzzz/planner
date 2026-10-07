@@ -166,3 +166,21 @@ def test_amounts_in_understands_thousand_dots():
 def test_localize_keeps_model_amount_for_tyshch(ctx):
     it = ExtractedItem(kind="expense", title="Кофе", source_text="25 тыщ кофе", amount=25000)
     assert localize(it, ctx).amount == 25000
+
+
+def test_localize_moves_weekday_money_to_the_past(ctx):
+    # ctx.now — четверг 01.10; «в понедельник потратил» — прошедший понедельник 28.09
+    it = item(kind="expense", title="Продукты", amount=100000,
+              source_text="в понедельник (2026-10-05) потратил 100 000 на продукты", occurred_on=date(2026, 10, 5))
+    assert localize(it, ctx).occurred_on == date(2026, 9, 28)
+
+
+def test_future_money_date_is_an_error(ctx):
+    from planner_worker.validate import FUTURE
+    it = localize(item(kind="income", title="Зарплата", amount=5000000, source_text="10.10 (2026-10-10) зарплата 5 000 000",
+                       occurred_on=date(2026, 10, 10)), ctx)
+    assert it.occurred_on == date(2026, 10, 10)
+    errs = check_item(it, ctx, None)
+    assert len(errs) == 1 and errs[0].startswith(FUTURE)
+    today = localize(item(kind="expense", title="Кофе", amount=40000, source_text="кофе 40 000"), ctx)
+    assert check_item(today, ctx, None) == []

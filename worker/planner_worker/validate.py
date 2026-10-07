@@ -3,10 +3,11 @@ from datetime import timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from .prompts import join_thousand_dots, split_number_lists
+from .prompts import WEEKDAY_RE, join_thousand_dots, split_number_lists
 from .schemas import ExtractedItem, UserContext
 
 NO_TIME = "у встречи не названо время"
+FUTURE = "дата операции ещё не наступила"
 CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 _ANNOTATION_RE = re.compile(r"\((?:\d{4}-\d{2}-\d{2}|\d{2}:\d{2})\)")
 _CLOCK_RE = re.compile(r"(?<!\d)\d{1,2}:\d{2}(?!\d)")
@@ -54,6 +55,10 @@ def localize(item: ExtractedItem, ctx: UserContext, strict: bool = True) -> Extr
         upd["currency"] = item.currency.strip().upper()
     if item.kind in ("expense", "income") and item.occurred_on is None:
         upd["occurred_on"] = ctx.now.date()
+    on = upd.get("occurred_on", item.occurred_on)
+    if item.kind in ("expense", "income") and on and 0 < (on - ctx.now.date()).days < 7 \
+            and WEEKDAY_RE.search(item.source_text):
+        upd["occurred_on"] = on - timedelta(days=7)  # «в понедельник потратил» — прошедший понедельник
     if item.kind in ("expense", "income") and item.amount is not None:
         # модель иногда портит числа — единственному числу из текста верим больше
         nums = amounts_in(item.source_text)
@@ -104,6 +109,8 @@ def check_item(
             nums = amounts_in(item.source_text)
             if nums and not _amount_in(item.amount, nums):
                 errs.append(f"сумма {item.amount} не совпадает с числами в тексте «{item.source_text}»")
+        if item.occurred_on is not None and item.occurred_on > ctx.now.date():
+            errs.append(f"{FUTURE}: {item.occurred_on.isoformat()}")
         if item.currency is not None and (
             not CURRENCY_RE.match(item.currency)
             or (known_currencies is not None and item.currency not in known_currencies)

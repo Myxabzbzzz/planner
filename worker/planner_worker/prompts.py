@@ -50,6 +50,8 @@ _WEEKDAY_STEMS = [
 ]
 _DATE_WORDS = r"послезавтра|позавчера|завтра|вчера|сегодня|" + "|".join(p for _, p in _WEEKDAY_STEMS)
 _DATE_RE = re.compile(rf"(?<!\w)({_DATE_WORDS})(?!\w)(?!\s*\(\d{{4}}-\d{{2}}-\d{{2}}\))", re.IGNORECASE)
+WEEKDAY_RE = re.compile(r"(?<!\w)(?:" + "|".join(p for _, p in _WEEKDAY_STEMS) + r")(?!\w)", re.IGNORECASE)
+_LAST_RE = re.compile(r"прошл\w*\s+$", re.IGNORECASE)
 _NUM_WORDS = {"один": 1, "одну": 1, "одного": 1, "два": 2, "две": 2, "пару": 2, "три": 3, "четыре": 4, "пять": 5,
               "шесть": 6, "семь": 7, "восемь": 8, "девять": 9, "десять": 10}
 _IN_RE = re.compile(
@@ -57,6 +59,12 @@ _IN_RE = re.compile(
     r"(?P<u>день|дня|дней|неделю|недели|недель|месяц|месяца|месяцев)(?!\w)(?!\s*\(\d{4}-\d{2}-\d{2}\))",
     re.IGNORECASE,
 )
+_AGO_RE = re.compile(
+    r"(?<!\w)(?:(?P<n>\d{1,2}|" + "|".join(_NUM_WORDS) + r")\s+)?"
+    r"(?P<u>день|дня|дней|неделю|недели|недель|месяц|месяца|месяцев)\s+назад(?!\w)(?!\s*\(\d{4}-\d{2}-\d{2}\))",
+    re.IGNORECASE,
+)
+_LAST_WEEK_RE = re.compile(r"(?<!\w)на\s+прошлой\s+неделе(?!\w)(?!\s*\(\d{4}-\d{2}-\d{2}\))", re.IGNORECASE)
 
 
 def _add_months(d: date, n: int) -> date:
@@ -70,9 +78,10 @@ def _add_months(d: date, n: int) -> date:
     raise ValueError(d)
 
 
-def _in_date(m: re.Match, today: date) -> date:
+def _in_date(m: re.Match, today: date, sign: int = 1) -> date:
+    """«через 3 дня» — вперёд, «3 дня назад» (sign=-1) — назад."""
     raw = (m.group("n") or "1").lower()
-    n = int(raw) if raw.isdigit() else _NUM_WORDS[raw]
+    n = sign * (int(raw) if raw.isdigit() else _NUM_WORDS[raw])
     unit = m.group("u").lower()
     if unit.startswith("д"):
         return today + timedelta(days=n)
@@ -166,7 +175,7 @@ def split_number_lists(text: str) -> str:
 
 
 def annotate_dates(text: str, today: date) -> str:
-    def resolve(word: str) -> date:
+    def resolve(word: str, last: bool) -> date:
         w = word.lower()
         if w == "сегодня":
             return today
@@ -180,10 +189,15 @@ def annotate_dates(text: str, today: date) -> str:
             return today - timedelta(days=2)
         for idx, (_, pat) in enumerate(_WEEKDAY_STEMS):
             if re.fullmatch(pat, w):
+                if last:  # «в прошлый понедельник» — строго до сегодня
+                    return today - timedelta(days=(today.weekday() - idx) % 7 or 7)
                 return today + timedelta(days=(idx - today.weekday()) % 7)
         raise ValueError(word)
 
     text = _IN_RE.sub(lambda m: f"{m.group(0)} ({_in_date(m, today).isoformat()})", text)
+    text = _AGO_RE.sub(lambda m: f"{m.group(0)} ({_in_date(m, today, -1).isoformat()})", text)
+    last_monday = today - timedelta(days=today.weekday() + 7)
+    text = _LAST_WEEK_RE.sub(lambda m: f"{m.group(0)} ({last_monday.isoformat()})", text)
     text = _annotate_explicit(text, today)
 
     def rep(m: re.Match) -> str:
@@ -191,7 +205,8 @@ def annotate_dates(text: str, today: date) -> str:
         is_weekday = w.lower() not in ("сегодня", "завтра", "послезавтра", "вчера", "позавчера")
         if is_weekday and re.search(r"\(\d{4}-\d{2}-\d{2}\)", text[m.end():m.end() + 40]):
             return w  # «в воскресенье следующее 11.10» — явная дата важнее дня недели
-        return f"{w} ({resolve(w).isoformat()})"
+        last = is_weekday and bool(_LAST_RE.search(text[max(0, m.start() - 20):m.start()]))
+        return f"{w} ({resolve(w, last).isoformat()})"
 
     return _DATE_RE.sub(rep, text)
 
@@ -204,8 +219,9 @@ _TIME_RE = re.compile(
     re.IGNORECASE,
 )
 _BARE_TIME_RE = re.compile(
-    r"(?<![\w:.])(?:(?P<word>час)|(?P<h>\d{1,2})(?:\s+час(?:а|ов)?)?)\s+(?P<suf>утра|дня|вечера|ночи)"
-    r"(?!\w)(?!\s*\(\d{2}:\d{2}\))",
+    r"(?<![\w:.])(?<!за )(?<!на )(?<!через )"  # «за 3 дня», «на 3 дня», «через 3 дня» — дни, не 15:00
+    r"(?:(?P<word>час)|(?P<h>\d{1,2})(?:\s+час(?:а|ов)?)?)\s+(?P<suf>утра|дня|вечера|ночи)"
+    r"(?!\w)(?!\s+назад)(?!\s*\(\d{2}:\d{2}\))(?!\s*\(\d{4}-\d{2}-\d{2}\))",
     re.IGNORECASE,
 )
 _TIME_WORDS = {"полдень": (12, 0), "полночь": (0, 0)}

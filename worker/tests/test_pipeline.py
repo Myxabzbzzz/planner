@@ -659,3 +659,27 @@ def test_past_choice_keep_saves_as_is(ctx):
     p, store, tg = make(ctx, FakeExtractor())
     p.process(row(result={"pending_review": _past_pending(forced_kind="event")}))
     assert store.inserted[0][1]["starts_at"] == "2026-09-30T23:30:00+00:00"  # 01.10 04:30 Ташкент
+
+
+FUTURE_TAXI = item(kind="expense", title="Такси", source_text="10.10 (2026-10-10) такси 30 000", amount=30000,
+                   occurred_on=date(2026, 10, 10))
+
+
+def test_future_money_asks_instead_of_saving(ctx):
+    p, store, tg = make(ctx, FakeExtractor([FUTURE_TAXI], [FUTURE_TAXI]))
+    p.process(row(text="10.10 такси 30 000"))
+    assert store.inserted == []
+    _, status, result, _, _ = store.finished[-1]
+    assert status == "needs_review" and result["pending_review"][0]["reason"] == "future"
+    text, buttons = tg.sent[0][1], tg.sent[0][2]
+    assert text == "📅 10.10 ещё не наступило. Записать «Такси» на сегодня?"
+    assert buttons == [[{"text": "На сегодня", "callback_data": "rv:i1:0:expense"},
+                        {"text": "🗑 Пропустить", "callback_data": "rv:i1:0:drop"}]]
+
+
+def test_future_money_choice_saves_today(ctx):
+    p, store, tg = make(ctx, FakeExtractor())
+    pending = [{"item": FUTURE_TAXI.model_dump(mode="json"), "reason": "future", "laya": None, "forced_kind": "expense"}]
+    p.process(row(result={"pending_review": pending}))
+    assert store.inserted[0][0] == "transactions"
+    assert store.inserted[0][1]["occurred_at"] == "2026-10-01"

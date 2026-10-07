@@ -98,6 +98,13 @@ def review_message(inbox_id: str, idx: int, item: ExtractedItem, reason: str) ->
     return text, buttons
 
 
+def future_message(inbox_id: str, idx: int, item: ExtractedItem) -> tuple[str, list[list[dict]]]:
+    """Трата или доход с датой, которая ещё не наступила: записать на сегодня или пропустить."""
+    text = f"📅 {item.occurred_on:%d.%m} ещё не наступило. Записать «{item.title}» на сегодня?"
+    return text, [[{"text": "На сегодня", "callback_data": f"rv:{inbox_id}:{idx}:{item.kind}"},
+                   {"text": "🗑 Пропустить", "callback_data": f"rv:{inbox_id}:{idx}:drop"}]]
+
+
 TIME_CHOICES = ["0900", "1200", "1500", "1800", "2000"]
 
 

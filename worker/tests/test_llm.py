@@ -304,3 +304,35 @@ def test_messages_dotted_amount_list(ctx):
 def test_prompt_explains_occurred_on():
     from planner_worker.prompts import SYSTEM
     assert "occurred_on" in SYSTEM
+
+
+def test_annotate_dates_ago_and_last_week():
+    from datetime import date
+
+    from planner_worker.prompts import annotate_dates
+    t = date(2026, 10, 1)  # четверг
+    assert annotate_dates("3 дня назад такси", t) == "3 дня назад (2026-09-28) такси"
+    assert annotate_dates("два дня назад обед", t) == "два дня назад (2026-09-29) обед"
+    assert annotate_dates("неделю назад кино", t) == "неделю назад (2026-09-24) кино"
+    assert annotate_dates("месяц назад ремонт", t) == "месяц назад (2026-09-01) ремонт"
+    assert annotate_dates("на прошлой неделе продукты", t) == "на прошлой неделе (2026-09-21) продукты"
+    once = annotate_dates("3 дня назад такси", t)
+    assert annotate_dates(once, t) == once
+
+
+def test_annotate_dates_last_weekday():
+    from datetime import date
+
+    from planner_worker.prompts import annotate_dates
+    t = date(2026, 10, 1)  # четверг
+    assert annotate_dates("в прошлый понедельник такси", t) == "в прошлый понедельник (2026-09-28) такси"
+    assert annotate_dates("в прошлую среду обед", t) == "в прошлую среду (2026-09-30) обед"
+    assert annotate_dates("в прошлый четверг кино", t) == "в прошлый четверг (2026-09-24) кино"
+    assert annotate_dates("в понедельник созвон", t) == "в понедельник (2026-10-05) созвон"
+
+
+def test_annotate_times_skips_day_counts():
+    from planner_worker.prompts import annotate_times
+    for s in ["3 дня назад (2026-09-28) такси", "через 3 дня (2026-10-04) сдать", "за 3 дня потратил 500", "на 3 дня в Самарканд"]:
+        assert annotate_times(s) == s
+    assert annotate_times("в 3 дня встреча") == "в 3 дня (15:00) встреча"
