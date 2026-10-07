@@ -47,6 +47,8 @@ class RecTg implements Tg {
     this.edited.push({ messageId, text, buttons, opts });
   }
   async answerCallback(id: string, text?: string) { this.answered.push([id, text]); }
+  deleted: Array<[number, number]> = [];
+  async deleteMessage(chatId: number, messageId: number) { this.deleted.push([chatId, messageId]); }
 }
 
 function setup() {

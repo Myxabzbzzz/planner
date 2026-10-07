@@ -5,6 +5,7 @@ export interface Tg {
   sendMessage(chatId: number, text: string, buttons?: Button[][], opts?: SendOpts): Promise<{ message_id: number }>;
   editMessage(chatId: number, messageId: number, text: string, buttons?: Button[][], opts?: SendOpts): Promise<void>;
   answerCallback(id: string, text?: string): Promise<void>;
+  deleteMessage(chatId: number, messageId: number): Promise<void>;
 }
 
 export function telegramClient(token: string, fetchFn: typeof fetch = fetch): Tg {
@@ -38,6 +39,14 @@ export function telegramClient(token: string, fetchFn: typeof fetch = fetch): Tg
     },
     answerCallback: async (id, text) => {
       await call("answerCallbackQuery", { callback_query_id: id, ...(text ? { text } : {}) });
+    },
+    deleteMessage: async (chatId, messageId) => {
+      // Сообщение могли удалить руками или оно слишком старое — это не ошибка.
+      try {
+        await call("deleteMessage", { chat_id: chatId, message_id: messageId });
+      } catch {
+        // уже нет — и хорошо
+      }
     },
   };
 }

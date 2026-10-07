@@ -27,12 +27,23 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * Окна жизни initData. Раньше было одно на всё — сутки, и утёкшая строка давала
+ * сутки полного доступа, включая удаление. Теперь чтение живёт долго (миниапп
+ * могут не закрывать полдня), а всё, что меняет данные, требует свежей сессии.
+ */
+export const MAX_AGE_READ = 86_400;
+export const MAX_AGE_WRITE = 6 * 3600;
+export const MAX_AGE_SENSITIVE = 3600;
+
+export type Auth = { tgId: number; authDate: number };
+
 export async function verifyInitData(
   initData: string,
   botToken: string,
   nowSec: number,
-  maxAgeSec = 86400,
-): Promise<{ tgId: number } | null> {
+  maxAgeSec = MAX_AGE_READ,
+): Promise<Auth | null> {
   if (!initData || !botToken) return null;
   const params = new URLSearchParams(initData);
   const hash = params.get("hash");
@@ -42,7 +53,7 @@ export async function verifyInitData(
   if (!Number.isFinite(authDate) || authDate <= 0 || nowSec - authDate > maxAgeSec || authDate > nowSec + 300) return null;
   try {
     const user = JSON.parse(params.get("user") ?? "null");
-    return typeof user?.id === "number" ? { tgId: user.id } : null;
+    return typeof user?.id === "number" ? { tgId: user.id, authDate } : null;
   } catch {
     return null;
   }

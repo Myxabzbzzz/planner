@@ -118,7 +118,12 @@ export function tzChoice(): View {
   };
 }
 
-export function renderTapGuide(supabaseUrl: string, token: string): View {
+/**
+ * Инструкция без токена. Раньше `Bearer <64 hex>` печатался прямо здесь и
+ * оставался в истории чата навсегда — при том что текст сам предупреждал
+ * «токен как пароль». Теперь токен показывается отдельно и по кнопке.
+ */
+export function renderTapGuide(supabaseUrl: string): View {
   const url = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/capture`;
   const text = [
     "📲 <b>Двойной тап по задней крышке</b>",
@@ -127,13 +132,28 @@ export function renderTapGuide(supabaseUrl: string, token: string): View {
       "3. Добавь «Получить содержимое URL»:\n" +
       `   • URL: <code>${url}</code>\n` +
       "   • Метод: POST\n" +
-      `   • Заголовок Authorization: <code>Bearer ${token}</code>\n` +
+      "   • Заголовок Authorization: <code>Bearer …</code> — токен по кнопке ниже\n" +
       "   • Тело: JSON, поле <code>text</code> = «Продиктованный текст»\n" +
       "4. Добавь «Получить значение словаря» (ключ <code>message</code>) и «Показать уведомление».\n" +
       "5. Настройки → Универсальный доступ → Касание → Касание задней панели → Двойное касание → «Планер».",
-    "Токен — как пароль, никому его не показывай.",
+    "Проще всего не настраивать руками, а взять готовый файл команды — он придёт с уже вшитым токеном.",
   ].join("\n\n");
-  return { text, buttons: [[{ text: "🔄 Перевыпустить токен", callback_data: "tap:new" }]] };
+  return {
+    text,
+    buttons: [
+      [{ text: "🔑 Показать токен", callback_data: "tap:token" }],
+      [{ text: "🔄 Перевыпустить токен", callback_data: "tap:new" }],
+    ],
+  };
+}
+
+/** Токен отдельным сообщением, которое легко стереть одной кнопкой. */
+export function renderToken(token: string): View {
+  return {
+    text: `<code>Bearer ${token}</code>\n\nСкопируй в заголовок Authorization и удали это сообщение — ` +
+      "токен работает как пароль к твоему планеру.",
+    buttons: [[{ text: "🗑 Удалить сообщение", callback_data: "tap:hide" }]],
+  };
 }
 
 export function shortcutAck(online: boolean): View {

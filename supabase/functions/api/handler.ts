@@ -1,15 +1,35 @@
 import type { ApiDb, InboxInsert } from "./db.ts";
-import { verifyInitData } from "./initdata.ts";
+import { MAX_AGE_READ, MAX_AGE_SENSITIVE, MAX_AGE_WRITE, verifyInitData } from "./initdata.ts";
 
 export type ApiDeps = { db: ApiDb; botToken: string; nowSec: () => number; newId?: () => string };
 
-const CORS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "x-init-data, content-type",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
-};
-const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), { status, headers: { ...CORS, "content-type": "application/json; charset=utf-8" } });
+/**
+ * Origin миниаппа задаётся переменной MINIAPP_ORIGIN (через запятую, если их
+ * несколько). Пока она не задана, остаётся прежнее «*» — чтобы деплой не сломался,
+ * — но в docs/deploy.md это отмечено как то, что нужно выставить.
+ */
+const ALLOWED = (Deno.env.get("MINIAPP_ORIGIN") ?? "")
+  .split(",").map((o: string) => o.trim()).filter((o: string) => o !== "");
+
+function corsFor(req: Request): Record<string, string> {
+  const base = {
+    "access-control-allow-headers": "x-init-data, content-type",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-max-age": "600",
+    vary: "Origin",
+  };
+  if (ALLOWED.length === 0) return { ...base, "access-control-allow-origin": "*" };
+  const origin = req.headers.get("origin") ?? "";
+  return ALLOWED.includes(origin)
+    ? { ...base, "access-control-allow-origin": origin }
+    : base; // чужой origin — заголовка нет, браузер не отдаст ответ странице
+}
+
+const json = (status: number, body: unknown, cors: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, "content-type": "application/json; charset=utf-8" },
+  });
 
 const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -308,18 +328,41 @@ async function postInboxAudio(req: Request, userId: string, tgId: number, d: Api
   }
 }
 
+/** Операции, для которых мы требуем особенно свежую сессию. */
+const SENSITIVE = /\/delete$|^\/account\/|^\/settings\/currency$/;
+
+const maxAgeFor = (method: string, path: string) =>
+  method !== "POST" ? MAX_AGE_READ : SENSITIVE.test(path) ? MAX_AGE_SENSITIVE : MAX_AGE_WRITE;
+
+/** Один выход — один набор CORS-заголовков. */
+const withCors = (res: Response, cors: Record<string, string>) => {
+  for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
+  return res;
+};
+
 export async function handleApi(req: Request, d: ApiDeps): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  return withCors(await handle(req, d), cors);
+}
+
+async function handle(req: Request, d: ApiDeps): Promise<Response> {
   if (req.method !== "GET" && req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  const auth = await verifyInitData(req.headers.get("x-init-data") ?? "", d.botToken, d.nowSec());
-  if (!auth) return json(401, { error: "unauthorized" });
+  const url = new URL(req.url);
+  const path = url.pathname.replace(/^(?:\/functions\/v1)?\/api(?=\/|$)/, "") || "/";
+  const init = req.headers.get("x-init-data") ?? "";
+  const auth = await verifyInitData(init, d.botToken, d.nowSec(), maxAgeFor(req.method, path));
+  if (!auth) {
+    // Подпись верна, но сессия устарела для этого действия — это не «чужой»,
+    // и клиенту стоит сказать именно «переоткрой», а не «нет доступа».
+    const stale = await verifyInitData(init, d.botToken, d.nowSec(), MAX_AGE_READ);
+    return json(401, { error: stale ? "stale_session" : "unauthorized" });
+  }
 
   try {
     const user = await d.db.userByTg(auth.tgId);
     if (!user || !user.is_allowed || !user.onboarded_at) return json(403, { error: "forbidden" });
-    const url = new URL(req.url);
-    const path = url.pathname.replace(/^(?:\/functions\/v1)?\/api(?=\/|$)/, "") || "/";
     if (req.method === "POST" && path === "/inbox") return await postInboxText(req, user.id, auth.tgId, d.db);
     if (req.method === "POST" && path === "/inbox/audio") return await postInboxAudio(req, user.id, auth.tgId, d);
     if (req.method === "POST") {

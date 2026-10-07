@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Api } from "../api";
 import { fmtAmount, fmtDayTitle, fmtNumber, fmtRateNote } from "../format";
 import { buildPatch, editableAmount } from "../opEdit";
+import { saveError } from "../saveError";
 import { confirmDialog, hapticResult } from "../telegram";
 import type { Categories, Operation } from "../types";
 import { Sheet } from "./Sheet";
@@ -34,9 +35,9 @@ export function OpSheet({ api, op, base, onClose, onSaved }: {
       await action();
       hapticResult(true);
       onSaved();
-    } catch {
+    } catch (e) {
       hapticResult(false);
-      setError("Не удалось сохранить. Попробуй ещё раз.");
+      setError(saveError(e));
       setBusy(false);
     }
   }

@@ -3,7 +3,7 @@ import type { User } from "./db.ts";
 import type { MenuDb } from "./menu_db.ts";
 import { type MenuKey, TZ_OPTIONS } from "./keyboard.ts";
 import {
-  fmtAmount, renderHabits, renderMoney, renderNotify, renderSettings, renderTapGuide, renderTasks, renderToday, shortcutAck, tzChoice, type View,
+  fmtAmount, renderHabits, renderMoney, renderNotify, renderSettings, renderTapGuide, renderTasks, renderToday, renderToken, shortcutAck, tzChoice, type View,
 } from "./views.ts";
 
 export type MenuDeps = { menu: MenuDb; tg: Tg; supabaseUrl: string; miniappUrl?: string };
@@ -148,10 +148,21 @@ export async function handleMenuCallback(user: User, cq: any, action: string, re
         await edit(v);
         return true;
       }
-      if (rest[0] === "manual") {
+      if (rest[0] === "token") {
         await d.tg.answerCallback(cq.id);
         const s = await d.menu.settings(user.id);
-        const v = renderTapGuide(d.supabaseUrl, s.capture_token);
+        const v = renderToken(s.capture_token);
+        await d.tg.sendMessage(chatId, v.text, v.buttons, { html: true });
+        return true;
+      }
+      if (rest[0] === "hide") {
+        await d.tg.answerCallback(cq.id, "Убрал");
+        await d.tg.deleteMessage(chatId, messageId);
+        return true;
+      }
+      if (rest[0] === "manual") {
+        await d.tg.answerCallback(cq.id);
+        const v = renderTapGuide(d.supabaseUrl);
         await d.tg.sendMessage(chatId, v.text, v.buttons, { html: true });
         return true;
       }

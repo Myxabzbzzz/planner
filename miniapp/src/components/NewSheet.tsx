@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ApiError, type Api } from "../api";
+import type { Api } from "../api";
 import { fmtAmount, todayIso } from "../format";
 import {
   buildNewEvent, buildNewHabit, buildNewNote, buildNewTask, buildNewTransaction,
 } from "../newItem";
 import type { NoteKind } from "../itemEdit";
+import { saveError } from "../saveError";
 import { hapticResult } from "../telegram";
 import type { Categories } from "../types";
 import { KINDS, TARGETS, targetLabel } from "./ItemSheets";
@@ -103,11 +104,7 @@ export function NewSheet({ api, tz, currency, kind, onClose, onSaved }: {
       onSaved(pick);
     } catch (e) {
       hapticResult(false);
-      setError(
-        e instanceof ApiError && e.status === 400
-          ? "Проверь поля — что-то не подходит."
-          : "Не удалось сохранить. Попробуй ещё раз.",
-      );
+      setError(saveError(e));
       setBusy(false);
     }
   }

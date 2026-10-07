@@ -386,3 +386,36 @@ Deno.test("habit day, unarchive, limit and notify post routes", async () => {
     [["api_set_notify", ["u1", "daily", false]]]);
   assertEquals((await run(await req("/settings/notify", { method: "POST", body: { kind: "nope", on: false } }))).status, 400);
 });
+
+// ——— План 8: окно жизни initData и CORS ———
+
+Deno.test("мутации требуют более свежей сессии, чем чтение", async () => {
+  const old = async (ageSec: number) =>
+    await signInitData({ auth_date: String(NOW - ageSec), user: JSON.stringify({ id: 7 }) }, TOKEN);
+
+  // 12 часов: читать можно
+  assertEquals((await run(await req("/today", { init: await old(12 * 3600) }))).status, 200);
+  // ...а писать уже нет — и это «сессия устарела», а не «кто ты такой»
+  const stale = await run(await req("/tasks", { method: "POST", body: { title: "x" }, init: await old(12 * 3600) }));
+  assertEquals([stale.status, stale.body], [401, { error: "stale_session" }]);
+
+  // 2 часа: обычная запись проходит
+  assertEquals((await run(await req("/tasks", { method: "POST", body: { title: "x" }, init: await old(2 * 3600) }))).status, 201);
+  // ...а удаление требует совсем свежей
+  const id = "3f2c1a2b-1111-2222-3333-444455556666";
+  const del = await run(await req(`/tasks/${id}/delete`, { method: "POST", body: {}, init: await old(2 * 3600) }));
+  assertEquals([del.status, del.body], [401, { error: "stale_session" }]);
+  assertEquals((await run(await req(`/tasks/${id}/delete`, { method: "POST", body: {}, init: await old(60) }))).status, 200);
+});
+
+Deno.test("просроченная совсем и подделанная подпись — разные ответы", async () => {
+  const ancient = await signInitData({ auth_date: String(NOW - 40 * 86400), user: JSON.stringify({ id: 7 }) }, TOKEN);
+  assertEquals((await run(await req("/today", { init: ancient }))).body, { error: "unauthorized" });
+  assertEquals((await run(await req("/today", { init: "auth_date=1&hash=00" }))).body, { error: "unauthorized" });
+});
+
+Deno.test("CORS-заголовки есть на обычных ответах, не только на preflight", async () => {
+  const r = await run(await req("/today"));
+  assertEquals(r.cors, "*"); // MINIAPP_ORIGIN не задан — прежнее поведение
+  assertEquals((await run(await req("/nope"))).cors, "*");
+});

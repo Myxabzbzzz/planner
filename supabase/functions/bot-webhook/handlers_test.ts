@@ -96,6 +96,8 @@ class FakeTg implements Tg {
   }
   async editMessage(chatId: number, messageId: number, text: string) { this.edited.push({ chatId, messageId, text }); }
   async answerCallback(id: string) { this.answered.push(id); }
+  deleted: Array<[number, number]> = [];
+  async deleteMessage(chatId: number, messageId: number) { this.deleted.push([chatId, messageId]); }
 }
 
 function setup() {

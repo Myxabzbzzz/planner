@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
-import { ApiError, type Api } from "../api";
+import type { Api } from "../api";
 import { buildEventPatch, buildHabitPatch, buildNotePatch, buildTaskPatch, splitDue, type NoteKind } from "../itemEdit";
+import { saveError } from "../saveError";
 import { confirmDialog, hapticResult } from "../telegram";
 import { Sheet } from "./Sheet";
 
@@ -18,11 +19,7 @@ function useRun(onSaved: () => void) {
       onSaved();
     } catch (e) {
       hapticResult(false);
-      setError(
-        e instanceof ApiError && e.status === 400
-          ? "Проверь поля — что-то не подходит."
-          : "Не удалось сохранить. Попробуй ещё раз.",
-      );
+      setError(saveError(e));
       setBusy(false);
     }
   }

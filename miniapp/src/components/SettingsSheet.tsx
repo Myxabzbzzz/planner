@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Api } from "../api";
 import { fmtAmount, fmtNumber } from "../format";
 import { parseAmount } from "../opEdit";
+import { saveError } from "../saveError";
 import { hapticResult } from "../telegram";
 import type { NotifyKind, Settings } from "../types";
 import { Sheet } from "./Sheet";
@@ -42,9 +43,9 @@ export function SettingsSheet({ api, settings, onClose, onChanged }: {
       hapticResult(true);
       onChanged(next);
       setSaved(true);
-    } catch {
+    } catch (e) {
       hapticResult(false);
-      setError("Не удалось сохранить. Попробуй ещё раз.");
+      setError(saveError(e));
     } finally {
       setBusy(false);
     }

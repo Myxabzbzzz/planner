@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
-  fmtAmount, fmtNumber, renderHabits, renderMoney, renderNotify, renderSettings, renderTapGuide, renderTasks, renderToday, tzChoice,
+  fmtAmount, fmtNumber, renderHabits, renderMoney, renderNotify, renderSettings, renderTapGuide, renderTasks, renderToday, renderToken, tzChoice,
 } from "./views.ts";
 import { MENU_ROWS, menuKey } from "./keyboard.ts";
 
@@ -132,12 +132,20 @@ Deno.test("renderSettings and tzChoice", () => {
     ["tz:tashkent", "tz:moscow", "tz:almaty", "tz:kyiv", "tz:dubai", "tz:berlin"]);
 });
 
-Deno.test("renderTapGuide contains url, token and rotate button", () => {
-  const tok = "a".repeat(64);
-  const v = renderTapGuide("https://x.supabase.co", tok);
-  assert(v.text.includes("<code>https://x.supabase.co/functions/v1/capture</code>"));
-  assert(v.text.includes(`<code>Bearer ${tok}</code>`));
-  assertEquals(v.buttons, [[{ text: "🔄 Перевыпустить токен", callback_data: "tap:new" }]]);
+Deno.test("инструкция больше не печатает токен, он прячется за кнопкой", () => {
+  const v = renderTapGuide("https://x.supabase.co");
+  assertStringIncludes(v.text, "https://x.supabase.co/functions/v1/capture");
+  // токена в истории чата быть не должно
+  assertEquals(/[0-9a-f]{64}/.test(v.text), false);
+  const codes = (v.buttons ?? []).flat().map((b) => b.callback_data);
+  assertEquals(codes, ["tap:token", "tap:new"]);
+});
+
+Deno.test("отдельное сообщение с токеном можно стереть одной кнопкой", () => {
+  const tok = "b".repeat(64);
+  const v = renderToken(tok);
+  assertStringIncludes(v.text, tok);
+  assertEquals((v.buttons ?? []).flat().map((b) => b.callback_data), ["tap:hide"]);
 });
 
 Deno.test("renderToday shows overflow of tasks", () => {
