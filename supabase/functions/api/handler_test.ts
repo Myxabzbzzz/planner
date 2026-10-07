@@ -419,3 +419,15 @@ Deno.test("CORS-заголовки есть на обычных ответах, 
   assertEquals(r.cors, "*"); // MINIAPP_ORIGIN не задан — прежнее поведение
   assertEquals((await run(await req("/nope"))).cors, "*");
 });
+
+Deno.test("выгрузка всех данных тоже требует свежей сессии, хоть это и GET", async () => {
+  const twoHours = await signInitData(
+    { auth_date: String(NOW - 2 * 3600), user: JSON.stringify({ id: 7 }) },
+    TOKEN,
+  );
+  const fresh = await signInitData({ auth_date: String(NOW - 60), user: JSON.stringify({ id: 7 }) }, TOKEN);
+  assertEquals((await run(await req("/account/export", { init: twoHours }))).body, { error: "stale_session" });
+  assertEquals((await run(await req("/account/export", { init: fresh }))).db.calls, [["export_data", ["u1"]]]);
+  // обычное чтение двухчасовой давности по-прежнему работает
+  assertEquals((await run(await req("/today", { init: twoHours }))).status, 200);
+});

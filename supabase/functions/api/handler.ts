@@ -404,8 +404,10 @@ async function postInboxAudio(req: Request, userId: string, tgId: number, d: Api
 /** Операции, для которых мы требуем особенно свежую сессию. */
 const SENSITIVE = /\/delete$|^\/account\/|^\/settings\/currency$/;
 
+// Сначала смотрим на путь, потом на метод: /account/export — это GET,
+// но он выгружает вообще всё, поэтому ему тоже нужна свежая сессия.
 const maxAgeFor = (method: string, path: string) =>
-  method !== "POST" ? MAX_AGE_READ : SENSITIVE.test(path) ? MAX_AGE_SENSITIVE : MAX_AGE_WRITE;
+  SENSITIVE.test(path) ? MAX_AGE_SENSITIVE : method !== "POST" ? MAX_AGE_READ : MAX_AGE_WRITE;
 
 /** Один выход — один набор CORS-заголовков. */
 const withCors = (res: Response, cors: Record<string, string>) => {
