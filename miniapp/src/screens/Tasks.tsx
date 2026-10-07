@@ -16,7 +16,7 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "nodue", label: "Без срока" }, { key: "done", label: "Готово" },
 ];
 const EMPTY: Record<Filter, string> = {
-  today: "На сегодня задач нет 🎉", upcoming: "Задач со сроком впереди нет",
+  today: "На сегодня задач нет", upcoming: "Задач со сроком впереди нет",
   nodue: "Задач без срока нет", done: "Выполненных пока нет",
 };
 

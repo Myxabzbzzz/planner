@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Api } from "../api";
 import { Bars } from "../components/Bars";
 import { Donut } from "../components/Donut";
+import { IconChevron } from "../components/Icons";
 import { OpSheet } from "../components/OpSheet";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { barHeights, donutSlices } from "../charts";
@@ -25,10 +26,10 @@ export function Money({ api, me, refresh = 0 }: { api: Api; me: Me; refresh?: nu
 
   const header = (
     <div className="month-switch">
-      <button onClick={() => go(-1)} aria-label="Предыдущий месяц">‹</button>
+      <button onClick={() => go(-1)} aria-label="Предыдущий месяц"><IconChevron dir="left" /></button>
       <h2>{monthTitle(month)}</h2>
       <button onClick={() => go(1)} disabled={month >= thisMonth} style={{ opacity: month >= thisMonth ? 0.3 : 1 }}
-        aria-label="Следующий месяц">›</button>
+        aria-label="Следующий месяц"><IconChevron dir="right" /></button>
     </div>
   );
   if (loading && !data) return <>{header}<Loading /></>;
@@ -42,7 +43,7 @@ export function Money({ api, me, refresh = 0 }: { api: Api; me: Me; refresh?: nu
   return (
     <>
       {header}
-      <Card>
+      <Card className="hero">
         <h3>Расходы</h3>
         <div className="big-number">{fmtAmount(data.expense, cur)}</div>
         <div className="sub">
@@ -89,7 +90,7 @@ export function Money({ api, me, refresh = 0 }: { api: Api; me: Me; refresh?: nu
                         {o.orig && ` · ${fmtRateNote(o.orig, cur)}`}
                       </div>
                     </div>
-                    <span className={o.type === "income" ? "income" : ""}>
+                    <span className={o.type === "income" ? "op-amount income" : "op-amount"}>
                       {o.type === "income" ? "+" : "−"}{fmtAmount(o.amount, cur)}
                     </span>
                   </button>

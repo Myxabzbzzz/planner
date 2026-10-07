@@ -3,6 +3,7 @@ import type { Api } from "../api";
 import { fmtAmount, fmtDayTitle, fmtRateNote, fmtNumber } from "../format";
 import { buildPatch, editableAmount } from "../opEdit";
 import { confirmDialog, hapticResult } from "../telegram";
+import { IconClose } from "./Icons";
 import type { Categories, Operation } from "../types";
 
 type Props = { api: Api; op: Operation; base: string; onClose: () => void; onSaved: () => void };
@@ -53,8 +54,11 @@ export function OpSheet({ api, op, base, onClose, onSaved }: Props) {
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet" role="dialog" aria-label="Операция" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
-          <span className="sub">{fmtDayTitle(op.date)} · {op.type === "income" ? "доход" : "расход"}</span>
-          <button type="button" className="sheet-close" onClick={onClose} disabled={busy} aria-label="Закрыть">✕</button>
+          <div>
+            <div className="sheet-title">{op.type === "income" ? "Доход" : "Расход"}</div>
+            <div className="sheet-kicker">{fmtDayTitle(op.date)}</div>
+          </div>
+          <button type="button" className="sheet-close" onClick={onClose} disabled={busy} aria-label="Закрыть"><IconClose /></button>
         </div>
 
         <label className="field">

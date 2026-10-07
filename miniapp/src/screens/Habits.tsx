@@ -24,11 +24,13 @@ export function Habits({ api, refresh = 0 }: { api: Api; refresh?: number }) {
         const d = v.done;
         return (
         <Card key={h.id}>
-          <div className="row" style={{ paddingTop: 0 }}>
+          <div className="habit-head">
             <Check done={d} label="Привычка выполнена сегодня"
               onToggle={() => void toggle(h.id, d, (x) => api.setHabitToday(h.id, x))} />
-            <button type="button" className="grow tap" onClick={() => setEditing(h)}><b>{h.name}</b></button>
-            <span className="right">{v.streak > 0 ? `🔥 ${v.streak} дн.` : "серии нет"}</span>
+            <button type="button" className="habit-name tap ellipsis" onClick={() => setEditing(h)}>{h.name}</button>
+            {v.streak > 0
+              ? <span className="streak"><b>{v.streak}</b><span>дн. подряд</span></span>
+              : <span className="streak none"><span>серии нет</span></span>}
           </div>
           <HabitGrid days={v.days} />
           <div className="sub">{d ? "Сегодня отмечено ✓" : "Сегодня ещё не отмечено"}</div>

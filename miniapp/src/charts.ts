@@ -1,6 +1,8 @@
 import type { HabitDay } from "./types";
 
-export const PALETTE = ["#5B8DEF", "#F2994A", "#27AE60", "#EB5757", "#9B51E0", "#F2C94C", "#2D9CDB", "#BB6BD9", "#6FCF97"];
+// BEAR PLANNER categorical order: honey, russet, steel, olive, rosewood, verdigris, caramel, heather.
+// Validated for the dark surface #1E1712 (dataviz validate_palette.js: L band, chroma, CVD ΔE ≥ 11, normal ΔE ≥ 17, ≥ 3:1).
+export const PALETTE = ["#B88B35", "#A44A32", "#4786B9", "#849245", "#99516F", "#36A697", "#B7743D", "#846CAE"];
 
 export type Slice = { name: string; amount: number; share: number; offset: number; color: string };
 

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { makeApi } from "./api";
+import { BearMark, Wordmark } from "./components/Brand";
 import { Composer } from "./components/Composer";
 import { IconHabits, IconMoney, IconNotes, IconTasks, IconToday } from "./components/Icons";
 import { FullScreenMessage, Loading } from "./components/States";
@@ -12,6 +13,11 @@ import { Tasks } from "./screens/Tasks";
 import { Today } from "./screens/Today";
 import { screenForState } from "./state";
 import { tg } from "./telegram";
+import { DEV_BASE, devFetch } from "./devMock";
+
+// Dev-only: outside Telegram there is no initData, so a plain browser gets a fake backend.
+// `import.meta.env.DEV` is false in production builds, so this branch and the mock are dropped.
+const DEV_MOCK = import.meta.env.DEV && !tg?.initData;
 
 const TABS = [
   { key: "today", label: "Сегодня", icon: <IconToday /> },
@@ -22,8 +28,9 @@ const TABS = [
 ];
 
 export default function App() {
-  const initData = tg?.initData ?? "";
-  const api = useMemo(() => makeApi(import.meta.env.VITE_API_URL ?? "", initData), [initData]);
+  const initData = DEV_MOCK ? "dev" : tg?.initData ?? "";
+  const api = useMemo(() => (DEV_MOCK ? makeApi(DEV_BASE, initData, devFetch)
+    : makeApi(import.meta.env.VITE_API_URL ?? "", initData)), [initData]);
   const me = useLoad(() => (initData ? api.me() : Promise.resolve(null)), [api]);
   const [tab, setTab] = useState("today");
   const [refresh, setRefresh] = useState(0);
@@ -38,6 +45,12 @@ export default function App() {
   return (
     <>
       <main className="page">
+        {tab === "today" && (
+          <header className="masthead">
+            <BearMark size={40} />
+            <Wordmark />
+          </header>
+        )}
         <h1>{TABS.find((t) => t.key === tab)!.label}</h1>
         {tab === "today" && <Today api={api} me={me.data} refresh={refresh} />}
         {tab === "tasks" && <Tasks api={api} me={me.data} refresh={refresh} />}

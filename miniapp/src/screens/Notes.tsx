@@ -39,8 +39,11 @@ export function Notes({ api, refresh = 0 }: { api: Api; refresh?: number }) {
             {notes.map((n) => (
               <button type="button" key={n.id} className="op-row" onClick={() => setEditing(n)}>
                 <Card>
-                  <div className="note-meta">{n.kind === "journal" ? "📔 Дневник" : "💡 Мысль"} · {fmtShortDate(n.created_at)} {fmtTime(n.created_at)}</div>
-                  <div className="note-text">{n.text}</div>
+                  <div className="note-meta">
+                    <span className={`kind ${n.kind}`}>{n.kind === "journal" ? "Дневник" : "Мысль"}</span>
+                    <span>{fmtShortDate(n.created_at)}, {fmtTime(n.created_at)}</span>
+                  </div>
+                  <div className={`note-text ${n.kind}`}>{n.text}</div>
                 </Card>
               </button>
             ))}

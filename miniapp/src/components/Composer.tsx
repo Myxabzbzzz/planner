@@ -5,6 +5,7 @@ import { fmtSeconds, MAX_BYTES, micSupported } from "../recorder";
 import { hapticResult, tg } from "../telegram";
 import type { Sent } from "../types";
 import { useRecorder } from "../useRecorder";
+import { IconClose, IconMic, IconSend, IconStop } from "./Icons";
 
 export function Composer({ api, onDone }: { api: Api; onDone: () => void }) {
   const [text, setText] = useState("");
@@ -80,10 +81,10 @@ export function Composer({ api, onDone }: { api: Api; onDone: () => void }) {
       )}
       {recorder.state === "recording" ? (
         <div className="composer-row">
-          <button type="button" className="composer-btn ghost" onClick={() => recorder.stop(false)} aria-label="Отменить">✕</button>
+          <button type="button" className="composer-btn ghost" onClick={() => recorder.stop(false)} aria-label="Отменить"><IconClose /></button>
           <span className="rec-dot" />
           <span className="grow">{fmtSeconds(recorder.seconds)} / 1:00</span>
-          <button type="button" className="composer-btn" onClick={() => recorder.stop(true)} aria-label="Отправить запись">■</button>
+          <button type="button" className="composer-btn" onClick={() => recorder.stop(true)} aria-label="Отправить запись"><IconStop /></button>
         </div>
       ) : (
         <form className="composer-row" onSubmit={(e) => { e.preventDefault(); submitText(); }}>
@@ -91,9 +92,9 @@ export function Composer({ api, onDone }: { api: Api; onDone: () => void }) {
             placeholder={showMic ? "Запиши или спроси…" : "Напиши или спроси (голосом — в чате бота)"}
             onChange={(e) => setText(e.target.value)} disabled={busy} />
           {text.trim() !== "" ? (
-            <button type="submit" className="composer-btn" disabled={busy || !validText(text)} aria-label="Отправить">↑</button>
+            <button type="submit" className="composer-btn" disabled={busy || !validText(text)} aria-label="Отправить"><IconSend /></button>
           ) : showMic && (
-            <button type="button" className="composer-btn ghost" disabled={busy} onClick={() => void recorder.start()} aria-label="Записать голос">🎤</button>
+            <button type="button" className="composer-btn" disabled={busy} onClick={() => void recorder.start()} aria-label="Записать голос"><IconMic /></button>
           )}
         </form>
       )}

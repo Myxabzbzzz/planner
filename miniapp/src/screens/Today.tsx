@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Api } from "../api";
 import { Check } from "../components/Check";
+import { IconTick } from "../components/Icons";
 import { EventSheet, TaskSheet } from "../components/ItemSheets";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { fmtAmount, fmtDayTitle, todayIso } from "../format";
@@ -25,8 +26,8 @@ export function Today({ api, me, refresh = 0 }: { api: Api; me: Me; refresh?: nu
   const used = data.limit ? Math.min(1, data.month_spent / data.limit) : 0;
   return (
     <>
-      <p className="sub">{fmtDayTitle(todayIso(me.tz))}</p>
-      <Card>
+      <p className="dateline">{fmtDayTitle(todayIso(me.tz))}</p>
+      <Card className="hero">
         <h3>Потрачено сегодня</h3>
         <div className="big-number">{fmtAmount(data.spent_today, cur)}</div>
         {data.limit !== null && (
@@ -86,7 +87,8 @@ export function Today({ api, me, refresh = 0 }: { api: Api; me: Me; refresh?: nu
             const d = over[k] ?? h.done;
             return (
               <button type="button" key={h.id} className={d ? "pill done" : "pill"} aria-pressed={d}
-                onClick={() => void toggle(k, d, (v) => api.setHabitToday(h.id, v))}>{d ? "✓" : "○"} {h.name}</button>
+                onClick={() => void toggle(k, d, (v) => api.setHabitToday(h.id, v))}>
+                <span className="pill-mark">{d && <IconTick />}</span>{h.name}</button>
             );
           })}
         </Card>

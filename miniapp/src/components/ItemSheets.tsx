@@ -3,6 +3,7 @@ import type { Api } from "../api";
 import { buildEventPatch, buildHabitPatch, buildNotePatch, buildTaskPatch, splitDue, type NoteKind } from "../itemEdit";
 import { ApiError } from "../api";
 import { confirmDialog, hapticResult } from "../telegram";
+import { IconClose } from "./Icons";
 
 type Base<T> = { api: Api; item: T; onClose: () => void; onSaved: () => void };
 
@@ -33,8 +34,8 @@ function Frame({ title, busy, error, invalid, canSave, onSave, removeLabel, onRe
     <div className="sheet-backdrop" onClick={busy ? undefined : onClose}>
       <div className="sheet" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
-          <span className="sub">{title}</span>
-          <button type="button" className="sheet-close" onClick={onClose} disabled={busy} aria-label="Закрыть">✕</button>
+          <span className="sheet-title">{title}</span>
+          <button type="button" className="sheet-close" onClick={onClose} disabled={busy} aria-label="Закрыть"><IconClose /></button>
         </div>
         {children}
         {invalid && <div className="danger sub">Проверь поля.</div>}
@@ -98,7 +99,7 @@ export function EventSheet({ api, item, onClose, onSaved }:
   );
 }
 
-const KINDS: { key: NoteKind; label: string }[] = [{ key: "thought", label: "💡 Мысль" }, { key: "journal", label: "📔 Дневник" }];
+const KINDS: { key: NoteKind; label: string }[] = [{ key: "thought", label: "Мысль" }, { key: "journal", label: "Дневник" }];
 
 export function NoteSheet({ api, item, onClose, onSaved }: Base<{ id: string; text: string; kind: NoteKind }>) {
   const [text, setText] = useState(item.text);
