@@ -115,3 +115,18 @@ def test_other_errors_keep_the_traceback(caplog):
     caplog.set_level(logging.INFO, logger="planner_worker")
     m.tick(Store(claim_error=True), None, None, CFG, time.monotonic())
     assert any(r.levelno == logging.ERROR and r.exc_info for r in caplog.records)
+
+
+def test_finished_message_is_logged_with_duration(monkeypatch, caplog):
+    import logging
+    from planner_worker.schemas import InboxRow
+    row = InboxRow(id="i1", user_id="u1", source="text", text="кофе", audio_ref=None, attempts=1)
+
+    class OneRow(Store):
+        def claim(self):
+            return row
+
+    monkeypatch.setattr(m, "run_one", lambda *a: None)
+    caplog.set_level(logging.INFO)
+    m.tick(OneRow(), None, None, CFG, last_beat=time.monotonic())
+    assert "finished i1 in" in caplog.text

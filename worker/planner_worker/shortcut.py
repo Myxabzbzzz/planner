@@ -59,6 +59,10 @@ def build_shortcut(supabase_url: str, token: str) -> bytes:
     return plistlib.dumps(workflow, fmt=plistlib.FMT_BINARY)
 
 
+class ShortcutSignError(RuntimeError):
+    """Текст — наш и вывод `shortcuts`, токена в нём нет: его можно логировать целиком."""
+
+
 class ShortcutSigner:
     def __init__(self, run=subprocess.run):
         self.run = run
@@ -67,4 +71,5 @@ class ShortcutSigner:
         r = self.run(["/usr/bin/shortcuts", "sign", "--mode", "anyone", "--input", str(unsigned),
                       "--output", str(signed)], capture_output=True, timeout=120)
         if r.returncode != 0 or not signed.exists():
-            raise RuntimeError(f"shortcuts sign failed ({r.returncode})")
+            why = (getattr(r, "stderr", None) or b"").decode(errors="replace").strip().splitlines()
+            raise ShortcutSignError(f"shortcuts sign failed ({r.returncode}): {why[-1][:200] if why else 'no output'}")

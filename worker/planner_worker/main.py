@@ -56,7 +56,9 @@ def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None) -> float:
             time.sleep(cfg.poll_interval)
             return last_beat
         log.info("processing %s (%s, attempt %s)", row.id, row.source, row.attempts)
+        started = time.monotonic()
         run_one(row, pipeline, store, tg)
+        log.info("finished %s in %.1fs", row.id, time.monotonic() - started)
     except Exception:
         _log_failure("loop error")
         time.sleep(cfg.poll_interval)

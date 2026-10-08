@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 from planner_worker.jobs import CAPTION, FAILED_TEXT, MANUAL_BUTTONS, cleanup_tmp, run_job
+from planner_worker.shortcut import ShortcutSignError
 
 TOKEN = "f" * 64
 
@@ -51,7 +52,7 @@ def test_success_sends_signed_file_and_cleans_up(tmp_path):
     assert (chat, name, caption) == (777, "Планер.shortcut", CAPTION)
     assert data.startswith(b"SIGNED:")
     assert store.finished == [("j1", "done", None)]
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.glob("*.shortcut")) == []  # временных файлов с токеном не остаётся
 
 
 def test_sign_failure_retries_then_fails_with_manual_hint(tmp_path):
@@ -73,8 +74,9 @@ def test_token_never_logged_or_stored(tmp_path, caplog):
 
 
 def test_run_job_returns_bool(tmp_path):
-    assert run_job(job(), Store(), Tg(), Signer(), "https://x", tmp_path) is True
-    assert run_job(job(), Store(), Tg(), Signer(fail=True), "https://x", tmp_path) is False
+    assert run_job(job(), Store(), Tg(), Signer(), "https://x", tmp_path / "ok") is True
+    # отдельная папка: в общей второй вызов взял бы файл из кэша и до подписи не дошёл
+    assert run_job(job(), Store(), Tg(), Signer(fail=True), "https://x", tmp_path / "fail") is False
 
 
 def test_failing_finish_job_does_not_escape_or_leak(tmp_path, caplog):
@@ -95,3 +97,45 @@ def test_cleanup_tmp_removes_leftover_shortcuts(tmp_path):
     assert cleanup_tmp(tmp_path) == 2
     assert [p.name for p in tmp_path.iterdir()] == ["keep.txt"]
     assert cleanup_tmp(tmp_path / "missing") == 0
+
+
+class CountingSigner(Signer):
+    def __init__(self):
+        super().__init__()
+        self.calls = 0
+
+    def sign(self, unsigned, signed):
+        self.calls += 1
+        super().sign(unsigned, signed)
+
+
+def test_second_request_is_served_from_cache_without_signing(tmp_path):
+    signer, tg = CountingSigner(), Tg()
+    assert run_job(job(), Store(), tg, signer, "https://x.supabase.co", tmp_path)
+    assert run_job({**job(), "id": "j2"}, Store(), tg, signer, "https://x.supabase.co", tmp_path)
+    assert signer.calls == 1
+    assert len(tg.docs) == 2 and tg.docs[0][2] == tg.docs[1][2]
+
+
+def test_cache_files_do_not_carry_the_token_in_their_name_and_are_private(tmp_path):
+    run_job(job(), Store(), Tg(), Signer(), "https://x.supabase.co", tmp_path)
+    cached = list((tmp_path / "cache").iterdir())
+    assert len(cached) == 1
+    assert TOKEN not in cached[0].name
+    assert cached[0].stat().st_mode & 0o077 == 0
+    assert cleanup_tmp(tmp_path) == 0  # уборка временных файлов кэш не трогает
+
+
+def test_sign_failure_logs_the_reason(tmp_path, caplog):
+    class Failing:
+        def sign(self, unsigned, signed):
+            raise ShortcutSignError("shortcuts sign failed (1): network unavailable")
+    caplog.set_level(logging.WARNING)
+    run_job(job(), Store(), Tg(), Failing(), "https://x.supabase.co", tmp_path)
+    assert "network unavailable" in caplog.text and TOKEN not in caplog.text
+
+
+def test_done_is_logged_with_duration(tmp_path, caplog):
+    caplog.set_level(logging.INFO)
+    run_job(job(), Store(), Tg(), Signer(), "https://x.supabase.co", tmp_path)
+    assert "job j1 done in" in caplog.text and "signed" in caplog.text
