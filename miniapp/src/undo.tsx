@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { hapticResult, tap } from "./telegram";
+import { nextOffer, runUndos, type Offer } from "./undoQueue";
 
 /**
  * Отмена удаления.
@@ -13,8 +14,6 @@ import { hapticResult, tap } from "./telegram";
  * двойная работа. Опасное действие теперь обратимо, а не защищено вопросом.
  */
 export const UNDO_MS = 8000;
-
-type Offer = { id: number; text: string; undo: () => Promise<unknown> };
 
 type UndoApi = {
   /** Показать «Отменить» после удаления. `undo` должен вернуть запись обратно. */
@@ -35,7 +34,8 @@ export function UndoProvider({ onRestored, children }: { onRestored: () => void;
   const api: UndoApi = {
     offer: useCallback((text, undo) => {
       seq.current += 1;
-      setOffer({ id: seq.current, text, undo });
+      const id = seq.current;
+      setOffer((prev) => nextOffer(prev, id, text, undo));
     }, []),
   };
 
@@ -50,13 +50,16 @@ export function UndoProvider({ onRestored, children }: { onRestored: () => void;
     tap();
     setBusy(true);
     try {
-      await offer.undo();
-      hapticResult(true);
-      setOffer(null);
-      restored.current();
-    } catch {
-      hapticResult(false);
-      // Оставляем полоску на месте: вернуть запись можно попробовать ещё раз.
+      const left = await runUndos(offer.undos);
+      if (left.length < offer.undos.length) restored.current();
+      if (left.length === 0) {
+        hapticResult(true);
+        setOffer(null);
+      } else {
+        hapticResult(false);
+        // Оставляем полоску только для того, что не вернулось: можно попробовать ещё раз.
+        setOffer({ ...offer, undos: left, text: `Не вернул: ${left.length}. Ещё раз?` });
+      }
     } finally {
       setBusy(false);
     }
