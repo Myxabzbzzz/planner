@@ -1,11 +1,12 @@
 import { Heat, MoneyMonths, TaskWeeks } from "../components/Charts";
-import { IconFlame, IconGear, IconLock, IconMedal } from "../components/Icons";
+import { IconFlame, IconGear, IconLock, IconMedal, IconStar } from "../components/Icons";
 import { Meter, Ring } from "../components/Meter";
 import { Card, ErrorCard, Loading } from "../components/States";
 import type { Api } from "../api";
 import { autoRate, badgesOf, finishRate, levelOf, type Badge } from "../gamify";
 import { days as daysWord, fmtAmount, fmtDayTitle } from "../format";
 import { useLoad } from "../load";
+import { subStatus } from "../subscription";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
@@ -27,10 +28,11 @@ function BadgeCard({ b }: { b: Badge }) {
  * серия не обрывается до конца дня, пропуск нигде не осуждается, награды
  * показывают сделанное, а не отнятое.
  */
-export function Profile({ api, refresh = 0, onSettings, onAccount }: {
-  api: Api; refresh?: number; onSettings: () => void; onAccount: () => void;
+export function Profile({ api, refresh = 0, onSettings, onAccount, onPro }: {
+  api: Api; refresh?: number; onSettings: () => void; onAccount: () => void; onPro: () => void;
 }) {
   const { data, error, loading, reload } = useLoad(() => api.profile(6), [api], refresh);
+  const sub = useLoad(() => api.subscription(), [api], refresh);
   if (loading && !data) return <Loading hero />;
   if (error || !data) return <ErrorCard onRetry={reload} />;
 
@@ -171,6 +173,11 @@ export function Profile({ api, refresh = 0, onSettings, onAccount }: {
       </Card>
 
       <Card className="flush">
+        <button type="button" className="row" style={{ width: "100%", padding: "8px 16px" }} onClick={onPro}>
+          <span style={{ color: "var(--accent)" }}><IconStar /></span>
+          <span className="grow row-title" style={{ minHeight: 0 }}>Подписка</span>
+          <span className="meta">{sub.data ? subStatus(sub.data).title : "Pro"}</span>
+        </button>
         <button type="button" className="row" style={{ width: "100%", padding: "8px 16px" }} onClick={onSettings}>
           <span style={{ color: "var(--fg-3)" }}><IconGear /></span>
           <span className="grow row-title" style={{ minHeight: 0 }}>Настройки</span>

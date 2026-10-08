@@ -28,6 +28,8 @@ type WebApp = {
     notificationOccurred?(t: "success" | "error" | "warning"): void;
   };
   showConfirm?(message: string, cb: (ok: boolean) => void): void;
+  openInvoice?(url: string, cb: (status: "paid" | "cancelled" | "failed" | "pending") => void): void;
+  openTelegramLink?(url: string): void;
   close?(): void;
   BackButton?: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
 };
@@ -172,4 +174,11 @@ export function useCloseGuard(dirty: boolean) {
 export function confirmDialog(message: string): Promise<boolean> {
   if (tg?.showConfirm) return new Promise((resolve) => tg!.showConfirm!(message, resolve));
   return Promise.resolve(window.confirm(message));
+}
+
+/** Оплата звёздами внутри Telegram. Вне Telegram (dev) — просто открываем ссылку. */
+export function openInvoice(url: string): Promise<"paid" | "cancelled" | "failed" | "pending"> {
+  if (tg?.openInvoice) return new Promise((resolve) => tg!.openInvoice!(url, resolve));
+  window.open(url, "_blank");
+  return Promise.resolve("pending");
 }

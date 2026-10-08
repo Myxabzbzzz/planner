@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { makeApi } from "./api";
 import { AccountSheet } from "./components/AccountSheet";
+import { SubscriptionSheet } from "./components/SubscriptionSheet";
 import { Masthead } from "./components/Brand";
 import { BudgetsSheet } from "./components/BudgetsSheet";
 import { Composer } from "./components/Composer";
@@ -55,6 +56,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [proOpen, setProOpen] = useState(false);
   const [budgetsOpen, setBudgetsOpen] = useState(false);
   // Открытые вопросы ИИ: бейдж на вкладке и отдельный экран вместо «открой чат».
   const reviews = useLoad(() => api.reviews().catch(() => ({ reviews: [] })), [api], refresh);
@@ -122,7 +124,8 @@ export default function App() {
         {tab === "habits" && <Habits api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("habit")} />}
         {tab === "notes" && <Notes api={api} refresh={refresh} onAdd={() => setAdding("note")} />}
         {tab === "profile" && (
-          <Profile api={api} refresh={refresh} onSettings={openSettings} onAccount={() => setAccountOpen(true)} />
+          <Profile api={api} refresh={refresh} onSettings={openSettings} onAccount={() => setAccountOpen(true)}
+            onPro={() => setProOpen(true)} />
         )}
         {tab === "reviews" && <Reviews api={api} refresh={refresh} onDone={bump} />}
       </main>
@@ -160,6 +163,8 @@ export default function App() {
         <AccountSheet api={api} settings={settings} onClose={() => setAccountOpen(false)}
           onChanged={(s) => { setSettings(s); bump(); }} />
       )}
+
+      {proOpen && <SubscriptionSheet api={api} onClose={() => setProOpen(false)} onChanged={bump} />}
 
       {budgetsOpen && (
         <BudgetsSheet api={api} month={currentMonth(me.data.tz)} onClose={() => setBudgetsOpen(false)}

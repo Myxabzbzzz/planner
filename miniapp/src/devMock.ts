@@ -197,6 +197,7 @@ export const devFetch: typeof fetch = async (input, init) => {
       return json({ id: `dev-${Math.random().toString(36).slice(2, 8)}` });
     }
     if (p === "/settings/currency") return json({ converted: 142, skipped: 3, from: "RUB", to: "UZS" });
+    if (p === "/subscription/invoice") return json({ url: "https://t.me/$dev-invoice" });
     return json({});
   }
   // ?mock=noaccess previews the «Нет доступа» screen
@@ -262,6 +263,16 @@ export const devFetch: typeof fetch = async (input, init) => {
   if (p === "/habits") return json({ habits: d.habits });
   if (p === "/profile") return json(profile(Number(url.searchParams.get("months") ?? "6")));
   if (p === "/settings") return json(SETTINGS);
+  if (p === "/subscription") {
+    return json({
+      status: "trial", pro_until: "2026-10-15T10:00", ai_left: null, ai_per_day: 3,
+      plans: [
+        { id: "month", title: "Pro · месяц", stars: 150, recurring: true },
+        { id: "year", title: "Pro · год", stars: 1100, recurring: false },
+        { id: "lifetime", title: "Founder · навсегда", stars: 2200, recurring: false },
+      ],
+    });
+  }
   if (p === "/reviews") return json(REVIEWS);
   if (p === "/budgets") return json(budgets(url.searchParams.get("month") ?? d.today.slice(0, 7)));
   if (p === "/operations") {

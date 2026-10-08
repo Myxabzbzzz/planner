@@ -4,7 +4,7 @@ import { baseMime } from "./recorder";
 import { flattenReviews, type ReviewsWire } from "./reviews";
 import type {
   BudgetsResp, Categories, Created, CurrencyChange, EventsResp, HabitsResp, InboxStatus, Me, MoneyResp, NotesResp,
-  NotifyKind, OperationsResp, Profile, ReviewKind, ReviewsResp, Sent, Settings, TasksResp, Today,
+  NotifyKind, OperationsResp, Profile, ReviewKind, ReviewsResp, Sent, Settings, SubPlan, Subscription, TasksResp, Today,
 } from "./types";
 import type { NewEvent, NewHabit, NewNote, NewTask, NewTransaction } from "./newItem";
 
@@ -106,6 +106,9 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     changeCurrency: (currency: string) => postJson<CurrencyChange>("/settings/currency", { currency }),
     exportData: () => get<unknown>("/account/export"),
     deleteAccount: () => post("/account/delete", {}),
+
+    subscription: () => get<Subscription>("/subscription"),
+    invoice: (plan: SubPlan["id"]) => postJson<{ url: string }>("/subscription/invoice", { plan }),
 
     profile: (months = 6) => get<Profile>("/profile", { months }),
     settings: () => get<Settings>("/settings"),

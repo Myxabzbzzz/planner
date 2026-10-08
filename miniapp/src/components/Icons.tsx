@@ -30,6 +30,7 @@ export const IconChevron = ({ dir, size = 20 }: { dir: "left" | "right"; size?: 
 export const IconTick = ({ size = 13 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" {...P} strokeWidth={3.4} aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 );
+export const IconStar = ({ size = 20 }: { size?: number }) => svg(<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />, size);
 export const IconGear = ({ size = 20 }: { size?: number }) => svg(<><circle cx="12" cy="12" r="3" /><path d="M12 2.5v2.2M12 19.3v2.2M4.2 7l1.9 1.1M17.9 15.9l1.9 1.1M4.2 17l1.9-1.1M17.9 8.1l1.9-1.1" /></>, size);
 export const IconSearch = ({ size = 18 }: { size?: number }) => svg(<><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.6-3.6" /></>, size);
 
