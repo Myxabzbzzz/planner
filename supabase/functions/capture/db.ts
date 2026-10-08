@@ -9,6 +9,7 @@ export interface CaptureDb {
   workerOnline(): Promise<boolean>;
   /** false — лимит исчерпан; сбой самой проверки пропускает запись. */
   rateLimit(userId: string): Promise<boolean>;
+  isPro(userId: string): Promise<boolean>;
   createInbox(row: CaptureRow): Promise<void>;
 }
 
@@ -35,6 +36,9 @@ export function supabaseCaptureDb(sb: SupabaseClient): CaptureDb {
       } catch {
         return true;
       }
+    },
+    async isPro(userId) {
+      return check(await sb.rpc("is_pro", { p_user: userId })) === true;
     },
     async createInbox(row) {
       check(await sb.from("inbox").insert(row));

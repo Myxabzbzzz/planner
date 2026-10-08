@@ -16,6 +16,7 @@ export async function handleCapture(req: Request, db: CaptureDb): Promise<Respon
   const user = await db.userByToken(m[1].toLowerCase());
   if (!user) return reply(401, "Неверный токен");
   if (!user.is_allowed || !user.onboarded_at) return reply(403, "Нет доступа");
+  if (!await db.isPro(user.id)) return reply(402, "Запись с iPhone — функция Pro. Оформить: /pro в боте");
 
   let text: string;
   if ((req.headers.get("content-type") ?? "").includes("application/json")) {
