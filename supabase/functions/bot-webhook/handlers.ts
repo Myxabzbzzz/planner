@@ -63,6 +63,9 @@ const onboardedText = (code: string) =>
   "Теперь просто пиши или наговаривай голосовым всё подряд: " +
   "«завтра в 15 встреча с Андреем, потратил 30 000 на такси, не забыть оплатить интернет» — я сам разложу по разделам.";
 
+// только при регистрации: у тех, кто был до подписки, Pro навсегда
+const TRIAL_NOTE = "\n\n🎁 7 дней Pro в подарок — голос и вопросы к ИИ без лимитов. Подробнее: /pro";
+
 const uname = (from: { username?: unknown }): string | null =>
   from.username ? String(from.username).toLowerCase() : null;
 
@@ -175,7 +178,7 @@ async function handleMessage(msg: any, d: Deps) {
     if (code && /^[A-Z]{3}$/.test(code)) {
       if (await d.db.knownCurrency(code)) {
         await d.db.onboard(user.id, code);
-        await d.tg.sendMessage(chatId, onboardedText(code), undefined, { replyKeyboard: MENU_ROWS });
+        await d.tg.sendMessage(chatId, onboardedText(code) + TRIAL_NOTE, undefined, { replyKeyboard: MENU_ROWS });
       } else {
         await d.tg.sendMessage(
           chatId,
@@ -340,7 +343,7 @@ async function handleCallback(cq: any, d: Deps) {
     }
     if (!CURRENCIES.includes(code)) return;
     await d.db.onboard(user.id, code);
-    await d.tg.editMessage(chatId, messageId, onboardedText(code));
+    await d.tg.editMessage(chatId, messageId, onboardedText(code) + TRIAL_NOTE);
     await d.tg.sendMessage(chatId, MENU_HINT, undefined, { replyKeyboard: MENU_ROWS });
     return;
   }

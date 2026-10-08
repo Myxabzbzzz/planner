@@ -172,6 +172,7 @@ Deno.test("currency button onboards and edits message", async () => {
   await handleUpdate(cb("cur:UZS", ADMIN, 501), deps);
   assertEquals(db.users[0].base_currency, "UZS");
   assert(tg.edited[0].text.includes("UZS"));
+  assert(tg.edited[0].text.includes("7 дней Pro"));
   assertEquals(tg.answered.length, 1);
 });
 
