@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(38);
+select plan(39);
 
 insert into public.users (id, tg_id, name, tz, is_allowed) values
   ('00000000-0000-0000-0000-00000000f501', 9601, 'A', 'Asia/Tashkent', true),
@@ -60,8 +60,10 @@ select throws_ok($$select public.edit_transaction('00000000-0000-0000-0000-00000
   'P0001', 'bad amount', 'zero amount rejected');
 select throws_ok($$select public.edit_transaction('00000000-0000-0000-0000-00000000f501', '00000000-0000-0000-0000-00000000f511', null, '   ', null, null, null, null)$$,
   'P0001', 'bad title', 'blank title rejected');
-select throws_ok($$select public.edit_transaction('00000000-0000-0000-0000-00000000f501', '00000000-0000-0000-0000-00000000f511', null, null, 'нетакой', null, null, null)$$,
-  'P0001', 'bad category', 'unknown category rejected');
+-- новая категория при правке создаётся, как и при создании операции (в OpSheet есть «или своя категория»)
+select is(public.edit_transaction('00000000-0000-0000-0000-00000000f501', '00000000-0000-0000-0000-00000000f511', null, null, 'Подарки', null, null, null), true, 'new category accepted');
+select is((select c.name || '/' || c.type from public.transactions t join public.categories c on c.id = t.category_id
+            where t.id = '00000000-0000-0000-0000-00000000f511'), 'Подарки/expense', 'new category created with the operation type');
 select throws_ok($$select public.edit_transaction('00000000-0000-0000-0000-00000000f501', '00000000-0000-0000-0000-00000000f511', null, null, null, null, 'wrong', null)$$,
   'P0001', 'bad type', 'bad type rejected');
 select throws_ok($$select public.edit_transaction('00000000-0000-0000-0000-00000000f501', '00000000-0000-0000-0000-00000000f511', null, null, null, null, null, 'ab')$$,

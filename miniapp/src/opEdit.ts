@@ -65,6 +65,7 @@ export function buildEdit(
   const amount = parseAmount(form.amount);
   if (amount === null) return "invalid";
   const title = form.title.trim();
+  if (title === "" && op.title !== "") return "invalid";  // сервер пустое название отклонит
   if (title.length > 200) return "invalid";
   if (!DATE_RE.test(form.date)) return "invalid";
   if (!/^[A-Z]{3}$/.test(form.currency)) return "invalid";

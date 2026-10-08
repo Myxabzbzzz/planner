@@ -76,7 +76,7 @@ export function OpSheet({ api, op, base, onClose, onSaved }: {
       onClose={onClose}
       footer={
         <>
-          {patch === "invalid" && <div className="sub danger">Проверь сумму, дату и валюту.</div>}
+          {patch === "invalid" && <div className="sub danger">Проверь сумму, дату, валюту и название.</div>}
           {error && <div className="sub danger">{error}</div>}
           <button type="button" className="btn wide block" disabled={busy || !patch || patch === "invalid"}
             onClick={() => { if (patch && patch !== "invalid") void run(() => api.editTransaction(op.id, patch)); }}>

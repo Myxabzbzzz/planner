@@ -83,6 +83,11 @@ describe("полная правка операции", () => {
       .toEqual({ date: "2026-10-01", type: "income", title: "Возврат" });
   });
 
+  it("пустое название не уходит на сервер (он его отклонит), у операции без названия — не изменение", () => {
+    expect(buildEdit(base, "RUB", form({ title: "  " }))).toBe("invalid");
+    expect(buildEdit({ ...base, title: "" }, "RUB", form({ title: "" }))).toBeNull();
+  });
+
   it("мусор не пропускается", () => {
     expect(buildEdit(base, "RUB", form({ amount: "абв" }))).toBe("invalid");
     expect(buildEdit(base, "RUB", form({ amount: "0" }))).toBe("invalid");

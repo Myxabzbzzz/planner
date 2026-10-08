@@ -41,7 +41,12 @@ begin
     else
       select id into v_cat from public.categories
        where user_id = p_user and type = v_type and name = btrim(p_category);
-      if v_cat is null then raise exception 'bad category'; end if;
+      if v_cat is null then
+        -- своя категория из формы — создаём, как create_transaction
+        if length(btrim(p_category)) > 50 then raise exception 'bad category'; end if;
+        insert into public.categories (user_id, name, type) values (p_user, btrim(p_category), v_type)
+        returning id into v_cat;
+      end if;
     end if;
   elsif p_type is not null and p_type <> t.type then
     -- расход стал доходом: старая категория принадлежит другому типу, её нельзя оставить
