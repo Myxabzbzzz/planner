@@ -5,20 +5,22 @@ import { Check } from "../components/Check";
 import { EventSheet, TaskSheet } from "../components/ItemSheets";
 import { Meter, Ring } from "../components/Meter";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
-import { IconChevron, IconTick } from "../components/Icons";
+import { IconChevron, IconStar, IconTick } from "../components/Icons";
 import { fmtAmount, fmtDayTitle, todayIso } from "../format";
 import { useLoad } from "../load";
+import { proBanner } from "../subscription";
 import { useToggles } from "../useToggles";
-import type { Me, Today as TodayData } from "../types";
+import type { Me, Subscription, Today as TodayData } from "../types";
 
 /**
  * Один хронологический список вместо двух карточек «Встречи» и «Задачи»:
  * день читается сверху вниз, как он и происходит.
  */
-export function Today({ api, me, refresh = 0, onAdd, onSettings, pending = 0, onReviews }: {
+export function Today({ api, me, refresh = 0, onAdd, onSettings, pending = 0, onReviews, sub = null, onPro }: {
   api: Api; me: Me; refresh?: number; onAdd: () => void; onSettings: () => void;
-  pending?: number; onReviews: () => void;
+  pending?: number; onReviews: () => void; sub?: Subscription | null; onPro: () => void;
 }) {
+  const banner = sub ? proBanner(sub) : null;
   const { data, error, loading, reload } = useLoad(() => api.today(), [api], refresh);
   const { over, toggle, reset } = useToggles();
   // Оптимистичные отметки сбрасываются при любых новых данных, а не только при retry:
@@ -54,6 +56,21 @@ export function Today({ api, me, refresh = 0, onAdd, onSettings, pending = 0, on
               <span className="grow">
                 {pending === 1 ? "ИИ ждёт ответа на вопрос" : `ИИ ждёт ответа: ${pending} вопроса`}
                 <span className="row-sub">Пока не ответишь, запись не сохранится</span>
+              </span>
+              <IconChevron dir="right" />
+            </div>
+          </Card>
+        </button>
+      )}
+
+      {banner && (
+        <button type="button" className="tapcard" onClick={onPro}>
+          <Card className="ask">
+            <div className="row" style={{ padding: 0, borderTop: 0 }}>
+              <span style={{ color: "var(--accent)" }} aria-hidden="true"><IconStar /></span>
+              <span className="grow">
+                {banner.title}
+                <span className="row-sub">{banner.hint}</span>
               </span>
               <IconChevron dir="right" />
             </div>

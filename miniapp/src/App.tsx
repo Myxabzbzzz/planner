@@ -61,6 +61,7 @@ export default function App() {
   // Открытые вопросы ИИ: бейдж на вкладке и отдельный экран вместо «открой чат».
   const reviews = useLoad(() => api.reviews().catch(() => ({ reviews: [] })), [api], refresh);
   const pending = reviews.data?.reviews.length ?? 0;
+  const sub = useLoad(() => api.subscription().catch(() => null), [api], refresh);
   const bump = () => setRefresh((n) => n + 1);
   // «+» в доке предлагает то, что подходит открытому экрану
   const ADD_FOR: Record<string, NewKind> = {
@@ -114,7 +115,8 @@ export default function App() {
 
         {tab === "today" && (
           <Today api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("task")}
-            onSettings={openSettings} pending={pending} onReviews={() => setTab("reviews")} />
+            onSettings={openSettings} pending={pending} onReviews={() => setTab("reviews")}
+            sub={sub.data} onPro={() => setProOpen(true)} />
         )}
         {tab === "tasks" && <Tasks api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("task")} />}
         {tab === "money" && (
