@@ -14,9 +14,10 @@ export interface ApiDb {
   removeAudio(path: string): Promise<void>;
 }
 
-const ARG_NAMES: Record<string, string[]> = {
+export const ARG_NAMES: Record<string, string[]> = {
   summary_today: ["p_user"],
   api_me: ["p_user"],
+  api_subscription: ["p_user"],
   api_tasks: ["p_user", "p_filter"],
   api_events: ["p_user", "p_from", "p_to"],
   api_money: ["p_user", "p_month"],

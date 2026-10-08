@@ -10,7 +10,7 @@ Telegram-бот + Mini App «вся жизнь в одном месте» с л�
 
     supabase start          # нужен Docker
     supabase test db        # pgTAP
-    deno test --allow-env --allow-net supabase/functions/
+    deno test --allow-env --allow-net --allow-read supabase/functions/
     cd worker && .venv/bin/pytest
 
 ## Запуск воркера
