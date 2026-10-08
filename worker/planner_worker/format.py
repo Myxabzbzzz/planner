@@ -91,6 +91,10 @@ def summary_buttons(inbox_id: str) -> list[list[dict]]:
     return [[{"text": "🗑 Удалить всё", "callback_data": f"del:{inbox_id}"}]]
 
 
+def pro_buttons() -> list[list[dict]]:
+    return [[{"text": "⭐ Pro — без лимитов", "callback_data": "pro"}]]
+
+
 def failure_buttons(inbox_id: str) -> list[list[dict]]:
     """«Не получилось разобрать» без кнопки — тупик: запись уже не вернуть в очередь."""
     return [[{"text": "🔄 Повторить", "callback_data": f"rtx:{inbox_id}"},

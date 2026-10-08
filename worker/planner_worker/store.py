@@ -114,6 +114,9 @@ class Store:
     def remove_audio(self, key: str) -> None:
         self.sb.storage.from_(AUDIO_BUCKET).remove([key])
 
+    def ai_quota_use(self, user_id: str) -> bool:
+        return self.sb.rpc("ai_quota_use", {"p_user": user_id}).execute().data is not False
+
     def reply_message_id(self, inbox_id: str) -> int | None:
         data = self.sb.table("inbox").select("reply_message_id").eq("id", inbox_id).execute().data
         return data[0]["reply_message_id"] if data else None

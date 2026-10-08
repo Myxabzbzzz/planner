@@ -26,6 +26,8 @@ class FakeStore:
         self.texts: list[tuple[str, str]] = []
         self.removed_audio: list[str] = []
         self.acks: dict[str, int] = {}
+        self.ai_left: int | None = None  # None — без лимита (Pro)
+        self.ai_calls = 0
 
     def load_context(self, user_id, now_utc):
         return self.ctx
@@ -61,6 +63,15 @@ class FakeStore:
 
     def reply_message_id(self, inbox_id):
         return self.acks.get(inbox_id)
+
+    def ai_quota_use(self, user_id):
+        self.ai_calls += 1
+        if self.ai_left is None:
+            return True
+        if self.ai_left <= 0:
+            return False
+        self.ai_left -= 1
+        return True
 
 
 class FakeTg:
@@ -791,3 +802,51 @@ def test_no_ack_lookup_for_miniapp_rows(ctx):
     store.acks["i1"] = 99
     p.process(row(source="miniapp", reply_message_id=None))
     assert tg.edited == []
+
+
+class ExplodingStt:
+    def transcribe(self, path):
+        raise AssertionError("voice must not be transcribed when the AI quota is spent")
+
+
+def test_voice_over_free_quota_is_refused_before_transcription(ctx):
+    p, store, tg = make(ctx, FakeExtractor(), stt=ExplodingStt())
+    store.ai_left = 0
+    p.process(row(text=None, source="voice", audio_ref="f1"))
+    _, status, result, _, _ = store.finished[-1]
+    assert status == "done" and result["limited"] is True
+    text, buttons = tg.edited[0][2], tg.edited[0][3]
+    assert "3 голосовых или вопроса" in text and "/pro" in text
+    assert buttons == [[{"text": "⭐ Pro — без лимитов", "callback_data": "pro"}]]
+
+
+def test_question_over_free_quota_is_refused(ctx):
+    ans = FakeAnswerer()
+    p, store, tg = make_q(ctx, ans)
+    store.ai_left = 0
+    p.process(row(text="Сколько потратил в октябре"))
+    assert ans.calls == [] and store.inserted == []
+    assert store.finished[-1][2]["limited"] is True
+
+
+def test_voice_question_costs_one_action(ctx):
+    ans = FakeAnswerer()
+    p, store, _ = make_q(ctx, ans, stt=FakeStt("Когда встреча с Ахмедом?"))
+    store.ai_left = 1
+    p.process(row(text=None, source="voice", audio_ref="f1"))
+    assert ans.calls == ["Когда встреча с Ахмедом?"]
+    assert store.ai_calls == 1
+
+
+def test_text_records_do_not_use_the_quota(ctx):
+    p, store, _ = make(ctx, FakeExtractor([TAXI]))
+    store.ai_left = 0
+    p.process(row(text="30 000 на такси"))
+    assert store.inserted[0][0] == "transactions" and store.ai_calls == 0
+
+
+def test_retry_does_not_charge_again(ctx):
+    p, store, _ = make(ctx, FakeExtractor([TAXI]), stt=FakeStt("30 000 на такси"))
+    store.ai_left = 0
+    p.process(row(text=None, source="voice", audio_ref="f1", attempts=2))
+    assert store.inserted[0][0] == "transactions" and store.ai_calls == 0

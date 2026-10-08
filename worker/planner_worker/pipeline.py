@@ -8,8 +8,8 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 from .classifier import decide
-from .format import (KIND_LABELS, failure_buttons, future_message, past_time_message, render_line, render_summary,
-                     review_message, summary_buttons, time_message)
+from .format import (KIND_LABELS, failure_buttons, future_message, past_time_message, pro_buttons, render_line,
+                     render_summary, review_message, summary_buttons, time_message)
 from .fx import FxApplied, FxError, RateTable, convert
 from .llm import ExtractionError
 from .rows import to_row
@@ -22,6 +22,8 @@ log = logging.getLogger(__name__)
 FAILED_TEXT = "😵 Не получилось разобрать запись. Попробуй отправить ещё раз."
 REPHRASE_TEXT = "😵 Не смог разобрать. Переформулируй, пожалуйста."
 NOT_HEARD = "🙉 Не расслышал. Повтори, пожалуйста."
+AI_LIMIT = ("🔒 Бесплатные действия ИИ на сегодня закончились: 3 голосовых или вопроса в день.\n"
+            "Текстом записывать можно без ограничений. Безлимит — в Pro: /pro")
 PREFIXES = {"shortcut": "📲 ", "miniapp": "📱 "}
 STORAGE = "storage:"
 PAST_GRACE = timedelta(minutes=15)
@@ -60,15 +62,25 @@ class Pipeline:
             return
 
         text = row.text
+        charged = False
         if text is None:
+            if not self._ai_allowed(row):
+                self._refuse_ai(row, "")
+                return
+            charged = True
             text = self._transcribe(row)
             if not text:
                 self.store.finish(row.id, "failed", {"text": "", "reply": NOT_HEARD}, "empty_transcript", notified=True)
                 reply(self.tg, with_ack(self.store, row), chat_text(row, NOT_HEARD))
                 return
 
-        if self.answerer and is_question(text) and self._answer(row, text, ctx):
-            return
+        if self.answerer and is_question(text):
+            # голосовой вопрос уже оплачен распознаванием — одно действие, а не два
+            if not charged and not self._ai_allowed(row):
+                self._refuse_ai(row, text)
+                return
+            if self._answer(row, text, ctx):
+                return
 
         lines: list[str] = []
         review: list[dict] = []
@@ -106,6 +118,21 @@ class Pipeline:
                             else future_message(row.id, idx, it) if entry["reason"] == "future"
                             else review_message(row.id, idx, it, entry["reason"]))
             self._best_effort(self.tg.send, row.reply_chat_id, msg, buttons)
+
+    def _ai_allowed(self, row: InboxRow) -> bool:
+        """Free: 3 голосовых или вопроса в день; Pro — без лимита (решает база)."""
+        if row.attempts > 1:
+            return True  # списали на первой попытке
+        try:
+            return self.store.ai_quota_use(row.user_id)
+        except Exception as e:  # noqa: BLE001 — сбой проверки не должен ломать разбор
+            log.warning("ai quota check failed for %s: %s", row.id, type(e).__name__)
+            return True
+
+    def _refuse_ai(self, row: InboxRow, text: str) -> None:
+        self.store.finish(row.id, "done", {"text": text, "reply": AI_LIMIT, "limited": True})
+        self._best_effort(reply, self.tg, with_ack(self.store, row), chat_text(row, AI_LIMIT), pro_buttons())
+        _drop_audio(self.store, row)
 
     @staticmethod
     def _best_effort(fn, *args) -> None:
