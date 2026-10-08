@@ -77,7 +77,11 @@ class FakeDb implements Db {
     this.sub = { status: plan === "lifetime" ? "lifetime" : "pro", pro_until: plan === "lifetime" ? null : "2026-11-07T10:00", ai_left: null, ai_per_day: 3 };
     return true;
   }
-  async subscription() { return this.sub; }
+  failSubscription = false;
+  async subscription() {
+    if (this.failSubscription) throw new Error("db is down");
+    return this.sub;
+  }
   async onboard(userId: string, currency: string) {
     const u = this.users.find((x) => x.id === userId)!;
     u.base_currency = currency;
@@ -166,14 +170,48 @@ Deno.test("invited user is created on /start", async () => {
   assertEquals(db.users[0].is_admin, false);
 });
 
+const TRIAL: Subscription = { status: "trial", pro_until: "2026-10-08T10:00", ai_left: null, ai_per_day: 3 };
+
 Deno.test("currency button onboards and edits message", async () => {
   const { db, tg, deps } = setup();
+  db.sub = TRIAL;
   await handleUpdate(msg(ADMIN, { text: "/start" }), deps);
   await handleUpdate(cb("cur:UZS", ADMIN, 501), deps);
   assertEquals(db.users[0].base_currency, "UZS");
   assert(tg.edited[0].text.includes("UZS"));
   assert(tg.edited[0].text.includes("7 дней Pro"));
   assertEquals(tg.answered.length, 1);
+});
+
+Deno.test("returning user without a trial gets no trial note on currency button", async () => {
+  const { db, tg, deps } = setup();
+  await handleUpdate(msg(ADMIN, { text: "/start" }), deps);
+  await handleUpdate(cb("cur:UZS", ADMIN, 501), deps);
+  assert(tg.edited[0].text.includes("UZS"));
+  assert(!tg.edited[0].text.includes("7 дней Pro"));
+});
+
+Deno.test("typed currency shows the trial note only to a trial user", async () => {
+  for (const [sub, note] of [[TRIAL, true], [undefined, false]] as const) {
+    const { db, tg, deps } = setup();
+    if (sub) db.sub = sub;
+    await handleUpdate(msg(ADMIN, { text: "/start" }), deps);
+    await handleUpdate(msg(ADMIN, { text: "gbp" }), deps);
+    const done = tg.sent.at(-1)!.text;
+    assert(done.includes("Базовая валюта — GBP"));
+    assertEquals(done.includes("7 дней Pro"), note);
+  }
+});
+
+Deno.test("subscription failure just omits the trial note", async () => {
+  const { db, tg, deps } = setup();
+  db.sub = TRIAL;
+  db.failSubscription = true;
+  await handleUpdate(msg(ADMIN, { text: "/start" }), deps);
+  await handleUpdate(msg(ADMIN, { text: "UZS" }), deps);
+  assertEquals(db.users[0].base_currency, "UZS");
+  const done = tg.sent.find((m) => m.text.includes("Базовая валюта — UZS"))!;
+  assert(!done.text.includes("7 дней Pro"));
 });
 
 Deno.test("typed currency code onboards", async () => {
@@ -497,6 +535,7 @@ Deno.test("/privacy answers even before onboarding and links the full page", asy
   const t = tg.sent.at(-1)!.text;
   assert(t.includes("Конфиденциальность"));
   assert(t.includes("https://app.example/privacy.html"));
+  assert(t.includes("хэш Telegram id"));
   assertEquals(db.inbox.length, 0);
 });
 

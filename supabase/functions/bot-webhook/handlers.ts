@@ -47,6 +47,7 @@ const PRIVACY = [
   "Голосовые после распознавания удаляются — хранится только текст.",
   "Где: база в облаке Supabase; разбирает сообщения ИИ-модель на компьютере владельца бота. Сторонним ИИ-сервисам и рекламе данные не передаются.",
   "Удалённые записи стираются насовсем через 30 дней. В мини-приложении (Профиль → Аккаунт) можно выгрузить все данные или удалить аккаунт целиком.",
+  "Чтобы пробный Pro выдавался один раз, после удаления аккаунта остаётся только хэш Telegram id — без имени и записей.",
 ].join("\n");
 const privacyText = (miniappUrl?: string) =>
   miniappUrl ? `${PRIVACY}\n\nПолностью: ${new URL("privacy.html", miniappUrl).href}` : PRIVACY;
@@ -63,8 +64,17 @@ const onboardedText = (code: string) =>
   "Теперь просто пиши или наговаривай голосовым всё подряд: " +
   "«завтра в 15 встреча с Андреем, потратил 30 000 на такси, не забыть оплатить интернет» — я сам разложу по разделам.";
 
-// только при регистрации: у тех, кто был до подписки, Pro навсегда
+// только при регистрации и только если пробный Pro правда выдан:
+// у тех, кто был до подписки, Pro навсегда; при повторной регистрации после удаления аккаунта — Free
 const TRIAL_NOTE = "\n\n🎁 7 дней Pro в подарок — голос и вопросы к ИИ без лимитов. Подробнее: /pro";
+async function trialNote(userId: string, d: Deps): Promise<string> {
+  try {
+    return (await d.db.subscription(userId)).status === "trial" ? TRIAL_NOTE : "";
+  } catch (e) {
+    console.error("subscription failed", e);
+    return "";
+  }
+}
 
 const uname = (from: { username?: unknown }): string | null =>
   from.username ? String(from.username).toLowerCase() : null;
@@ -178,7 +188,8 @@ async function handleMessage(msg: any, d: Deps) {
     if (code && /^[A-Z]{3}$/.test(code)) {
       if (await d.db.knownCurrency(code)) {
         await d.db.onboard(user.id, code);
-        await d.tg.sendMessage(chatId, onboardedText(code) + TRIAL_NOTE, undefined, { replyKeyboard: MENU_ROWS });
+        const note = await trialNote(user.id, d);
+        await d.tg.sendMessage(chatId, onboardedText(code) + note, undefined, { replyKeyboard: MENU_ROWS });
       } else {
         await d.tg.sendMessage(
           chatId,
@@ -343,7 +354,7 @@ async function handleCallback(cq: any, d: Deps) {
     }
     if (!CURRENCIES.includes(code)) return;
     await d.db.onboard(user.id, code);
-    await d.tg.editMessage(chatId, messageId, onboardedText(code) + TRIAL_NOTE);
+    await d.tg.editMessage(chatId, messageId, onboardedText(code) + await trialNote(user.id, d));
     await d.tg.sendMessage(chatId, MENU_HINT, undefined, { replyKeyboard: MENU_ROWS });
     return;
   }
