@@ -423,8 +423,11 @@ async function postInboxAudio(req: Request, userId: string, tgId: number, d: Api
   }
 }
 
-/** Операции, для которых мы требуем особенно свежую сессию. */
-const SENSITIVE = /\/delete$|^\/account\/|^\/settings\/currency$/;
+/**
+ * Необратимые операции — для них особенно свежая сессия. Удаление записей сюда не входит:
+ * оно мягкое и отменяется, а часовое окно заставляло переоткрывать миниапп ради «удалить задачу».
+ */
+const SENSITIVE = /^\/account\/|^\/settings\/currency$|^\/categories\/[^/]+\/delete$/i;
 
 // Сначала смотрим на путь, потом на метод: /account/export — это GET,
 // но он выгружает вообще всё, поэтому ему тоже нужна свежая сессия.

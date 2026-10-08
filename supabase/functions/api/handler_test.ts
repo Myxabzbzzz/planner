@@ -420,14 +420,19 @@ Deno.test("мутации требуют более свежей сессии, �
     (await run(await req("/tasks", { method: "POST", body: { title: "x" }, init: await old(2 * 3600) }), creating)).status,
     201,
   );
-  // ...а удаление требует совсем свежей
+  // удаление записи мягкое и отменяемое — ему хватает обычного окна записи
   const id = "3f2c1a2b-1111-2222-3333-444455556666";
-  const del = await run(await req(`/tasks/${id}/delete`, { method: "POST", body: {}, init: await old(2 * 3600) }));
-  assertEquals([del.status, del.body], [401, { error: "stale_session" }]);
   const deleting = new FakeApiDb();
   deleting.rpc = () => Promise.resolve(true);
   assertEquals(
-    (await run(await req(`/tasks/${id}/delete`, { method: "POST", body: {}, init: await old(60) }), deleting)).status,
+    (await run(await req(`/tasks/${id}/delete`, { method: "POST", body: {}, init: await old(2 * 3600) }), deleting)).status,
+    200,
+  );
+  // ...а категория удаляется насовсем — ей нужна совсем свежая сессия
+  const cat = await run(await req(`/categories/${id}/delete`, { method: "POST", body: {}, init: await old(2 * 3600) }));
+  assertEquals([cat.status, cat.body], [401, { error: "stale_session" }]);
+  assertEquals(
+    (await run(await req(`/categories/${id}/delete`, { method: "POST", body: {}, init: await old(60) }), deleting)).status,
     200,
   );
 });
