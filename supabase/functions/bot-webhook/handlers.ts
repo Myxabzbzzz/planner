@@ -38,6 +38,17 @@ export const KIND_LABELS: Record<string, string> = {
 
 const NO_ACCESS = "Доступ по приглашению. Попроси владельца добавить тебя.";
 const ASK_ACCESS: Button[][] = [[{ text: "✋ Запросить доступ", callback_data: "ask" }]];
+const PRIVACY = [
+  "🔒 Конфиденциальность",
+  "",
+  "Что храню: твой Telegram id, имя и ник; тексты сообщений и то, что из них разобрано, — дела, встречи, траты, заметки, привычки.",
+  "Голосовые после распознавания удаляются — хранится только текст.",
+  "Где: база в облаке Supabase; разбирает сообщения ИИ-модель на компьютере владельца бота. Сторонним ИИ-сервисам и рекламе данные не передаются.",
+  "Удалённые записи стираются насовсем через 30 дней. В мини-приложении (Профиль → Аккаунт) можно выгрузить все данные или удалить аккаунт целиком.",
+].join("\n");
+const privacyText = (miniappUrl?: string) =>
+  miniappUrl ? `${PRIVACY}\n\nПолностью: ${new URL("privacy.html", miniappUrl).href}` : PRIVACY;
+
 const SAVE_FAILED = "😵 Не смог принять запись — база не ответила. Пришли её, пожалуйста, ещё раз.";
 
 const currencyButtons = (): Button[][] => [
@@ -95,6 +106,10 @@ async function handleMessage(msg: any, d: Deps) {
 
   const text: string | undefined = msg.text;
   if (text && /^\/(allow|deny)\b/.test(text)) return await handleAdmin(user, chatId, text, d);
+  if (text === "/privacy") {
+    await d.tg.sendMessage(chatId, privacyText(d.miniappUrl));
+    return;
+  }
 
   if (!user.onboarded_at) {
     const code = text?.trim().toUpperCase();
@@ -113,7 +128,8 @@ async function handleMessage(msg: any, d: Deps) {
     }
     await d.tg.sendMessage(
       chatId,
-      "Привет! Выбери базовую валюту — в ней будут все итоги и лимиты. Менять её потом непросто.",
+      "Привет! Выбери базовую валюту — в ней будут все итоги и лимиты. Менять её потом непросто.\n\n" +
+        "Как я храню твои данные — /privacy",
       currencyButtons(),
     );
     return;

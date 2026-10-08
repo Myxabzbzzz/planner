@@ -476,3 +476,19 @@ Deno.test("too long voice is refused before it reaches the laptop", async () => 
   assertEquals(db.inbox.length, 0);
   assert(tg.sent.at(-1)!.text.includes("5 минут"));
 });
+
+Deno.test("/privacy answers even before onboarding and links the full page", async () => {
+  const { db, tg, deps } = setup();
+  await handleUpdate(msg(ADMIN, { text: "/start" }), deps);
+  await handleUpdate(msg(ADMIN, { text: "/privacy" }), { ...deps, miniappUrl: "https://app.example/" });
+  const t = tg.sent.at(-1)!.text;
+  assert(t.includes("Конфиденциальность"));
+  assert(t.includes("https://app.example/privacy.html"));
+  assertEquals(db.inbox.length, 0);
+});
+
+Deno.test("first greeting mentions /privacy", async () => {
+  const { tg, deps } = setup();
+  await handleUpdate(msg(ADMIN, { text: "/start" }), deps);
+  assert(tg.sent.at(-1)!.text.includes("/privacy"));
+});

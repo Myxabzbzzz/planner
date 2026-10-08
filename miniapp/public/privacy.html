@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Планер — конфиденциальность</title>
+  <style>
+    :root { --bg: #FAF8F5; --text: #1B1C1F; --hint: #6B6F76; --accent: #E89B2B; --card: #FFFFFF; --line: #ECE7E0; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0B0D10; --text: #EDEEF0; --hint: #9AA0A8; --card: #12151B; --line: #222832; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+           font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 680px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { font-size: 28px; margin: 0 0 4px; }
+    .date { color: var(--hint); margin: 0 0 24px; }
+    section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin: 12px 0; }
+    h2 { font-size: 17px; margin: 0 0 8px; }
+    h2::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: middle; }
+    p, li { margin: 6px 0; }
+    ul { padding-left: 20px; margin: 6px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Конфиденциальность</h1>
+  <p class="date">Планер — Telegram-бот и мини-приложение. Редакция от 8 октября 2026.</p>
+
+  <section>
+    <h2>Что хранится</h2>
+    <ul>
+      <li>Telegram id, имя и ник — чтобы узнавать тебя и отвечать в чат.</li>
+      <li>Тексты твоих сообщений и то, что из них разобрано: дела, встречи, траты и доходы, заметки, дневник, привычки.</li>
+      <li>Настройки: базовая валюта, часовой пояс, лимиты, уведомления.</li>
+      <li>Голосовые сообщения после распознавания удаляются — хранится только текст.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Где и кто обрабатывает</h2>
+    <p>Данные лежат в облачной базе Supabase. Разбирает сообщения и распознаёт голос ИИ-модель, которая работает на компьютере владельца бота.</p>
+    <p>Сторонним ИИ-сервисам, рекламным сетям и другим людям данные не передаются и не продаются.</p>
+  </section>
+
+  <section>
+    <h2>Сколько хранится</h2>
+    <p>Пока у тебя есть аккаунт. Удалённые записи можно вернуть кнопкой «Отменить», а через 30 дней они стираются насовсем.</p>
+  </section>
+
+  <section>
+    <h2>Твои права</h2>
+    <ul>
+      <li>Выгрузить все свои данные: мини-приложение → Профиль → Аккаунт → выгрузка.</li>
+      <li>Удалить аккаунт и все записи без возможности восстановления: там же.</li>
+      <li>Команда /privacy в боте показывает краткую версию этого текста.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>
