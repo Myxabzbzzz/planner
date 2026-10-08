@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(15);
 
 -- #7 приглашение по нику — одноразовое и на 7 дней
 select public.invite_user('@Bob');

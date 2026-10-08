@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(22);
 
 insert into public.users (id, tg_id, name, is_allowed, tz) values
   ('00000000-0000-0000-0000-0000000000d1', 41, 'D', true, 'Asia/Tashkent'),
