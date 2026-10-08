@@ -73,6 +73,9 @@ class FakeDb implements Db {
   }
   async knownCurrency(code: string) { return this.rates ? code in this.rates : true; }
   async workerOnline() { return this.online; }
+  limited = new Set<string>();
+  rateCalls: string[] = [];
+  async rateLimit(_userId: string, action: string) { this.rateCalls.push(action); return !this.limited.has(action); }
   async createInbox(row: NewInbox) {
     if (this.failCreateInbox) throw new Error("db is down");
     this.inbox.push(row);
@@ -447,4 +450,29 @@ Deno.test("отмена удаления не падает на мусорном
   await handleUpdate(cb("undel:не-uuid"), deps);
   assertEquals(db.restored, []);
   assert(tg.answered.length > 0);
+});
+
+
+Deno.test("chat messages are rate limited per user — flood does not reach the queue", async () => {
+  const { db, tg, deps } = setup();
+  onboarded(db);
+  db.limited.add("inbox");
+  await handleUpdate(msg(ADMIN, { text: "кофе 40 000" }), deps);
+  assertEquals(db.inbox.length, 0);
+  assert(tg.sent.at(-1)!.text.includes("Слишком много"));
+});
+
+Deno.test("voice uses its own limit", async () => {
+  const { db, deps } = setup();
+  onboarded(db);
+  await handleUpdate(msg(ADMIN, { voice: { file_id: "F1", duration: 3 } }), deps);
+  assertEquals(db.rateCalls, ["audio"]);
+});
+
+Deno.test("too long voice is refused before it reaches the laptop", async () => {
+  const { db, tg, deps } = setup();
+  onboarded(db);
+  await handleUpdate(msg(ADMIN, { voice: { file_id: "F1", duration: 301 } }), deps);
+  assertEquals(db.inbox.length, 0);
+  assert(tg.sent.at(-1)!.text.includes("5 минут"));
 });

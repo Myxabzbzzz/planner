@@ -1,5 +1,6 @@
 import type { Db, User } from "./db.ts";
 import type { Button, Tg } from "../_shared/telegram.ts";
+import { MAX_VOICE_SEC, TOO_LONG_VOICE, TOO_MANY } from "../_shared/limits.ts";
 
 import type { MenuDb } from "./menu_db.ts";
 import { MENU_ROWS, menuKey } from "./keyboard.ts";
@@ -137,6 +138,16 @@ async function handleMessage(msg: any, d: Deps) {
   else if (text && !text.startsWith("/")) payload = { source: "text", text: text.slice(0, MAX_TEXT) };
   else {
     await d.tg.sendMessage(chatId, "Пришли текст или голосовое.");
+    return;
+  }
+
+  if (msg.voice && Number(msg.voice.duration) > MAX_VOICE_SEC) {
+    await d.tg.sendMessage(chatId, TOO_LONG_VOICE);
+    return;
+  }
+  // очередь на ноутбуке одна на всех: без лимита один человек задержит разбор у остальных
+  if (!await d.db.rateLimit(user.id, payload.source === "voice" ? "audio" : "inbox")) {
+    await d.tg.sendMessage(chatId, TOO_MANY);
     return;
   }
 

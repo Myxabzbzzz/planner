@@ -31,6 +31,7 @@ export async function handleCapture(req: Request, db: CaptureDb): Promise<Respon
   text = text.trim();
   if (!text || text.length > MAX_TEXT) return reply(400, BAD_TEXT);
 
+  if (!await db.rateLimit(user.id)) return reply(429, "Слишком часто. Подожди пару минут");
   await db.createInbox({ user_id: user.id, source: "shortcut", text, reply_chat_id: user.tg_id });
   return reply(202, (await db.workerOnline().catch(() => false)) ? "Записано ✅" : "Записано, разберу, когда ИИ проснётся");
 }

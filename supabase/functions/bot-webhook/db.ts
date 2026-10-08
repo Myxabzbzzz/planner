@@ -1,4 +1,5 @@
 import { CURRENCIES } from "./currencies.ts";
+import { type LimitAction, LIMITS } from "../_shared/limits.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export type User = {
@@ -43,6 +44,8 @@ export interface Db {
   onboard(userId: string, currency: string): Promise<void>;
   knownCurrency(code: string): Promise<boolean>;
   workerOnline(): Promise<boolean>;
+  /** false — лимит исчерпан; сбой самой проверки пропускает запись. */
+  rateLimit(userId: string, action: LimitAction): Promise<boolean>;
   createInbox(row: NewInbox): Promise<string>;
   setInboxReply(inboxId: string, messageId: number): Promise<void>;
   deleteRecords(userId: string, inboxId: string): Promise<number>;
@@ -101,6 +104,14 @@ export function supabaseDb(sb: SupabaseClient): Db {
     },
     async workerOnline() {
       return check(await sb.rpc("worker_online")) === true;
+    },
+    async rateLimit(userId, action) {
+      const { limit, window } = LIMITS[action];
+      try {
+        return check(await sb.rpc("rate_limit", { p_user: userId, p_action: action, p_limit: limit, p_window: window })) !== false;
+      } catch {
+        return true;
+      }
     },
     async createInbox(row) {
       return (check(await sb.from("inbox").insert(row).select("id").single()) as { id: string }).id;

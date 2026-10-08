@@ -26,6 +26,7 @@ class MiniDb implements Db {
   async onboard() {}
   async knownCurrency() { return true; }
   async workerOnline() { return true; }
+  async rateLimit() { return true; }
   async createInbox(row: NewInbox) { this.inbox.push(row); return "11111111-1111-1111-1111-111111111111"; }
   async setInboxReply() {}
   async deleteRecords() { return 0; }

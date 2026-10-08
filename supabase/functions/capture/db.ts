@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { LIMITS } from "../_shared/limits.ts";
 
 export type CaptureUser = { id: string; tg_id: number; is_allowed: boolean; onboarded_at: string | null };
 export type CaptureRow = { user_id: string; source: "shortcut"; text: string; reply_chat_id: number };
@@ -6,6 +7,8 @@ export type CaptureRow = { user_id: string; source: "shortcut"; text: string; re
 export interface CaptureDb {
   userByToken(token: string): Promise<CaptureUser | null>;
   workerOnline(): Promise<boolean>;
+  /** false — лимит исчерпан; сбой самой проверки пропускает запись. */
+  rateLimit(userId: string): Promise<boolean>;
   createInbox(row: CaptureRow): Promise<void>;
 }
 
@@ -24,6 +27,14 @@ export function supabaseCaptureDb(sb: SupabaseClient): CaptureDb {
     },
     async workerOnline() {
       return check(await sb.rpc("worker_online")) === true;
+    },
+    async rateLimit(userId) {
+      const { limit, window } = LIMITS.inbox;
+      try {
+        return check(await sb.rpc("rate_limit", { p_user: userId, p_action: "inbox", p_limit: limit, p_window: window })) !== false;
+      } catch {
+        return true;
+      }
     },
     async createInbox(row) {
       check(await sb.from("inbox").insert(row));

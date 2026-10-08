@@ -11,6 +11,8 @@ class FakeCaptureDb implements CaptureDb {
   seenToken: string | null = null;
   async userByToken(token: string) { this.seenToken = token; return token === TOKEN ? this.user : null; }
   async workerOnline() { return this.online; }
+  limited = false;
+  async rateLimit() { return !this.limited; }
   async createInbox(row: { user_id: string; source: "shortcut"; text: string; reply_chat_id: number }) { this.rows.push(row); }
 }
 
@@ -77,4 +79,13 @@ Deno.test("400 empty, too long, bad json", async () => {
 Deno.test("405 on GET", async () => {
   const r = await call(req("", {}, "GET"));
   assertEquals([r.status, r.message], [405, "Только POST"]);
+});
+
+
+Deno.test("429 when the user floods the shortcut", async () => {
+  const db = new FakeCaptureDb();
+  db.limited = true;
+  const { status, db: after } = await call(req(JSON.stringify({ text: "кофе" }), auth), db);
+  assertEquals(status, 429);
+  assertEquals(after.rows, []);
 });

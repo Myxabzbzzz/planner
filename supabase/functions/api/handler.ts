@@ -1,4 +1,5 @@
 import type { ApiDb, InboxInsert } from "./db.ts";
+import { LIMITS } from "../_shared/limits.ts";
 import { MAX_AGE_READ, MAX_AGE_SENSITIVE, MAX_AGE_WRITE, verifyInitData } from "./initdata.ts";
 
 export type ApiDeps = { db: ApiDb; botToken: string; nowSec: () => number; newId?: () => string };
@@ -369,11 +370,6 @@ const MAX_TEXT = 4000;
  * ничем не ограничивалась — можно было забить и очередь, и хранилище.
  * Пороги щедрые для человека и тесные для скрипта.
  */
-const LIMITS: Record<string, { limit: number; window: string }> = {
-  inbox: { limit: 40, window: "10 minutes" },
-  audio: { limit: 15, window: "10 minutes" },
-  write: { limit: 300, window: "10 minutes" },
-};
 
 /** false — лимит исчерпан. Сбой самой проверки не должен ломать приложение. */
 async function allow(db: ApiDb, userId: string, action: keyof typeof LIMITS): Promise<boolean> {
