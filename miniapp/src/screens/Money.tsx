@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Api } from "../api";
 import { DayBars, RankedBars, ShareBar } from "../components/Charts";
 import { IconChevron } from "../components/Icons";
@@ -28,6 +28,8 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
   const [more, setMore] = useState<Operation[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Растёт при смене месяца/обновлении: страница, пришедшая для прежнего месяца, выбрасывается.
+  const generation = useRef(0);
   const go = (d: number) => {
     haptic();
     setMonth((m) => shiftMonth(m, d));
@@ -35,6 +37,7 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
 
   // Новый месяц или обновление — догруженное больше не актуально.
   useEffect(() => {
+    generation.current += 1;
     setMore([]);
     setCursor(data?.operations_next_before ?? null);
   }, [data]);
@@ -42,8 +45,10 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
   const loadMore = async () => {
     if (cursor === null || loadingMore) return;
     setLoadingMore(true);
+    const gen = generation.current;
     try {
       const page = await api.operations(month, cursor);
+      if (gen !== generation.current) return;
       setMore((prev) => [...prev, ...page.operations]);
       setCursor(page.next_before);
     } catch {
