@@ -16,11 +16,20 @@ export interface Payments {
   answerPreCheckoutQuery(id: string, ok: boolean, error?: string): Promise<void>;
 }
 
-export function telegramClient(token: string, fetchFn: typeof fetch = fetch): Tg & Payments {
+/**
+ * testEnv — тестовая среда Telegram (отдельные аккаунты и боты, звёзды бесплатные).
+ * По умолчанию берётся из TELEGRAM_TEST_ENV, чтобы локальный тестовый бот не требовал правок кода.
+ */
+export function telegramClient(
+  token: string,
+  fetchFn: typeof fetch = fetch,
+  testEnv = Deno.env.get("TELEGRAM_TEST_ENV") === "true",
+): Tg & Payments {
+  const base = `https://api.telegram.org/bot${token}${testEnv ? "/test" : ""}`;
   async function call(method: string, body: unknown) {
     let json;
     try {
-      const res = await fetchFn(`https://api.telegram.org/bot${token}/${method}`, {
+      const res = await fetchFn(`${base}/${method}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

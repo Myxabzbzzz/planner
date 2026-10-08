@@ -12,3 +12,4 @@ supabase/functions/.env
 .superpowers/
 *.egg-info/
 docs/superpowers/
+supabase/functions/.env.test

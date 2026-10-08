@@ -59,3 +59,14 @@ Mini App, гоняет `pytest` воркера и Deno-тесты Edge Functions
 ## Лицензия
 
 Все права защищены. Код опубликован только для портфолио, использовать его без разрешения автора нельзя. Подробности в [LICENSE](LICENSE).
+
+## Проверка оплаты без денег (тестовая среда Telegram)
+
+В тестовой среде Telegram звёзды бесплатные. Тестовый бот работает локально, прод не трогается.
+
+1. Тестовый аккаунт: в Telegram для macOS 10 раз нажми на иконку «Настройки» → в отладочном меню ⌘+клик «Add Account» → войти по номеру.
+2. В тестовом аккаунте: @BotFather → `/newbot` → токен.
+3. `cp supabase/functions/.env.test.example supabase/functions/.env.test` и впиши токен.
+4. Терминал 1 (нужен `supabase start`): `supabase functions serve --env-file supabase/functions/.env.test --no-verify-jwt`
+5. Терминал 2: `deno run --allow-net --allow-env --env-file=supabase/functions/.env.test scripts/tg-test-bot.ts`
+6. В тестовом Telegram: `/start` → валюта → `/pro` → оплатить.

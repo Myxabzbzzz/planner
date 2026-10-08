@@ -38,3 +38,14 @@ Deno.test("html option sets parse_mode on send and edit", async () => {
   assertEquals(bodies[0].reply_markup, { inline_keyboard: [[{ text: "k", callback_data: "c" }]] });
   assertEquals(bodies[1].parse_mode, "HTML");
 });
+
+Deno.test("test environment uses the /test/ Bot API path", async () => {
+  const urls: string[] = [];
+  const fetchFn = ((url: string) => {
+    urls.push(String(url));
+    return Promise.resolve(new Response(JSON.stringify({ ok: true, result: "https://t.me/$x" })));
+  }) as typeof fetch;
+  await telegramClient("T", fetchFn, true).createInvoiceLink({ title: "t", description: "d", payload: "pro:month", stars: 1 });
+  await telegramClient("T", fetchFn, false).createInvoiceLink({ title: "t", description: "d", payload: "pro:month", stars: 1 });
+  assertEquals(urls, ["https://api.telegram.org/botT/test/createInvoiceLink", "https://api.telegram.org/botT/createInvoiceLink"]);
+});
