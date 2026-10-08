@@ -1,5 +1,6 @@
 import copy
 import logging
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -63,7 +64,7 @@ class Pipeline:
             text = self._transcribe(row)
             if not text:
                 self.store.finish(row.id, "failed", {"text": "", "reply": NOT_HEARD}, "empty_transcript", notified=True)
-                reply(self.tg, row, chat_text(row, NOT_HEARD))
+                reply(self.tg, with_ack(self.store, row), chat_text(row, NOT_HEARD))
                 return
 
         if self.answerer and is_question(text) and self._answer(row, text, ctx):
@@ -96,7 +97,7 @@ class Pipeline:
         summary = render_summary(lines, len(review))
         self.store.finish(row.id, status, {"text": text, "saved": len(lines), "pending_review": review,
                                            "reply": summary})
-        self._best_effort(reply, self.tg, row, chat_text(row, summary),
+        self._best_effort(reply, self.tg, with_ack(self.store, row), chat_text(row, summary),
                           summary_buttons(row.id) if lines else None)
         for idx, entry in enumerate(review):
             it = ExtractedItem.model_validate(entry["item"])
@@ -121,7 +122,7 @@ class Pipeline:
             return False
         answer, question = answered
         self.store.finish(row.id, "done", {"text": text, "question": question, "answered": True, "reply": answer})
-        self._best_effort(reply, self.tg, row, chat_text(row, answer))
+        self._best_effort(reply, self.tg, with_ack(self.store, row), chat_text(row, answer))
         return True
 
     def _transcribe(self, row: InboxRow) -> str:
@@ -260,6 +261,19 @@ class Pipeline:
         saved.append(self._save(it, ctx, inbox_id))
 
 
+def with_ack(store, row: InboxRow) -> InboxRow:
+    """Бот вставляет запись в inbox раньше, чем шлёт «⏳ Разбираю…», и привязывает его отдельным шагом.
+    Если воркер забрал строку в этом окне, без id ответа «Разбираю…» так и повисло бы с мёртвой кнопкой."""
+    if row.reply_message_id is not None or row.source not in ("text", "voice"):
+        return row
+    try:
+        mid = store.reply_message_id(row.id)
+    except Exception as e:  # noqa: BLE001 — без id просто ответим новым сообщением
+        log.warning("ack lookup failed for %s: %s", row.id, type(e).__name__)
+        return row
+    return replace(row, reply_message_id=mid) if mid else row
+
+
 def reply(tg, row: InboxRow, text: str, buttons=None) -> None:
     # a review pass must not overwrite the main summary message
     if row.reply_message_id and not row.result.get("pending_review"):
@@ -294,7 +308,7 @@ def run_one(row: InboxRow, pipeline: Pipeline, store, tg) -> None:
         log.warning("extraction failed for %s: %s", row.id, e)
         store.finish(row.id, "failed", original, f"extraction: {e}", notified=True)
         _drop_audio(store, row)
-        error_reply(tg, row, REPHRASE_TEXT)
+        error_reply(tg, with_ack(store, row), REPHRASE_TEXT)
     except Exception as e:  # noqa: BLE001 — любая другая ошибка: ретрай до 3 попыток
         log.exception("processing failed for %s (attempt %s)", row.id, row.attempts)
         if row.attempts < 3:
@@ -302,7 +316,7 @@ def run_one(row: InboxRow, pipeline: Pipeline, store, tg) -> None:
         else:
             store.finish(row.id, "failed", original, str(e), notified=True)
             _drop_audio(store, row)
-            error_reply(tg, row, FAILED_TEXT)
+            error_reply(tg, with_ack(store, row), FAILED_TEXT)
 
 
 def notify_failed(store, tg) -> None:

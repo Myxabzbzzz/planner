@@ -25,6 +25,7 @@ class FakeStore:
         self.events: list[str] = []
         self.texts: list[tuple[str, str]] = []
         self.removed_audio: list[str] = []
+        self.acks: dict[str, int] = {}
 
     def load_context(self, user_id, now_utc):
         return self.ctx
@@ -57,6 +58,9 @@ class FakeStore:
 
     def remove_audio(self, key):
         self.removed_audio.append(key)
+
+    def reply_message_id(self, inbox_id):
+        return self.acks.get(inbox_id)
 
 
 class FakeTg:
@@ -765,3 +769,25 @@ def test_remembered_correction_must_match_the_kind(ctx):
     p, store, _ = make(c, FakeExtractor([bad], [bad]), classifier=cls, store=FakeStore(c))
     p.process(row())
     assert store.finished[0][1] == "needs_review"
+
+
+def test_ack_linked_after_claim_is_edited_not_left_hanging(ctx):
+    # бот вставил inbox, воркер забрал строку, и только потом бот привязал «⏳ Разбираю…»
+    p, store, tg = make(ctx, FakeExtractor([TAXI]))
+    store.acks["i1"] = 99
+    p.process(row(reply_message_id=None))
+    assert tg.edited[0][:2] == (5, 99) and tg.sent == []
+
+
+def test_error_reply_also_finds_a_late_ack(ctx):
+    p, store, tg = make(ctx, FakeExtractor(ExtractionError("bad json")))
+    store.acks["i1"] = 99
+    run_one(row(reply_message_id=None), p, store, tg)
+    assert tg.edited[0][:2] == (5, 99)
+
+
+def test_no_ack_lookup_for_miniapp_rows(ctx):
+    p, store, tg = make(ctx, FakeExtractor([TAXI]))
+    store.acks["i1"] = 99
+    p.process(row(source="miniapp", reply_message_id=None))
+    assert tg.edited == []
