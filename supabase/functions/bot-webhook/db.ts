@@ -29,6 +29,14 @@ export type Queue = {
   oldest: string | null;
 };
 
+/** api_subscription: pro_until — локальное время пользователя; null у «навсегда» и у Free. */
+export type Subscription = {
+  status: "trial" | "pro" | "lifetime" | "free";
+  pro_until: string | null;
+  ai_left: number | null;
+  ai_per_day: number;
+};
+
 export interface Db {
   resolveTime(userId: string, inboxId: string, idx: number, choice: string): Promise<boolean>;
   findUser(tgId: number): Promise<User | null>;
@@ -54,6 +62,10 @@ export interface Db {
   retryInbox(userId: string, inboxId: string): Promise<boolean>;
   cancelInbox(userId: string, inboxId: string): Promise<boolean>;
   queue(userId: string): Promise<Queue>;
+  /** false — этот платёж уже зачислен (Telegram прислал его повторно). */
+  applyPayment(userId: string, chargeId: string, plan: string, stars: number, until: string | null,
+               recurring: boolean): Promise<boolean>;
+  subscription(userId: string): Promise<Subscription>;
 }
 
 const USER_COLS = "id,tg_id,tg_username,is_allowed,is_admin,onboarded_at,base_currency,pending_action";
@@ -112,6 +124,14 @@ export function supabaseDb(sb: SupabaseClient): Db {
       } catch {
         return true;
       }
+    },
+    async applyPayment(userId, chargeId, plan, stars, until, recurring) {
+      return check(await sb.rpc("apply_payment", {
+        p_user: userId, p_charge_id: chargeId, p_plan: plan, p_stars: stars, p_until: until, p_recurring: recurring,
+      })) === true;
+    },
+    async subscription(userId) {
+      return check(await sb.rpc("api_subscription", { p_user: userId })) as Subscription;
     },
     async createInbox(row) {
       return (check(await sb.from("inbox").insert(row).select("id").single()) as { id: string }).id;

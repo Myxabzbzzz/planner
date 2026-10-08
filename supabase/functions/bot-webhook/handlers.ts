@@ -1,5 +1,6 @@
-import type { Db, User } from "./db.ts";
-import type { Button, Tg } from "../_shared/telegram.ts";
+import type { Db, Subscription, User } from "./db.ts";
+import type { Button, Payments, Tg } from "../_shared/telegram.ts";
+import { invoiceLinks, PLAN_IDS, PLANS, planFromPayload, PRO_PITCH } from "../_shared/plans.ts";
 import { MAX_VOICE_SEC, TOO_LONG_VOICE, TOO_MANY } from "../_shared/limits.ts";
 
 import type { MenuDb } from "./menu_db.ts";
@@ -14,6 +15,7 @@ export type Deps = {
   supabaseUrl: string;
   miniappUrl?: string;
   openAccess?: boolean; // любой, кто нажал /start, получает доступ (кроме закрытых через /deny)
+  pay?: Payments; // счета в Telegram Stars; без него /pro честно говорит, что оплата недоступна
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -71,6 +73,62 @@ export async function handleUpdate(update: any, d: Deps): Promise<void> {
   if (!(await d.db.recordUpdate(update?.update_id))) return;
   if (update.message) return await handleMessage(update.message, d);
   if (update.callback_query) return await handleCallback(update.callback_query, d);
+  if (update.pre_checkout_query) return await handlePreCheckout(update.pre_checkout_query, d);
+}
+
+// ——— Подписка Pro за Telegram Stars ———
+
+const fmtDay = (local: string | null) => (local ? local.slice(0, 10).split("-").reverse().join(".") : "");
+
+function statusLine(s: Subscription): string {
+  if (s.status === "lifetime") return "Сейчас: Pro навсегда ⭐";
+  if (s.status === "pro") return `Сейчас: Pro до ${fmtDay(s.pro_until)}`;
+  if (s.status === "trial") return `Сейчас: пробный Pro до ${fmtDay(s.pro_until)}`;
+  return `Сейчас: Free — сегодня осталось ${s.ai_left ?? 0} из ${s.ai_per_day} действий ИИ (голосовое или вопрос)`;
+}
+
+async function sendPlans(user: User, chatId: number, d: Deps) {
+  const s = await d.db.subscription(user.id);
+  const head = `⭐ Планер Pro\n${PRO_PITCH}\n\n${statusLine(s)}`;
+  if (s.status === "lifetime") return void await d.tg.sendMessage(chatId, head);
+  if (!d.pay) return void await d.tg.sendMessage(chatId, `${head}\n\nОплата скоро появится.`);
+  const links = await invoiceLinks(d.pay);
+  await d.tg.sendMessage(
+    chatId,
+    `${head}\n\nОплата звёздами Telegram. Месяц продлевается сам, отменить можно в любой момент в настройках Telegram.`,
+    PLAN_IDS.map((p) => [{ text: `${PLANS[p].title} — ${PLANS[p].stars} ⭐`, url: links[p] }]),
+  );
+}
+
+// Telegram спрашивает перед списанием: счёт наш, сумма актуальная, человек известен.
+// deno-lint-ignore no-explicit-any
+async function handlePreCheckout(q: any, d: Deps) {
+  if (!d.pay) return;
+  const plan = planFromPayload(q.invoice_payload);
+  const user = await d.db.findUser(q.from?.id);
+  const ok = plan !== null && q.currency === "XTR" && q.total_amount === PLANS[plan].stars && user?.is_allowed === true;
+  await d.pay.answerPreCheckoutQuery(q.id, ok, ok ? undefined : "Не получилось оформить — открой /pro ещё раз.");
+}
+
+// Первая оплата и каждое автопродление приходят как successful_payment.
+// deno-lint-ignore no-explicit-any
+async function handlePaid(user: User, chatId: number, sp: any, d: Deps) {
+  const plan = planFromPayload(sp.invoice_payload);
+  if (!plan) {
+    console.error("payment with unknown payload", sp.invoice_payload);
+    return;
+  }
+  const until = sp.subscription_expiration_date ? new Date(sp.subscription_expiration_date * 1000).toISOString() : null;
+  const applied = await d.db.applyPayment(user.id, String(sp.telegram_payment_charge_id), plan,
+                                          Number(sp.total_amount), until, sp.is_recurring === true);
+  if (!applied) return;  // повтор того же платежа
+  const s = await d.db.subscription(user.id);
+  const text = s.status === "lifetime"
+    ? "⭐ Pro активен навсегда. Спасибо, что поддержал проект!"
+    : sp.is_recurring && !sp.is_first_recurring
+    ? `⭐ Pro продлён до ${fmtDay(s.pro_until)}.`
+    : `⭐ Pro активен до ${fmtDay(s.pro_until)}. Спасибо!`;
+  await d.tg.sendMessage(chatId, text);
 }
 
 // deno-lint-ignore no-explicit-any
@@ -103,6 +161,7 @@ async function handleMessage(msg: any, d: Deps) {
     await d.tg.sendMessage(chatId, NO_ACCESS, d.adminTgId ? ASK_ACCESS : undefined);
     return;
   }
+  if (msg.successful_payment) return await handlePaid(user, chatId, msg.successful_payment, d);
 
   const text: string | undefined = msg.text;
   if (text && /^\/(allow|deny)\b/.test(text)) return await handleAdmin(user, chatId, text, d);
@@ -140,6 +199,7 @@ async function handleMessage(msg: any, d: Deps) {
     await d.tg.sendMessage(chatId, onboardedText(user.base_currency!), undefined, { replyKeyboard: MENU_ROWS });
     return;
   }
+  if (text === "/pro") return await sendPlans(user, chatId, d);
   if (text === "/menu") {
     await d.tg.sendMessage(chatId, MENU_HINT, undefined, { replyKeyboard: MENU_ROWS });
     return;
@@ -241,6 +301,10 @@ async function handleCallback(cq: any, d: Deps) {
   if (!user || !user.is_allowed || chatId === undefined || messageId === undefined) {
     await d.tg.answerCallback(cq.id, "Нет доступа");
     return;
+  }
+  if (cq.data === "pro") {
+    await d.tg.answerCallback(cq.id);
+    return await sendPlans(user, chatId, d);
   }
   const [action, ...rest] = String(cq.data ?? "").split(":");
 

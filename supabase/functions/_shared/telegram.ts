@@ -8,7 +8,15 @@ export interface Tg {
   deleteMessage(chatId: number, messageId: number): Promise<void>;
 }
 
-export function telegramClient(token: string, fetchFn: typeof fetch = fetch): Tg {
+/** Счёт в Telegram Stars (XTR). subscriptionPeriod — только 30 дней (2592000), Telegram продлевает сам. */
+export type Invoice = { title: string; description: string; payload: string; stars: number; subscriptionPeriod?: number };
+
+export interface Payments {
+  createInvoiceLink(inv: Invoice): Promise<string>;
+  answerPreCheckoutQuery(id: string, ok: boolean, error?: string): Promise<void>;
+}
+
+export function telegramClient(token: string, fetchFn: typeof fetch = fetch): Tg & Payments {
   async function call(method: string, body: unknown) {
     let json;
     try {
@@ -39,6 +47,18 @@ export function telegramClient(token: string, fetchFn: typeof fetch = fetch): Tg
     },
     answerCallback: async (id, text) => {
       await call("answerCallbackQuery", { callback_query_id: id, ...(text ? { text } : {}) });
+    },
+    createInvoiceLink: async (inv) =>
+      await call("createInvoiceLink", {
+        title: inv.title,
+        description: inv.description,
+        payload: inv.payload,
+        currency: "XTR",
+        prices: [{ label: inv.title, amount: inv.stars }],
+        ...(inv.subscriptionPeriod ? { subscription_period: inv.subscriptionPeriod } : {}),
+      }) as string,
+    answerPreCheckoutQuery: async (id, ok, error) => {
+      await call("answerPreCheckoutQuery", { pre_checkout_query_id: id, ok, ...(ok || !error ? {} : { error_message: error }) });
     },
     deleteMessage: async (chatId, messageId) => {
       // Сообщение могли удалить руками или оно слишком старое — это не ошибка.

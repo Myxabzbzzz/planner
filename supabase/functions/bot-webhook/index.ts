@@ -5,9 +5,11 @@ import { supabaseMenuDb } from "./menu_db.ts";
 import { telegramClient } from "../_shared/telegram.ts";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+const tg = telegramClient(Deno.env.get("TELEGRAM_BOT_TOKEN")!);
 const deps = {
   db: supabaseDb(sb),
-  tg: telegramClient(Deno.env.get("TELEGRAM_BOT_TOKEN")!),
+  tg,
+  pay: tg,
   adminTgId: Number(Deno.env.get("ADMIN_TG_ID")),
   openAccess: Deno.env.get("OPEN_ACCESS") === "true",
   menu: supabaseMenuDb(sb),

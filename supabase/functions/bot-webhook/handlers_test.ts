@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { handleUpdate } from "./handlers.ts";
-import type { Db, NewInbox, Queue, User } from "./db.ts";
+import type { Db, NewInbox, Queue, Subscription, User } from "./db.ts";
+import type { Invoice, Payments } from "../_shared/telegram.ts";
 import type { Button, Tg } from "../_shared/telegram.ts";
 import { FakeMenuDb } from "./testing.ts";
 
@@ -66,6 +67,17 @@ class FakeDb implements Db {
   async retryInbox(_u: string, id: string) { this.retried.push(id); return id === INBOX_ID; }
   async cancelInbox(_u: string, id: string) { this.cancelled.push(id); return id === INBOX_ID; }
   async queue() { return this.queueData; }
+  payments: Array<[string, string, string, number, string | null, boolean]> = [];
+  paidCharges = new Set<string>();
+  sub: Subscription = { status: "free", pro_until: null, ai_left: 2, ai_per_day: 3 };
+  async applyPayment(userId: string, chargeId: string, plan: string, stars: number, until: string | null, recurring: boolean) {
+    this.payments.push([userId, chargeId, plan, stars, until, recurring]);
+    if (this.paidCharges.has(chargeId)) return false;
+    this.paidCharges.add(chargeId);
+    this.sub = { status: plan === "lifetime" ? "lifetime" : "pro", pro_until: plan === "lifetime" ? null : "2026-11-07T10:00", ai_left: null, ai_per_day: 3 };
+    return true;
+  }
+  async subscription() { return this.sub; }
   async onboard(userId: string, currency: string) {
     const u = this.users.find((x) => x.id === userId)!;
     u.base_currency = currency;
@@ -491,4 +503,61 @@ Deno.test("first greeting mentions /privacy", async () => {
   const { tg, deps } = setup();
   await handleUpdate(msg(ADMIN, { text: "/start" }), deps);
   assert(tg.sent.at(-1)!.text.includes("/privacy"));
+});
+
+
+class FakePay implements Payments {
+  invoices: Invoice[] = [];
+  prechecks: Array<[string, boolean, string | undefined]> = [];
+  async createInvoiceLink(inv: Invoice) { this.invoices.push(inv); return `https://t.me/$inv${this.invoices.length}`; }
+  async answerPreCheckoutQuery(id: string, ok: boolean, error?: string) { this.prechecks.push([id, ok, error]); }
+}
+
+function paySetup() {
+  const s = setup();
+  const pay = new FakePay();
+  return { ...s, pay, deps: { ...s.deps, pay } };
+}
+
+Deno.test("/pro shows the status and three plans as Stars invoice links", async () => {
+  const { db, tg, pay, deps } = paySetup();
+  onboarded(db);
+  await handleUpdate(msg(ADMIN, { text: "/pro" }), deps);
+  const m = tg.sent.at(-1)!;
+  assert(m.text.includes("Free") && m.text.includes("2 из 3"));
+  assertEquals(pay.invoices.map((i) => i.payload), ["pro:month", "pro:year", "pro:lifetime"]);
+  assertEquals(pay.invoices[0].subscriptionPeriod, 2592000);
+  assertEquals(pay.invoices[1].subscriptionPeriod, undefined);
+  assertEquals(m.buttons!.flat().map((b) => b.url), ["https://t.me/$inv1", "https://t.me/$inv2", "https://t.me/$inv3"]);
+});
+
+Deno.test("the «⭐ Pro» button under the limit message opens the same plans", async () => {
+  const { db, tg, pay, deps } = paySetup();
+  onboarded(db);
+  await handleUpdate(cb("pro"), deps);
+  assertEquals(pay.invoices.length, 3);
+  assert(tg.sent.at(-1)!.text.includes("Pro"));
+});
+
+Deno.test("pre-checkout: our plan from a known user is approved, anything else is declined", async () => {
+  const { db, pay, deps } = paySetup();
+  onboarded(db);
+  await handleUpdate({ update_id: nextUpdate++, pre_checkout_query: { id: "q1", from: { id: ADMIN }, currency: "XTR", total_amount: 150, invoice_payload: "pro:month" } }, deps);
+  await handleUpdate({ update_id: nextUpdate++, pre_checkout_query: { id: "q2", from: { id: ADMIN }, currency: "XTR", total_amount: 150, invoice_payload: "pro:forever" } }, deps);
+  await handleUpdate({ update_id: nextUpdate++, pre_checkout_query: { id: "q3", from: { id: 4242 }, currency: "XTR", total_amount: 150, invoice_payload: "pro:month" } }, deps);
+  assertEquals(pay.prechecks.map(([id, ok]) => [id, ok]), [["q1", true], ["q2", false], ["q3", false]]);
+});
+
+Deno.test("successful payment turns Pro on once, even if Telegram repeats it", async () => {
+  const { db, tg, deps } = paySetup();
+  onboarded(db);
+  const paid = (charge: string) => msg(ADMIN, { successful_payment: {
+    currency: "XTR", total_amount: 150, invoice_payload: "pro:month", telegram_payment_charge_id: charge,
+    subscription_expiration_date: 1791108000, is_recurring: true, is_first_recurring: true,
+  } });
+  await handleUpdate(paid("ch-1"), deps);
+  await handleUpdate(paid("ch-1"), deps);
+  assertEquals(db.payments[0], ["u-on", "ch-1", "month", 150, new Date(1791108000 * 1000).toISOString(), true]);
+  assertEquals(db.inbox.length, 0);
+  assertEquals(tg.sent.filter((m) => m.text.includes("Pro активен")).length, 1);
 });
