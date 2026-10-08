@@ -2,10 +2,13 @@
 -- Раньше промах на первом экране («USD» вместо «UZS») означал год кривых сумм без выхода.
 
 -- Курсы в fx_rates: base = USD, rates[X] = единиц X за 1 USD (ровно как читает worker/fx.py).
--- Если на нужную дату таблицы нет — берём ближайшую более раннюю.
+-- Если на нужную дату таблицы нет — берём ближайшую более раннюю, а для дат раньше
+-- первой таблицы — самую раннюю: приблизительный курс лучше суммы в чужой валюте.
 create function public._fx_rates_on(p_date date) returns jsonb
 language sql stable security definer set search_path = public as $$
-  select rates from public.fx_rates where date <= p_date order by date desc limit 1;
+  select coalesce(
+    (select rates from public.fx_rates where date <= p_date order by date desc limit 1),
+    (select rates from public.fx_rates order by date asc limit 1));
 $$;
 
 -- Сколько единиц p_to за 1 единицу p_from на дату p_date; null, если курса нет.
@@ -58,36 +61,38 @@ begin
   end if;
 
   -- Удалённые строки тоже пересчитываем: иначе «отменить удаление» вернёт сумму в старой валюте.
+  -- Пропускать строки нельзя: суммы читаются без фильтра по base_currency, и одна
+  -- непересчитанная строка смешала бы валюты во всех итогах. Нечем пересчитать — отменяем всё.
   for r in select * from public.transactions where user_id = p_user order by id for update loop
+    v_rate := null;
     if r.currency_orig is not null and r.amount_orig is not null and r.fx_date is not null then
       -- есть исходная сумма — считаем от неё, курсом на дату операции в исходных документах
       v_src := r.currency_orig; v_amt := r.amount_orig; v_date := r.fx_date;
-    else
-      -- исходной суммы нет — переводим из старой базы в новую курсом на дату операции
-      v_src := r.base_currency; v_amt := r.amount_base; v_date := r.occurred_at;
+      v_rate := public._fx_pair(v_date, v_src, v_new);
     end if;
-
-    v_rate := public._fx_pair(v_date, v_src, v_new);
-    if v_rate is null then v_skip := v_skip + 1; continue; end if;
-    v_base := round(v_amt * v_rate, 2);
-    -- amount_base > 0 по схеме: лучше оставить старое число, чем записать заведомо неверный ноль
-    if v_base is null or v_base <= 0 then v_skip := v_skip + 1; continue; end if;
+    if v_rate is null then
+      -- исходной суммы нет или её валюты нет в курсах — переводим из старой базы курсом на дату операции
+      v_src := r.base_currency; v_amt := r.amount_base; v_date := r.occurred_at;
+      v_rate := public._fx_pair(v_date, v_src, v_new);
+    end if;
+    if v_rate is null then raise exception 'no rate'; end if;
+    v_base := greatest(round(v_amt * v_rate, 2), 0.01);  -- amount_base > 0 по схеме
 
     update public.transactions
        set amount_base = v_base,
            base_currency = v_new,
-           fx_rate = case when r.currency_orig is not null then round(v_rate, 8) else fx_rate end
+           fx_rate = case when r.currency_orig is not null and v_src = r.currency_orig
+                          then round(v_rate, 8) else fx_rate end
      where id = r.id;
     v_conv := v_conv + 1;
   end loop;
 
-  -- лимиты тоже в деньгах; нет курса — оставляем как есть, иначе получим бессмысленное число
+  -- лимиты тоже в деньгах; без курса старое число в новой валюте было бы бессмысленным
   v_rate := public._fx_pair(current_date, v_old, v_new);
-  if v_rate is not null then
-    update public.budgets
-       set monthly_limit = greatest(round(monthly_limit * v_rate, 2), 0.01)
-     where user_id = p_user;
-  end if;
+  if v_rate is null then raise exception 'no rate'; end if;
+  update public.budgets
+     set monthly_limit = greatest(round(monthly_limit * v_rate, 2), 0.01)
+   where user_id = p_user;
 
   update public.users set base_currency = v_new where id = p_user;
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Api } from "../api";
+import { ApiError, type Api } from "../api";
 import { fmtAmount } from "../format";
 import { saveError } from "../saveError";
 import { confirmDialog, hapticResult } from "../telegram";
@@ -41,10 +41,13 @@ export function AccountSheet({ api, settings, onClose, onChanged }: {
       const r = await api.changeCurrency(currency);
       hapticResult(true);
       setResult(r);
-      onChanged({ ...settings, base_currency: r.to });
+      // лимит сервер тоже пересчитал — берём свежие настройки, а не старое число с новой валютой
+      onChanged(await api.settings().catch(() => ({ ...settings, base_currency: r.to, limit: null })));
     } catch (e) {
       hapticResult(false);
-      setError(saveError(e));
+      setError(e instanceof ApiError && e.status === 400
+        ? "Не смог пересчитать: для части операций нет курса. Ничего не изменилось."
+        : saveError(e));
     } finally {
       setBusy(null);
     }
