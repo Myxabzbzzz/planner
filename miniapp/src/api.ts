@@ -1,6 +1,7 @@
 import type { EventPatch, HabitPatch, NotePatch, TaskPatch } from "./itemEdit";
 import type { OpEdit, OpPatch } from "./opEdit";
 import { baseMime } from "./recorder";
+import { flattenReviews, type ReviewsWire } from "./reviews";
 import type {
   BudgetsResp, Categories, Created, CurrencyChange, EventsResp, HabitsResp, InboxStatus, Me, MoneyResp, NotesResp,
   NotifyKind, OperationsResp, Profile, ReviewKind, ReviewsResp, Sent, Settings, TasksResp, Today,
@@ -98,7 +99,7 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     renameCategory: (id: string, name: string) => post(`/categories/${id}`, { name }),
     deleteCategory: (id: string) => post(`/categories/${id}/delete`, {}),
 
-    reviews: () => get<ReviewsResp>("/reviews"),
+    reviews: async (): Promise<ReviewsResp> => flattenReviews(await get<ReviewsWire>("/reviews")),
     answerReview: (inboxId: string, index: number, choice: string, kind: ReviewKind) =>
       post(`/reviews/${inboxId}`, { index, choice, kind }),
 

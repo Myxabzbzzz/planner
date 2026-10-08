@@ -85,13 +85,12 @@ export type BudgetsResp = {
 };
 
 /** Открытый вопрос ИИ: раньше ответить на него можно было только в чате. */
-export type ReviewOption = { key: string; label: string };
+export type ReviewOption = { key: string; label: string; kind: ReviewKind };
 /** «type» — что это за запись, «time» — во сколько; у них разные RPC. */
 export type ReviewKind = "type" | "time";
 export type Review = {
   inbox_id: string;
   index: number;
-  kind: ReviewKind;
   question: string;
   source_text: string;
   options: ReviewOption[];

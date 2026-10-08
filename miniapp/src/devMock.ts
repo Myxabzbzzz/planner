@@ -136,26 +136,31 @@ function profile(months: number) {
 }
 
 const REVIEWS = {
+  // форма api_reviews: вопросы сгруппированы по записи, у кнопки свой RPC
   reviews: [
     {
-      inbox_id: "aaaaaaaa-1111-2222-3333-444444444444", index: 0, kind: "type",
-      question: "Это трата или просто мысль?", source_text: "такси 400",
-      options: [
-        { key: "expense", label: "💸 Расход" },
-        { key: "note", label: "💡 Мысль" },
-        { key: "drop", label: "🗑 Пропустить" },
-      ],
-      created_at: "2026-10-07T09:12:00",
+      inbox_id: "aaaaaaaa-1111-2222-3333-444444444444", source: "text", status: "needs_review",
+      created_at: "2026-10-07T09:12", text: "такси 400",
+      questions: [{
+        idx: 0, reason: "laya", title: "Такси", source_text: "такси 400", kind: "expense",
+        options: [
+          { rpc: "resolve_review", arg: "expense", label: "Расход" },
+          { rpc: "resolve_review", arg: "note", label: "Мысль" },
+          { rpc: "resolve_review", arg: "drop", label: "Пропустить" },
+        ],
+      }],
     },
     {
-      inbox_id: "bbbbbbbb-1111-2222-3333-444444444444", index: 0, kind: "time",
-      question: "Во сколько встреча с Андреем?", source_text: "завтра встреча с Андреем",
-      options: [
-        { key: "1000", label: "10:00" },
-        { key: "1500", label: "15:00" },
-        { key: "none", label: "Без времени" },
-      ],
-      created_at: "2026-10-06T18:40:00",
+      inbox_id: "bbbbbbbb-1111-2222-3333-444444444444", source: "voice", status: "needs_review",
+      created_at: "2026-10-06T18:40", text: "завтра встреча с Андреем",
+      questions: [{
+        idx: 0, reason: "time", title: "Встреча с Андреем", source_text: "завтра встреча с Андреем", kind: "event",
+        options: [
+          { rpc: "resolve_time", arg: "1000", label: "10:00" },
+          { rpc: "resolve_time", arg: "1500", label: "15:00" },
+          { rpc: "resolve_time", arg: "none", label: "Без времени" },
+        ],
+      }],
     },
   ],
 };

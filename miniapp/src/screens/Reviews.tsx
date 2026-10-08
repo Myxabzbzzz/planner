@@ -62,7 +62,7 @@ export function Reviews({ api, refresh = 0, onDone }: {
             <div className="chips" style={{ marginTop: 12 }}>
               {r.options.map((o) => (
                 <button type="button" key={o.key} className="pill" disabled={busy !== null}
-                  onClick={() => void answer(r.inbox_id, r.index, o.key, r.kind)}>
+                  onClick={() => void answer(r.inbox_id, r.index, o.key, o.kind)}>
                   {busy === key ? "…" : o.label}
                 </button>
               ))}
