@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import type { HomeScreenStatus } from "./homeScreen";
 
 type Inset = { top: number; bottom: number; left: number; right: number };
 
@@ -30,6 +31,8 @@ type WebApp = {
   showConfirm?(message: string, cb: (ok: boolean) => void): void;
   openInvoice?(url: string, cb: (status: "paid" | "cancelled" | "failed" | "pending") => void): void;
   openTelegramLink?(url: string): void;
+  addToHomeScreen?(): void;
+  checkHomeScreenStatus?(cb: (status: HomeScreenStatus) => void): void;
   close?(): void;
   BackButton?: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
 };
@@ -181,4 +184,20 @@ export function openInvoice(url: string): Promise<"paid" | "cancelled" | "failed
   if (tg?.openInvoice) return new Promise((resolve) => tg!.openInvoice!(url, resolve));
   window.open(url, "_blank");
   return Promise.resolve("pending");
+}
+
+/**
+ * Иконка Mini App на экране «Домой» (Bot API 8.0+, мобильные). Статус спрашиваем у Telegram;
+ * после добавления он присылает homeScreenAdded — тогда кнопку прячем.
+ */
+export function useHomeScreen(): { status: HomeScreenStatus; add: () => void } {
+  const [status, setStatus] = useState<HomeScreenStatus>("unsupported");
+  useEffect(() => {
+    if (!tg?.checkHomeScreenStatus || !tg.isVersionAtLeast?.("8.0")) return;
+    tg.checkHomeScreenStatus((s) => setStatus(s));
+    const added = () => setStatus("added");
+    tg.onEvent?.("homeScreenAdded", added);
+    return () => tg?.offEvent?.("homeScreenAdded", added);
+  }, []);
+  return { status, add: () => tg?.addToHomeScreen?.() };
 }

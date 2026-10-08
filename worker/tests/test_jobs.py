@@ -139,3 +139,7 @@ def test_done_is_logged_with_duration(tmp_path, caplog):
     caplog.set_level(logging.INFO)
     run_job(job(), Store(), Tg(), Signer(), "https://x.supabase.co", tmp_path)
     assert "job j1 done in" in caplog.text and "signed" in caplog.text
+
+
+def test_caption_explains_the_home_screen_widget():
+    assert "Добавить виджет" in CAPTION and "«Команды»" in CAPTION

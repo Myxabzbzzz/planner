@@ -172,3 +172,9 @@ Deno.test("renderNotify shows toggles", () => {
     [{ text: "🔔 Итоги недели (вс, 21:30)", callback_data: "nt:weekly" }],
   ]);
 });
+
+
+Deno.test("tap guide also explains the home screen widget", () => {
+  const v = renderTapGuide("https://x.supabase.co");
+  if (!v.text.includes("Добавить виджет")) throw new Error("no widget step");
+});

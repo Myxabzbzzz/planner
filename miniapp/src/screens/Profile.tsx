@@ -1,5 +1,5 @@
 import { Heat, MoneyMonths, TaskWeeks } from "../components/Charts";
-import { IconFlame, IconGear, IconLock, IconMedal, IconStar } from "../components/Icons";
+import { IconFlame, IconGear, IconHome, IconLock, IconMedal, IconStar } from "../components/Icons";
 import { Meter, Ring } from "../components/Meter";
 import { Card, ErrorCard, Loading } from "../components/States";
 import type { Api } from "../api";
@@ -7,6 +7,8 @@ import { autoRate, badgesOf, finishRate, levelOf, type Badge } from "../gamify";
 import { days as daysWord, fmtAmount, fmtDayTitle } from "../format";
 import { useLoad } from "../load";
 import { subStatus } from "../subscription";
+import { offerHomeScreen } from "../homeScreen";
+import { useHomeScreen } from "../telegram";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
@@ -33,6 +35,7 @@ export function Profile({ api, refresh = 0, onSettings, onAccount, onPro }: {
 }) {
   const { data, error, loading, reload } = useLoad(() => api.profile(6), [api], refresh);
   const sub = useLoad(() => api.subscription(), [api], refresh);
+  const home = useHomeScreen();
   if (loading && !data) return <Loading hero />;
   if (error || !data) return <ErrorCard onRetry={reload} />;
 
@@ -178,6 +181,13 @@ export function Profile({ api, refresh = 0, onSettings, onAccount, onPro }: {
           <span className="grow row-title" style={{ minHeight: 0 }}>Подписка</span>
           <span className="meta">{sub.data ? subStatus(sub.data).title : "Pro"}</span>
         </button>
+        {offerHomeScreen(home.status) && (
+          <button type="button" className="row" style={{ width: "100%", padding: "8px 16px" }} onClick={home.add}>
+            <span style={{ color: "var(--fg-3)" }}><IconHome /></span>
+            <span className="grow row-title" style={{ minHeight: 0 }}>На экран «Домой»</span>
+            <span className="meta">иконка планера</span>
+          </button>
+        )}
         <button type="button" className="row" style={{ width: "100%", padding: "8px 16px" }} onClick={onSettings}>
           <span style={{ color: "var(--fg-3)" }}><IconGear /></span>
           <span className="grow row-title" style={{ minHeight: 0 }}>Настройки</span>
