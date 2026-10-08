@@ -1,8 +1,16 @@
 import type { ApiDb, InboxInsert } from "./db.ts";
 import { LIMITS } from "../_shared/limits.ts";
+import { invoiceFor, PLAN_IDS, PLANS, type Plan } from "../_shared/plans.ts";
+import type { Payments } from "../_shared/telegram.ts";
 import { MAX_AGE_READ, MAX_AGE_SENSITIVE, MAX_AGE_WRITE, verifyInitData } from "./initdata.ts";
 
-export type ApiDeps = { db: ApiDb; botToken: string; nowSec: () => number; newId?: () => string };
+export type ApiDeps = {
+  db: ApiDb;
+  botToken: string;
+  nowSec: () => number;
+  newId?: () => string;
+  pay?: Payments; // счета в Telegram Stars
+};
 
 /**
  * Origin миниаппа задаётся переменной MINIAPP_ORIGIN (через запятую, если их
@@ -471,6 +479,12 @@ async function handle(req: Request, d: ApiDeps): Promise<Response> {
       return json(429, { error: "too_many" });
     }
     if (req.method === "POST") {
+      if (path === "/subscription/invoice") {
+        const plan = (await readJson(req)).plan;
+        if (!(typeof plan === "string" && Object.hasOwn(PLANS, plan))) throw new BadRequest();
+        if (!d.pay) return json(503, { error: "payments_unavailable" });
+        return json(200, { url: await d.pay.createInvoiceLink(invoiceFor(plan as Plan)) });
+      }
       const rev = new RegExp(`^/reviews/(${UUID})$`, "i").exec(path);
       if (rev) {
         const { fn, idx, choice } = reviewAnswer(await readJson(req));
@@ -492,6 +506,14 @@ async function handle(req: Request, d: ApiDeps): Promise<Response> {
       if (!pr) return json(404, { error: "not_found" });
       const ok = await d.db.call(pr[0], pr[1]);
       return ok === true ? json(200, { ok: true }) : json(404, { error: "not_found" });
+    }
+    if (path === "/subscription") {
+      const sub = await d.db.call("api_subscription", [user.id]);
+      if (sub === null) return json(404, { error: "not_found" });
+      const plans = PLAN_IDS.map((id) => ({
+        id, title: PLANS[id].title, stars: PLANS[id].stars, recurring: "subscriptionPeriod" in PLANS[id],
+      }));
+      return json(200, { ...(sub as Record<string, unknown>), plans });
     }
     const r = route(path, url.searchParams, user.id);
     if (!r) return json(404, { error: "not_found" });

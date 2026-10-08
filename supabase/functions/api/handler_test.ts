@@ -510,3 +510,43 @@ Deno.test("сбой самой проверки лимита не ломает �
   };
   assertEquals((await run(await req("/inbox", { method: "POST", body: { text: "привет" } }), db)).status, 201);
 });
+
+// ——— Подписка Pro ———
+
+class FakePay {
+  invoices: Array<{ payload: string; stars: number; subscriptionPeriod?: number }> = [];
+  async createInvoiceLink(inv: { payload: string; stars: number; subscriptionPeriod?: number }) {
+    this.invoices.push(inv);
+    return "https://t.me/$abc";
+  }
+  async answerPreCheckoutQuery() {}
+}
+
+Deno.test("GET /subscription returns the status with the plans and their Stars prices", async () => {
+  const db = new FakeApiDb();
+  db.rpc = (fn: string, args: unknown[]) => {
+    db.calls.push([fn, args]);
+    return Promise.resolve({ status: "free", pro_until: null, ai_left: 3, ai_per_day: 3 });
+  };
+  const r = await run(await req("/subscription"), db);
+  assertEquals(r.db.calls, [["api_subscription", ["u1"]]]);
+  assertEquals(r.body.status, "free");
+  assertEquals(r.body.plans.map((p: { id: string }) => p.id), ["month", "year", "lifetime"]);
+  assertEquals(r.body.plans[0].recurring, true);
+  assertEquals(r.body.plans[2].recurring, false);
+});
+
+Deno.test("POST /subscription/invoice creates a Stars invoice link for the plan", async () => {
+  const pay = new FakePay();
+  const res = await handleApi(await req("/subscription/invoice", { method: "POST", body: { plan: "month" } }),
+    { db: new FakeApiDb(), botToken: TOKEN, nowSec: () => NOW, pay });
+  assertEquals([res.status, await res.json()], [200, { url: "https://t.me/$abc" }]);
+  assertEquals(pay.invoices[0].payload, "pro:month");
+  assertEquals(pay.invoices[0].subscriptionPeriod, 2592000);
+
+  const bad = await handleApi(await req("/subscription/invoice", { method: "POST", body: { plan: "forever" } }),
+    { db: new FakeApiDb(), botToken: TOKEN, nowSec: () => NOW, pay });
+  assertEquals(bad.status, 400);
+  const off = await run(await req("/subscription/invoice", { method: "POST", body: { plan: "month" } }));
+  assertEquals(off.status, 503);
+});
