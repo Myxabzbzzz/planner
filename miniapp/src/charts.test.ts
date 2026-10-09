@@ -12,6 +12,14 @@ describe("доли категорий", () => {
     expect(s.map((x) => x.color)).toEqual([RAMP[0], RAMP[1]]);
   });
 
+  it("свой цвет категории побеждает ранг и не переезжает при смене порядка", () => {
+    const colorOf = (n: string) => (n === "еда" ? "var(--cat-green)" : null);
+    const a = categoryShares([{ name: "еда", amount: 5 }, { name: "дом", amount: 1 }], RAMP.length, colorOf);
+    const b = categoryShares([{ name: "еда", amount: 1 }, { name: "дом", amount: 5 }], RAMP.length, colorOf);
+    expect(a.map((x) => [x.name, x.color])).toEqual([["еда", "var(--cat-green)"], ["дом", RAMP[1]]]);
+    expect(b.map((x) => [x.name, x.color])).toEqual([["дом", RAMP[0]], ["еда", "var(--cat-green)"]]);
+  });
+
   it("хвост сворачивается в «Другое», цветов ровно столько, сколько ступеней", () => {
     const items = Array.from({ length: 9 }, (_, i) => ({ name: `к${i}`, amount: 9 - i }));
     const s = categoryShares(items);

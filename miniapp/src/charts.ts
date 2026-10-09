@@ -3,11 +3,18 @@
  *
  * Пончик на 7 категорий убран: на телефоне он требует легенды и всё равно не даёт
  * сравнить величины. Вместо него 100 % полоса состава + ранжированные бары.
- * Поэтому цвет здесь порядковый (ранг = величина), а не категориальный: один
- * янтарный тон в пять ступеней. Обе рампы (тёмная и светлая) прогнаны через
+ * Поэтому по умолчанию цвет здесь порядковый (ранг = величина), а не категориальный:
+ * один янтарный тон в пять ступеней. Если пользователь выбрал категории свой цвет,
+ * он побеждает ступень — цвет следует за категорией, а не за её местом. Обе рампы (тёмная и светлая) прогнаны через
  * dataviz/scripts/validate_palette.js --ordinal и проходят все проверки,
  * поэтому отдаём CSS-переменные — тема переключается сама.
  */
+
+/**
+ * Свой цвет категории — восемь слотов категориальной палитры dataviz в этом порядке
+ * (порядок и есть защита от дальтонизма). Оттенки для каждой темы — `--cat-*` в styles.css.
+ */
+export const catColor = (key: string | null | undefined) => (key ? `var(--cat-${key})` : null);
 
 /** Ступени от самой крупной доли к самой мелкой. */
 export const RAMP = ["var(--r1)", "var(--r2)", "var(--r3)", "var(--r4)", "var(--r5)"] as const;
@@ -19,7 +26,11 @@ export type Share = { name: string; amount: number; share: number; color: string
  * Топ-(n−1) категорий плюс «Другое». Девятой ступени не бывает:
  * хвост всегда сворачивается, иначе цвета пришлось бы повторять.
  */
-export function categoryShares(items: { name: string; amount: number }[], slots = RAMP.length): Share[] {
+export function categoryShares(
+  items: { name: string; amount: number }[],
+  slots = RAMP.length,
+  colorOf: (name: string) => string | null = () => null,
+): Share[] {
   const positive = items.filter((i) => i.amount > 0);
   const total = positive.reduce((s, i) => s + i.amount, 0);
   if (total <= 0) return [];
@@ -28,7 +39,8 @@ export function categoryShares(items: { name: string; amount: number }[], slots 
   const tail = sorted.length > slots ? sorted.slice(slots - 1) : [];
   const rows = [...head];
   if (tail.length > 0) rows.push({ name: OTHER, amount: tail.reduce((s, i) => s + i.amount, 0) });
-  return rows.map((r, i) => ({ ...r, share: r.amount / total, color: RAMP[i] }));
+  // Свой цвет категории следует за ней, ступень рампы — только у тех, кому его не выбрали.
+  return rows.map((r, i) => ({ ...r, share: r.amount / total, color: (r.name !== OTHER && colorOf(r.name)) || RAMP[i] }));
 }
 
 export function barHeights(byDay: { date: string; expense: number }[], month: string) {

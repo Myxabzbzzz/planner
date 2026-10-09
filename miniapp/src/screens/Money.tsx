@@ -5,7 +5,7 @@ import { IconChevron } from "../components/Icons";
 import { Meter } from "../components/Meter";
 import { OpSheet } from "../components/OpSheet";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
-import { barHeights, categoryShares } from "../charts";
+import { barHeights, catColor, categoryShares, RAMP } from "../charts";
 import { currentMonth, fmtAmount, fmtDayTitle, fmtRateNote, monthTitle, shiftMonth, todayIso } from "../format";
 import { useLoad } from "../load";
 import { haptic } from "../telegram";
@@ -23,6 +23,8 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
   const thisMonth = currentMonth(me.tz);
   const [month, setMonth] = useState(thisMonth);
   const { data, error, loading, reload } = useLoad(() => api.money(month), [api, month], refresh);
+  // Свои цвета категорий; заодно кэш категорий прогрет к открытию шторки операции.
+  const cats = useLoad(() => api.categories().catch(() => null), [api], refresh);
   const [editing, setEditing] = useState<Operation | null>(null);
   // Догруженные страницы операций: сервер отдаёт первые 200 и курсор на остальное.
   const [more, setMore] = useState<Operation[]>([]);
@@ -75,7 +77,8 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
   if (error || !data) return <>{header}<ErrorCard onRetry={reload} /></>;
 
   const cur = data.base_currency;
-  const shares = categoryShares(data.by_category);
+  const colors = new Map((cats.data?.expense ?? []).map((c) => [c.name, catColor(c.color)]));
+  const shares = categoryShares(data.by_category, RAMP.length, (name) => colors.get(name) ?? null);
   const today = month === thisMonth ? Number(todayIso(me.tz).slice(8, 10)) : undefined;
   const left = data.limit !== null ? data.limit - data.expense : null;
   const ops = [...data.operations, ...more];
@@ -122,7 +125,7 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
               <div className="card-head">
                 <h3 className="grow">Куда уходит</h3>
                 <button type="button" className="btn quiet" style={{ minHeight: 32, padding: 0 }} onClick={onBudgets}>
-                  Лимиты
+                  Лимиты и цвета
                 </button>
               </div>
               <ShareBar shares={shares} />

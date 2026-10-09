@@ -41,7 +41,11 @@ export function RankedBars({ shares, currency }: { shares: Share[]; currency: st
   );
 }
 
-/** Траты по дням. Тап по столбику показывает его значение — на телефоне hover нет. */
+/**
+ * Траты по дням. Слева шкала сумм, чтобы величину было видно без тапа.
+ * Выбрать день можно тапом или ведя пальцем по графику: попасть в столбик шириной
+ * в несколько пикселей (а у пустого дня его нет вовсе) на телефоне трудно.
+ */
 export function DayBars({ bars, today, currency }: {
   bars: { day: number; value: number; h: number }[];
   today?: number;
@@ -50,29 +54,61 @@ export function DayBars({ bars, today, currency }: {
   const [sel, setSel] = useState<number | null>(null);
   const picked = sel === null ? null : bars.find((b) => b.day === sel) ?? null;
   const mid = Math.ceil(bars.length / 2);
+  const max = Math.max(0, ...bars.map((b) => b.value));
+
+  const dayAt = (el: HTMLElement, clientX: number) => {
+    const r = el.getBoundingClientRect();
+    const i = Math.floor(((clientX - r.left) / r.width) * bars.length);
+    return bars[Math.min(bars.length - 1, Math.max(0, i))]?.day ?? null;
+  };
+  const scrub = (el: HTMLElement, clientX: number) => {
+    const d = dayAt(el, clientX);
+    if (d !== null && d !== sel) {
+      haptic();
+      setSel(d);
+    }
+  };
+
   return (
     <>
-      <div className="bars">
-        {bars.map((b) => (
-          <button
-            type="button"
-            key={b.day}
-            className={`bar-col${b.day === sel ? " sel" : b.day === today ? " now" : ""}`}
-            aria-label={`${b.day}-е: ${fmtAmount(b.value, currency)}`}
-            onClick={() => {
-              haptic();
-              setSel((s) => (s === b.day ? null : b.day));
-            }}
-          >
-            <i style={{ height: `${Math.max(b.h * 100, b.value > 0 ? 3 : 0)}%` }} />
-          </button>
-        ))}
+      <div className="bars-wrap">
+        {max > 0 && (
+          <div className="y-axis" aria-hidden="true">
+            <span>{fmtCompact(max)}</span>
+            <span>{fmtCompact(Math.round(max / 2))}</span>
+            <span>0</span>
+          </div>
+        )}
+        <div
+          className="bars"
+          onPointerDown={(e) => scrub(e.currentTarget, e.clientX)}
+          onPointerMove={(e) => { if (e.buttons || e.pointerType === "touch") scrub(e.currentTarget, e.clientX); }}
+        >
+          {max > 0 && <><i className="grid-line" style={{ bottom: "50%" }} /><i className="grid-line" style={{ bottom: "100%" }} /></>}
+          {bars.map((b) => (
+            <button
+              type="button"
+              key={b.day}
+              className={`bar-col${b.day === sel ? " sel" : b.day === today ? " now" : ""}`}
+              aria-label={`${b.day}-е: ${fmtAmount(b.value, currency)}`}
+              aria-pressed={b.day === sel}
+              onClick={(e) => {
+                // мышь и касание уже выбрали день в onPointerDown; сюда доходит клавиатура
+                if (e.detail === 0) setSel((s) => (s === b.day ? null : b.day));
+              }}
+            >
+              <i style={{ height: `${Math.max(b.h * 100, b.value > 0 ? 3 : 0)}%` }} />
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="axis" aria-hidden="true"><span>1</span><span>{mid}</span><span>{bars.length}</span></div>
+      <div className={max > 0 ? "axis with-y" : "axis"} aria-hidden="true">
+        <span>1</span><span>{mid}</span><span>{bars.length}</span>
+      </div>
       <div className="card-foot">
         {picked
           ? `${picked.day}-е — ${fmtAmount(picked.value, currency)}`
-          : "Нажми на столбик, чтобы увидеть сумму"}
+          : "Нажми или проведи пальцем по графику, чтобы увидеть сумму за день"}
       </div>
     </>
   );

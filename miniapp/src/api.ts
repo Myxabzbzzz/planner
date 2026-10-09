@@ -3,7 +3,7 @@ import type { OpEdit, OpPatch } from "./opEdit";
 import { baseMime } from "./recorder";
 import { flattenReviews, type ReviewsWire } from "./reviews";
 import type {
-  BudgetsResp, Categories, Created, CurrencyChange, EventsResp, HabitsResp, InboxStatus, Me, MoneyResp, NotesResp,
+  BudgetsResp, Categories, CategoryColor, Created, CurrencyChange, EventsResp, HabitsResp, InboxStatus, Me, MoneyResp, NotesResp,
   NotifyKind, OperationsResp, Profile, ReviewKind, ReviewsResp, Sent, Settings, SubPlan, Subscription, TasksResp, Today,
 } from "./types";
 import type { NewEvent, NewHabit, NewNote, NewTask, NewTransaction } from "./newItem";
@@ -49,6 +49,25 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     if (!res.ok) throw new ApiError(res.status);
     return (await res.json()) as T;
   }
+  // Категории меняются редко, а нужны сразу при открытии шторки: без кэша форма операции
+  // сначала рисовалась с одной категорией, а через полсекунды прыгала на полный список.
+  let cats: Promise<Categories> | null = null;
+  let catsReady: Categories | null = null;
+  const loadCategories = () =>
+    (cats ??= get<Categories>("/categories").then(
+      (c) => (catsReady = c),
+      (e) => {
+        cats = null;
+        throw e;
+      },
+    ));
+  /** Правки, после которых список категорий мог измениться (своя категория создаётся на лету). */
+  const dropCategories = <T>(p: Promise<T>) =>
+    p.finally(() => {
+      cats = null;
+      catsReady = null;
+    });
+
   return {
     me: () => get<Me>("/me"),
     today: () => get<Today>("/today"),
@@ -59,8 +78,10 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     setTaskDone: (id: string, done: boolean) => post(`/tasks/${id}/done`, { done }),
     setEventDone: (id: string, done: boolean) => post(`/events/${id}/done`, { done }),
     setHabitToday: (id: string, done: boolean) => post(`/habits/${id}/today`, { done }),
-    categories: () => get<Categories>("/categories"),
-    updateTransaction: (id: string, patch: OpPatch) => post(`/transactions/${id}`, patch),
+    categories: loadCategories,
+    /** Уже загруженные категории — чтобы первая отрисовка шторки была сразу полной. */
+    cachedCategories: () => catsReady,
+    updateTransaction: (id: string, patch: OpPatch) => dropCategories(post(`/transactions/${id}`, patch)),
     deleteTransaction: (id: string) => post(`/transactions/${id}/delete`, {}),
     updateTask: (id: string, patch: TaskPatch) => post(`/tasks/${id}`, patch),
     deleteTask: (id: string) => post(`/tasks/${id}/delete`, {}),
@@ -80,7 +101,7 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     createEvent: (body: NewEvent) => postJson<Created>("/events", body),
     createNote: (body: NewNote) => postJson<Created>("/notes", body),
     createHabit: (body: NewHabit) => postJson<Created>("/habits", body),
-    createTransaction: (body: NewTransaction) => postJson<Created>("/transactions", body),
+    createTransaction: (body: NewTransaction) => dropCategories(postJson<Created>("/transactions", body)),
 
     setHabitOn: (id: string, date: string, done: boolean) => post(`/habits/${id}/day`, { date, done }),
     unarchiveHabit: (id: string) => post(`/habits/${id}/unarchive`, {}),
@@ -91,13 +112,15 @@ export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch
     restoreNote: (id: string) => post(`/notes/${id}/restore`, {}),
     restoreTransaction: (id: string) => post(`/transactions/${id}/restore`, {}),
 
-    editTransaction: (id: string, patch: OpEdit) => post(`/transactions/${id}/edit`, patch),
+    editTransaction: (id: string, patch: OpEdit) => dropCategories(post(`/transactions/${id}/edit`, patch)),
     operations: (month: string, before?: string) => get<OperationsResp>("/operations", { month, before }),
 
     budgets: (month: string) => get<BudgetsResp>("/budgets", { month }),
     setCategoryLimit: (category: string, amount: number) => post("/settings/category-limit", { category, amount }),
-    renameCategory: (id: string, name: string) => post(`/categories/${id}`, { name }),
-    deleteCategory: (id: string) => post(`/categories/${id}/delete`, {}),
+    renameCategory: (id: string, name: string) => dropCategories(post(`/categories/${id}`, { name })),
+    deleteCategory: (id: string) => dropCategories(post(`/categories/${id}/delete`, {})),
+    setCategoryColor: (id: string, color: CategoryColor | null) =>
+      dropCategories(post(`/categories/${id}/color`, { color })),
 
     reviews: async (): Promise<ReviewsResp> => flattenReviews(await get<ReviewsWire>("/reviews")),
     answerReview: (inboxId: string, index: number, choice: string, kind: ReviewKind) =>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { HomeScreenStatus } from "./homeScreen";
+import { keyboardInset } from "./viewport";
 
 type Inset = { top: number; bottom: number; left: number; right: number };
 
@@ -79,19 +80,30 @@ function applyInsets() {
   }
 }
 
+/** Софт-клавиатура бывает открыта только у поля ввода. */
+function typing(): boolean {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
+  return el.tagName === "INPUT" && !/^(button|checkbox|radio|range|color|file|submit|reset)$/.test((el as HTMLInputElement).type);
+}
+
 /**
  * Клавиатура. Док приклеен к низу, и на iOS софт-клавиатура его перекрывала:
- * visualViewport даёт реальную высоту видимой области.
+ * visualViewport даёт реальную высоту видимой области. Сам расчёт — keyboardInset.
  */
 function trackKeyboard() {
   const vv = window.visualViewport;
   if (!vv) return;
   const sync = () => {
-    const hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    const hidden = keyboardInset(window.innerHeight, vv.height, vv.offsetTop, typing());
     document.documentElement.style.setProperty("--kb", px(hidden));
   };
   vv.addEventListener("resize", sync);
   vv.addEventListener("scroll", sync);
+  // клавиатура закрылась (blur), а resize iOS прислал раньше — пересчитать
+  document.addEventListener("focusin", sync);
+  document.addEventListener("focusout", () => setTimeout(sync, 0));
   sync();
 }
 

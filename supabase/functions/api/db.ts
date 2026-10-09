@@ -56,6 +56,7 @@ export const ARG_NAMES: Record<string, string[]> = {
   set_category_limit: ["p_user", "p_category", "p_amount"],
   rename_category: ["p_user", "p_id", "p_name"],
   delete_category: ["p_user", "p_id"],
+  set_category_color: ["p_user", "p_id", "p_color"],
   api_reviews: ["p_user"],
   resolve_review: ["p_user", "p_inbox", "p_idx", "p_kind"],
   resolve_time: ["p_user", "p_inbox", "p_idx", "p_choice"],

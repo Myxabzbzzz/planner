@@ -185,6 +185,8 @@ const isEmpty = () => location.search.includes("mock=empty");
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 let polls = 0;
+// цвета категорий живут, пока открыта вкладка
+const catColors: Record<string, string | null> = {};
 
 export const devFetch: typeof fetch = async (input, init) => {
   await new Promise((r) => setTimeout(r, 250));
@@ -195,6 +197,11 @@ export const devFetch: typeof fetch = async (input, init) => {
     if (p === "/inbox" || p === "/inbox/audio") { polls = 0; return json({ id: "dev1", worker_online: true }); }
     if (["/tasks", "/events", "/notes", "/habits", "/transactions"].includes(p)) {
       return json({ id: `dev-${Math.random().toString(36).slice(2, 8)}` });
+    }
+    const color = p.match(/^\/categories\/([^/]+)\/color$/);
+    if (color) {
+      catColors[color[1]] = (JSON.parse(String(init?.body ?? "{}")) as { color: string | null }).color;
+      return json({});
     }
     if (p === "/settings/currency") return json({ converted: 142, skipped: 3, from: "RUB", to: "UZS" });
     if (p === "/subscription/invoice") return json({ url: "https://t.me/$dev-invoice" });
@@ -280,7 +287,10 @@ export const devFetch: typeof fetch = async (input, init) => {
   }
   if (p === "/account/export") return json({ exported_at: new Date().toISOString(), tasks: d.tasks, habits: d.habits });
   if (p === "/categories") {
-    const cat = (names: string[]) => names.map((name, i) => ({ id: `c${i}-0000-0000-0000-00000000000${i}`, name }));
+    const cat = (names: string[]) => names.map((name, i) => {
+      const id = `c${i}-0000-0000-0000-00000000000${i}`;
+      return { id, name, color: catColors[id] ?? null };
+    });
     return json({
       expense: cat(["Продукты", "Кафе и рестораны", "Дом", "Транспорт", "Здоровье", "Подписки", "Подарки"]),
       income: cat(["Зарплата", "Фриланс", "Подарки"]),

@@ -52,6 +52,35 @@ describe("api client", () => {
       ["https://x/api/categories", "GET", undefined],
     ]);
   });
+
+  it("caches categories until something that can change them", async () => {
+    const seen: string[] = [];
+    const fetchFn = (async (url: URL, init?: RequestInit) => {
+      seen.push(`${init?.method ?? "GET"} ${new URL(url).pathname}`);
+      return new Response(JSON.stringify({ ok: true, expense: [{ id: "c1", name: "еда", color: null }], income: [] }),
+        { status: 200 });
+    }) as unknown as typeof fetch;
+    const api = makeApi("https://x", "INIT", fetchFn);
+    expect(api.cachedCategories()).toBeNull();
+    await api.categories();
+    await api.categories();
+    expect(api.cachedCategories()?.expense[0].name).toBe("еда");
+    await api.setCategoryColor("c1", "green");
+    expect(api.cachedCategories()).toBeNull();
+    await api.categories();
+    expect(seen).toEqual(["GET /categories", "POST /categories/c1/color", "GET /categories"]);
+  });
+
+  it("does not cache a failed categories load", async () => {
+    let fail = true;
+    const fetchFn = (async () =>
+      fail ? new Response("{}", { status: 500 }) : new Response(JSON.stringify({ expense: [], income: [] }))
+    ) as unknown as typeof fetch;
+    const api = makeApi("https://x", "INIT", fetchFn);
+    await expect(api.categories()).rejects.toBeInstanceOf(ApiError);
+    fail = false;
+    await expect(api.categories()).resolves.toEqual({ expense: [], income: [] });
+  });
 });
 
 describe("edit endpoints", () => {

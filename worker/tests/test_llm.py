@@ -173,6 +173,8 @@ def test_system_prompt_title_and_category_hints():
     from planner_worker.prompts import SYSTEM
     assert "«Claude»" in SYSTEM and "«Продажа футболки»" in SYSTEM
     assert "подписки" in SYSTEM
+    # «Таблетки 56000» уходили в «другое»: модели не хватало подсказки, что это «здоровье»
+    assert "таблетки, лекарства, аптека" in SYSTEM and "— «здоровье»" in SYSTEM
 
 
 def test_system_prompt_money_direction_rule():

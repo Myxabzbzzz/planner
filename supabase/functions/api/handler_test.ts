@@ -187,6 +187,14 @@ Deno.test("transactions: edit, delete and categories", async () => {
   assertEquals(r.db.calls, [["delete_transaction", ["u1", ID]]]);
   r = await run(await req(`/categories`));
   assertEquals(r.db.calls, [["api_categories", ["u1"]]]);
+  r = await run(await req(`/categories/${ID}/color`, { method: "POST", body: { color: "green" } }), mk());
+  assertEquals(r.db.calls, [["set_category_color", ["u1", ID, "green"]]]);
+  r = await run(await req(`/categories/${ID}/color`, { method: "POST", body: { color: null } }), mk());
+  assertEquals(r.db.calls, [["set_category_color", ["u1", ID, null]]]);
+  for (const body of [{}, { color: "#ff0000" }, { color: 3 }]) {
+    assertEquals((await run(await req(`/categories/${ID}/color`, { method: "POST", body }), mk())).status, 400,
+      JSON.stringify(body));
+  }
 });
 
 Deno.test("transactions: bad bodies are 400, missing row 404, db validation error 400", async () => {

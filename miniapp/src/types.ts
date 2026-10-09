@@ -38,7 +38,10 @@ export type Habit = {
 export type HabitsResp = { habits: Habit[] };
 export type Note = { id: string; kind: "thought" | "journal"; text: string; created_at: string };
 export type NotesResp = { notes: Note[]; next_before: string | null };
-export type Category = { id: string; name: string };
+/** Слот палитры категорий; сами цвета — CSS-переменные `--cat-*` для каждой темы. */
+export const CATEGORY_COLORS = ["blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red"] as const;
+export type CategoryColor = typeof CATEGORY_COLORS[number];
+export type Category = { id: string; name: string; color?: CategoryColor | null };
 export type Categories = { expense: Category[]; income: Category[] };
 export type Sent = { id: string; worker_online: boolean };
 export type InboxStatus = { status: "pending" | "processing" | "done" | "failed" | "needs_review"; reply: string | null };

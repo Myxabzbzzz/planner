@@ -25,6 +25,8 @@ SKIP_FUNCTIONS=0
 FUNCTIONS=(api bot-webhook capture notify fx-sync)
 
 die() { printf '\033[31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
+# Мало, чтобы был установлен docker CLI: без запущенного демона db diff и сборка функций падают.
+docker_up() { command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; }
 info() { printf '\033[36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m!\033[0m %s\n' "$*" >&2; }
 
@@ -144,11 +146,11 @@ main() {
     run supabase db push --project-ref "$ref" --dry-run
 
     # db diff строит shadow-базу в Docker. Без Docker шаг бессмысленен — пропускаем.
-    if command -v docker >/dev/null 2>&1; then
+    if docker_up; then
       info "Расхождение схемы с облаком (supabase db diff, нужен Docker):"
       run supabase db diff --linked
     else
-      warn "docker не найден — supabase db diff пропущен (ему нужна shadow-база)."
+      warn "Docker не запущен — supabase db diff пропущен (ему нужна shadow-база)."
       warn "Списка выше (migration list + db push --dry-run) для деплоя достаточно."
     fi
 
@@ -167,8 +169,8 @@ main() {
     info "Деплой Edge Functions:"
     # Без Docker CLI умеет собирать функции на стороне Supabase — --use-api.
     local no_docker=0
-    if ! command -v docker >/dev/null 2>&1; then
-      warn "docker не найден — функции собираю через --use-api (сборка на стороне Supabase)."
+    if ! docker_up; then
+      warn "Docker не запущен — функции собираю через --use-api (сборка на стороне Supabase)."
       no_docker=1
     fi
 

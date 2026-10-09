@@ -65,7 +65,7 @@ export function NewSheet({ api, tz, currency, kind, onClose, onSaved }: {
   const [text, setText] = useState("");
   const [noteKind, setNoteKind] = useState<NoteKind>("thought");
   const [target, setTarget] = useState(7);
-  const [cats, setCats] = useState<Categories | null>(null);
+  const [cats, setCats] = useState<Categories | null>(() => api.cachedCategories());
 
   // Встреча без даты и времени невозможна — подставляем сегодня и ближайший час.
   useEffect(() => {

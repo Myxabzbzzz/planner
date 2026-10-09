@@ -286,6 +286,9 @@ function categoryLimit(b: Record<string, unknown>, u: string): unknown[] {
   return [u, category.trim(), amount];
 }
 
+/** Слоты палитры категорий — те же ключи, что в check-ограничении `categories.color`. */
+const CATEGORY_COLORS = ["blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red"];
+
 /** Вопрос бывает двух видов: «что это» и «во сколько» — у них разные RPC. */
 const REVIEW_KINDS = ["type", "time"] as const;
 
@@ -308,6 +311,10 @@ const POST_ROUTES: [RegExp, string, BodyParser][] = [
     return [u, id, (b.name as string).trim()];
   }],
   [new RegExp(`^/categories/(${UUID})/delete$`, "i"), "delete_category", (_b, u, id) => [u, id]],
+  [new RegExp(`^/categories/(${UUID})/color$`, "i"), "set_category_color", (b, u, id) => {
+    if (!(b.color === null || (typeof b.color === "string" && CATEGORY_COLORS.includes(b.color)))) throw new BadRequest();
+    return [u, id, b.color];
+  }],
   [/^\/settings\/category-limit$/, "set_category_limit", categoryLimit],
   [/^\/account\/delete$/, "delete_account", (_b, u) => [u]],
   [/^\/settings\/limit$/, "api_set_limit", limitArg],

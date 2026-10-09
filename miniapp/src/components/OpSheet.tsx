@@ -30,7 +30,7 @@ export function OpSheet({ api, op, base, onClose, onSaved }: {
   });
   const set = <K extends keyof OpFullForm>(k: K, v: OpFullForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const [cats, setCats] = useState<Categories | null>(null);
+  const [cats, setCats] = useState<Categories | null>(() => api.cachedCategories());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const undo = useUndo();
