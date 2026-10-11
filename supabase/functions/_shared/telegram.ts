@@ -8,6 +8,13 @@ export interface Tg {
   deleteMessage(chatId: number, messageId: number): Promise<void>;
 }
 
+export type Doc = { name: string; bytes: Uint8Array<ArrayBuffer>; mime: string };
+
+/** Файл в чат с ботом — единственный способ «скачать», который одинаково работает во всех клиентах Telegram. */
+export interface Files {
+  sendDocument(chatId: number, doc: Doc, caption?: string): Promise<void>;
+}
+
 /** Счёт в Telegram Stars (XTR). subscriptionPeriod — только 30 дней (2592000), Telegram продлевает сам. */
 export type Invoice = { title: string; description: string; payload: string; stars: number; subscriptionPeriod?: number };
 
@@ -24,16 +31,14 @@ export function telegramClient(
   token: string,
   fetchFn: typeof fetch = fetch,
   testEnv = Deno.env.get("TELEGRAM_TEST_ENV") === "true",
-): Tg & Payments {
+): Tg & Payments & Files {
   const base = `https://api.telegram.org/bot${token}${testEnv ? "/test" : ""}`;
   async function call(method: string, body: unknown) {
     let json;
     try {
-      const res = await fetchFn(`${base}/${method}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const res = await fetchFn(`${base}/${method}`, body instanceof FormData
+        ? { method: "POST", body }
+        : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       json = await res.json();
     } catch {
       // the original error text contains the URL (and the bot token)
@@ -68,6 +73,13 @@ export function telegramClient(
       }) as string,
     answerPreCheckoutQuery: async (id, ok, error) => {
       await call("answerPreCheckoutQuery", { pre_checkout_query_id: id, ok, ...(ok || !error ? {} : { error_message: error }) });
+    },
+    sendDocument: async (chatId, doc, caption) => {
+      const form = new FormData();
+      form.set("chat_id", String(chatId));
+      form.set("document", new Blob([doc.bytes], { type: doc.mime }), doc.name);
+      if (caption) form.set("caption", caption);
+      await call("sendDocument", form);
     },
     deleteMessage: async (chatId, messageId) => {
       // Сообщение могли удалить руками или оно слишком старое — это не ошибка.

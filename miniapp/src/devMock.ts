@@ -204,6 +204,10 @@ export const devFetch: typeof fetch = async (input, init) => {
       return json({});
     }
     if (p === "/settings/currency") return json({ converted: 142, skipped: 3, from: "RUB", to: "UZS" });
+    if (p === "/account/export/send") {
+      const { format } = JSON.parse(String(init?.body ?? "{}")) as { format: string };
+      return json({ ok: true, name: `planner-${d.today}.${format}` });
+    }
     if (p === "/subscription/invoice") return json({ url: "https://t.me/$dev-invoice" });
     return json({});
   }
@@ -285,7 +289,6 @@ export const devFetch: typeof fetch = async (input, init) => {
   if (p === "/operations") {
     return json({ operations: money(url.searchParams.get("month") ?? d.today.slice(0, 7)).operations, next_before: null });
   }
-  if (p === "/account/export") return json({ exported_at: new Date().toISOString(), tasks: d.tasks, habits: d.habits });
   if (p === "/categories") {
     const cat = (names: string[]) => names.map((name, i) => {
       const id = `c${i}-0000-0000-0000-00000000000${i}`;

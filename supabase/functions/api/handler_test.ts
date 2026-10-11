@@ -474,6 +474,70 @@ Deno.test("выгрузка всех данных тоже требует све
   assertEquals((await run(await req("/today", { init: twoHours }))).status, 200);
 });
 
+class ExportDb extends FakeApiDb {
+  override async rpc(fn: string, args: unknown[]): Promise<unknown> {
+    this.calls.push([fn, args]);
+    if (fn === "api_categories") return { expense: [{ id: "c1", name: "еда", color: "green" }], income: [] };
+    return {
+      exported_at: "2026-10-01T00:00:00Z",
+      profile: { name: "М", tz: "UTC", base_currency: "UZS", tg_username: null, created_at: "2026-09-01T00:00:00Z" },
+      categories: [{ id: "c1", name: "еда", type: "expense", is_default: true }],
+      budgets: [], items: [], notes: [], habits: [],
+      transactions: [{ type: "expense", amount_base: 100, base_currency: "UZS", amount_orig: 100, currency_orig: "UZS",
+        category: "еда", comment: null, occurred_at: "2026-09-30T10:00:00Z" }],
+    };
+  }
+}
+
+class FakeFiles {
+  sent: Array<{ chatId: number; name: string; mime: string; size: number; caption?: string }> = [];
+  fail = false;
+  async sendDocument(chatId: number, doc: { name: string; bytes: Uint8Array; mime: string }, caption?: string) {
+    if (this.fail) throw new Error("telegram sendDocument: Forbidden: bot was blocked by the user");
+    this.sent.push({ chatId, name: doc.name, mime: doc.mime, size: doc.bytes.length, caption });
+  }
+}
+
+async function sendExport(body: unknown, opts: { files?: FakeFiles | null; init?: string; db?: FakeApiDb } = {}) {
+  const db = opts.db ?? new ExportDb();
+  const files = opts.files === undefined ? new FakeFiles() : opts.files ?? undefined;
+  const res = await handleApi(await req("/account/export/send", { method: "POST", body, init: opts.init }),
+    { db, botToken: TOKEN, nowSec: () => NOW, files });
+  return { status: res.status, body: await res.json(), db, files };
+}
+
+Deno.test("выгрузка в Excel уходит файлом в чат с ботом", async () => {
+  const r = await sendExport({ format: "xlsx" });
+  assertEquals([r.status, r.body], [200, { ok: true, name: "planner-2026-10-02.xlsx" }]);
+  assertEquals(r.db.calls, [["export_data", ["u1"]], ["api_categories", ["u1"]]]);
+  assertEquals(r.files!.sent.length, 1);
+  assertEquals(r.files!.sent[0].chatId, 7);
+  assertEquals(r.files!.sent[0].mime, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  assertEquals(r.db.rateChecks.map((c) => c[0]), ["write", "export"]);
+});
+
+Deno.test("выгрузка в JSON — тоже в чат, с цветами категорий", async () => {
+  const r = await sendExport({ format: "json" });
+  assertEquals(r.body.name, "planner-2026-10-02.json");
+  assertEquals(r.files!.sent[0].mime, "application/json");
+});
+
+Deno.test("выгрузка файлом: формат, свежая сессия, лимит и заблокированный бот", async () => {
+  assertEquals((await sendExport({ format: "pdf" })).status, 400);
+  assertEquals((await sendExport({})).status, 400);
+  const stale = await signInitData({ auth_date: String(NOW - 2 * 3600), user: JSON.stringify({ id: 7 }) }, TOKEN);
+  const old = await sendExport({ format: "xlsx" }, { init: stale });
+  assertEquals([old.status, old.body, old.files!.sent.length], [401, { error: "stale_session" }, 0]);
+  const limited = new ExportDb();
+  limited.rateAllows = false;
+  assertEquals((await sendExport({ format: "xlsx" }, { db: limited })).status, 429);
+  assertEquals((await sendExport({ format: "xlsx" }, { files: null })).status, 503);
+  const blocked = new FakeFiles();
+  blocked.fail = true;
+  const b = await sendExport({ format: "xlsx" }, { files: blocked });
+  assertEquals([b.status, b.body], [502, { error: "send_failed" }]);
+});
+
 Deno.test("лимит запросов: инбокс, голос и запись считаются раздельно", async () => {
   const db = new FakeApiDb();
   await run(await req("/inbox", { method: "POST", body: { text: "привет" } }), db);

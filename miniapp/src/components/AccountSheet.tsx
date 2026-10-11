@@ -23,8 +23,9 @@ export function AccountSheet({ api, settings, onClose, onChanged }: {
   onChanged: (s: Settings) => void;
 }) {
   const [currency, setCurrency] = useState(settings.base_currency);
-  const [busy, setBusy] = useState<null | "currency" | "export" | "delete">(null);
+  const [busy, setBusy] = useState<null | "currency" | "xlsx" | "json" | "delete">(null);
   const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
   const [result, setResult] = useState<CurrencyChange | null>(null);
   const choices = COMMON.includes(currency) ? COMMON : [currency, ...COMMON];
   const changed = currency !== settings.base_currency;
@@ -53,22 +54,19 @@ export function AccountSheet({ api, settings, onClose, onChanged }: {
     }
   }
 
-  async function exportAll() {
-    setBusy("export");
+  async function exportAll(format: "xlsx" | "json") {
+    setBusy(format);
     setError(null);
+    setSent(null);
     try {
-      const data = await api.exportData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `planner-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const r = await api.sendExport(format);
       hapticResult(true);
+      setSent(r.name);
     } catch (e) {
       hapticResult(false);
-      setError(saveError(e));
+      setError(e instanceof ApiError && e.status === 502
+        ? "Не смог отправить файл в чат. Проверь, что бот не заблокирован, и попробуй ещё раз."
+        : saveError(e));
     } finally {
       setBusy(null);
     }
@@ -124,11 +122,16 @@ export function AccountSheet({ api, settings, onClose, onChanged }: {
       )}
 
       <div className="field" style={{ marginTop: 24 }}><span>Данные</span></div>
-      <button type="button" className="btn ghost wide" disabled={busy !== null} onClick={() => void exportAll()}>
-        {busy === "export" ? "Собираю…" : "Выгрузить всё в файл"}
+      <button type="button" className="btn wide block" disabled={busy !== null} onClick={() => void exportAll("xlsx")}>
+        {busy === "xlsx" ? "Собираю таблицу…" : "Выгрузить в Excel с графиками"}
+      </button>
+      <button type="button" className="btn ghost wide block" disabled={busy !== null} onClick={() => void exportAll("json")}>
+        {busy === "json" ? "Собираю…" : "Выгрузить в JSON"}
       </button>
       <div className="card-foot">
-        Задачи, встречи, операции, заметки и привычки одним JSON — на случай, если захочешь уйти или просто сохранить.
+        {sent
+          ? `Готово: ${sent} — в чате с ботом.`
+          : "Файл придёт в чат с ботом. В Excel — операции, задачи, встречи, заметки и привычки по листам, а на первом листе графики по месяцам и категориям."}
       </div>
 
       <div className="field" style={{ marginTop: 24 }}><span>Опасная зона</span></div>

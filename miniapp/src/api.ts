@@ -170,7 +170,8 @@ export function makeApi(
       post(`/reviews/${inboxId}`, { index, choice, kind }),
 
     changeCurrency: (currency: string) => postJson<CurrencyChange>("/settings/currency", { currency }),
-    exportData: () => get<unknown>("/account/export"),
+    /** Файл приходит в чат с ботом: скачать из миниаппа внутри Telegram получается не везде. */
+    sendExport: (format: "xlsx" | "json") => postJson<{ ok: true; name: string }>("/account/export/send", { format }),
     deleteAccount: () => post("/account/delete", {}),
 
     subscription: () => get<Subscription>("/subscription"),

@@ -49,3 +49,22 @@ Deno.test("test environment uses the /test/ Bot API path", async () => {
   await telegramClient("T", fetchFn, false).createInvoiceLink({ title: "t", description: "d", payload: "pro:month", stars: 1 });
   assertEquals(urls, ["https://api.telegram.org/botT/test/createInvoiceLink", "https://api.telegram.org/botT/createInvoiceLink"]);
 });
+
+Deno.test("sendDocument шлёт файл multipart-формой, без JSON-заголовка", async () => {
+  let seen: RequestInit | undefined;
+  let url = "";
+  const fetchFn = (async (u: string, init: RequestInit) => {
+    url = u;
+    seen = init;
+    return new Response(JSON.stringify({ ok: true, result: {} }));
+  }) as unknown as typeof fetch;
+  const bytes = new TextEncoder().encode("PK");
+  await telegramClient("T", fetchFn, false).sendDocument(42, { name: "planner.xlsx", bytes, mime: "application/x" }, "📊");
+  assertEquals(url, "https://api.telegram.org/botT/sendDocument");
+  assertEquals(seen?.headers, undefined);
+  const form = seen?.body as FormData;
+  assertEquals(form.get("chat_id"), "42");
+  assertEquals(form.get("caption"), "📊");
+  const file = form.get("document") as File;
+  assertEquals([file.name, file.type, await file.text()], ["planner.xlsx", "application/x", "PK"]);
+});

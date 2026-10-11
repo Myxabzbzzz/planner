@@ -1,7 +1,8 @@
 import type { ApiDb, InboxInsert } from "./db.ts";
 import { LIMITS } from "../_shared/limits.ts";
 import { invoiceFor, PLAN_IDS, PLANS, type Plan } from "../_shared/plans.ts";
-import type { Payments } from "../_shared/telegram.ts";
+import type { Files, Payments } from "../_shared/telegram.ts";
+import { type ExportData, exportFile, withColors } from "./export_book.ts";
 import { type Auth, MAX_AGE_READ, MAX_AGE_SENSITIVE, MAX_AGE_WRITE, verifyInitData } from "./initdata.ts";
 import { mintSession, SESSION_MINT_MAX_INIT_AGE, SESSION_RENEW_AFTER, type Session, verifySession } from "./session.ts";
 
@@ -11,6 +12,7 @@ export type ApiDeps = {
   nowSec: () => number;
   newId?: () => string;
   pay?: Payments; // счета в Telegram Stars
+  files?: Files; // выгрузка файлом в чат с ботом
 };
 
 /**
@@ -502,6 +504,36 @@ function nextSession(auth: Auth, signed: Auth | null, session: Session | null, n
   return null;
 }
 
+const EXPORT_CAPTION = {
+  xlsx: "📊 Все твои данные: записи по листам и графики на первом.",
+  json: "🗂 Все твои данные одним JSON.",
+};
+
+/**
+ * Выгрузка файлом в чат с ботом. Скачивание прямо из миниаппа (blob + a.download)
+ * внутри Telegram на iOS и Android часто ничего не делает, а документ в чате
+ * открывается везде — и остаётся под рукой.
+ */
+async function sendExport(req: Request, d: ApiDeps, userId: string, tgId: number): Promise<Response> {
+  const format = (await readJson(req)).format;
+  if (format !== "xlsx" && format !== "json") throw new BadRequest();
+  if (!d.files) return json(503, { error: "files_unavailable" });
+  if (!await allow(d.db, userId, "export")) return json(429, { error: "too_many" });
+  const data = await d.db.call("export_data", [userId]) as ExportData | null;
+  if (data === null) return json(404, { error: "not_found" });
+  const cats = await d.db.call("api_categories", [userId]).catch(() => null);
+  const doc = await exportFile(withColors(data, cats as Parameters<typeof withColors>[1]), format,
+    new Date(d.nowSec() * 1000).toISOString());
+  try {
+    await d.files.sendDocument(tgId, doc, EXPORT_CAPTION[format]);
+  } catch (e) {
+    // чаще всего бот заблокирован — сказать об этом, а не «что-то сломалось»
+    console.error("export send failed:", (e as Error)?.message ?? String(e));
+    return json(502, { error: "send_failed" });
+  }
+  return json(200, { ok: true, name: doc.name });
+}
+
 async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Auth): Promise<Response> {
   try {
     const user = await d.db.userByTg(auth.tgId);
@@ -530,6 +562,7 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
         const ok = await d.db.call(fn, [user.id, rev[1].toLowerCase(), idx, choice]);
         return ok === true ? json(200, { ok: true }) : json(404, { error: "not_found" });
       }
+      if (path === "/account/export/send") return await sendExport(req, d, user.id, auth.tgId);
       if (path === "/settings/currency") {
         const cur = (await readJson(req)).currency;
         if (!(typeof cur === "string" && /^[A-Z]{3}$/.test(cur))) throw new BadRequest();

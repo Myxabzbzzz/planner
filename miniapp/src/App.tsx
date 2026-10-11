@@ -96,16 +96,20 @@ export default function App() {
   }
   if (me.loading || !me.data) return <main className="page"><Loading hero /></main>;
 
-  const openSettings = async () => {
-    setSettingsOpen(true);
+  // Обеим шторкам нужны настройки. «Аккаунт» из профиля раньше просто не открывался,
+  // если «Настройки» в этот запуск ещё не открывали: настройки грузились только там.
+  const openWithSettings = (setOpen: (v: boolean) => void) => async () => {
+    setOpen(true);
     if (settings === null) {
       try {
         setSettings(await api.settings());
       } catch {
-        setSettingsOpen(false);
+        setOpen(false);
       }
     }
   };
+  const openSettings = openWithSettings(setSettingsOpen);
+  const openAccount = openWithSettings(setAccountOpen);
 
   return (
     <UndoProvider onRestored={bump}>
@@ -126,7 +130,7 @@ export default function App() {
         {tab === "habits" && <Habits api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("habit")} />}
         {tab === "notes" && <Notes api={api} refresh={refresh} onAdd={() => setAdding("note")} />}
         {tab === "profile" && (
-          <Profile api={api} refresh={refresh} onSettings={openSettings} onAccount={() => setAccountOpen(true)}
+          <Profile api={api} refresh={refresh} onSettings={openSettings} onAccount={openAccount}
             onPro={() => setProOpen(true)} />
         )}
         {tab === "reviews" && <Reviews api={api} refresh={refresh} onDone={bump} />}

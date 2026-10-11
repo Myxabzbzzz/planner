@@ -7,6 +7,8 @@ export const LIMITS = {
   inbox: { limit: 40, window: "10 minutes" },
   audio: { limit: 15, window: "10 minutes" },
   write: { limit: 300, window: "10 minutes" },
+  // выгрузка собирает всю историю и шлёт файл в чат — дорого и незачем чаще
+  export: { limit: 6, window: "10 minutes" },
 } as const;
 
 export type LimitAction = keyof typeof LIMITS;

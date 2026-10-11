@@ -83,6 +83,19 @@ describe("api client", () => {
   });
 });
 
+describe("выгрузка", () => {
+  it("просит сервер прислать файл в чат", async () => {
+    const seen: [string, RequestInit][] = [];
+    const fetchFn = (async (u: URL, init: RequestInit) => {
+      seen.push([String(u), init]);
+      return new Response(JSON.stringify({ ok: true, name: "planner-2026-10-12.xlsx" }));
+    }) as unknown as typeof fetch;
+    expect(await makeApi("https://x/api", "INIT", fetchFn).sendExport("xlsx")).toEqual({ ok: true, name: "planner-2026-10-12.xlsx" });
+    expect(seen[0][0]).toBe("https://x/api/account/export/send");
+    expect([seen[0][1].method, seen[0][1].body]).toEqual(["POST", '{"format":"xlsx"}']);
+  });
+});
+
 describe("edit endpoints", () => {
   it("posts patches and deletes to item routes", async () => {
     const calls: [string, RequestInit | undefined][] = [];
