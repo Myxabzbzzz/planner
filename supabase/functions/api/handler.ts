@@ -2,7 +2,8 @@ import type { ApiDb, InboxInsert } from "./db.ts";
 import { LIMITS } from "../_shared/limits.ts";
 import { invoiceFor, PLAN_IDS, PLANS, type Plan } from "../_shared/plans.ts";
 import type { Payments } from "../_shared/telegram.ts";
-import { MAX_AGE_READ, MAX_AGE_SENSITIVE, MAX_AGE_WRITE, verifyInitData } from "./initdata.ts";
+import { type Auth, MAX_AGE_READ, MAX_AGE_SENSITIVE, MAX_AGE_WRITE, verifyInitData } from "./initdata.ts";
+import { mintSession, SESSION_MINT_MAX_INIT_AGE, SESSION_RENEW_AFTER, type Session, verifySession } from "./session.ts";
 
 export type ApiDeps = {
   db: ApiDb;
@@ -22,7 +23,8 @@ const ALLOWED = (Deno.env.get("MINIAPP_ORIGIN") ?? "")
 
 function corsFor(req: Request): Record<string, string> {
   const base = {
-    "access-control-allow-headers": "x-init-data, content-type",
+    "access-control-allow-headers": "x-init-data, x-session, content-type",
+    "access-control-expose-headers": "x-session",
     "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-max-age": "600",
     vary: "Origin",
@@ -463,14 +465,44 @@ async function handle(req: Request, d: ApiDeps): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname.replace(/^(?:\/functions\/v1)?\/api(?=\/|$)/, "") || "/";
   const init = req.headers.get("x-init-data") ?? "";
-  const auth = await verifyInitData(init, d.botToken, d.nowSec(), maxAgeFor(req.method, path));
+  const now = d.nowSec();
+  const sensitive = SENSITIVE.test(path);
+  let auth = await verifyInitData(init, d.botToken, now, maxAgeFor(req.method, path));
+  // Токен сессии — тот, что прислал клиент, если он валиден и принадлежит тому же человеку,
+  // что и initData: подпись Telegram любой давности всё равно говорит, кто открыл миниапп.
+  const signed = init ? await verifyInitData(init, d.botToken, now, Number.MAX_SAFE_INTEGER) : null;
+  let session = await verifySession(req.headers.get("x-session") ?? "", d.botToken, now);
+  if (session && init && signed?.tgId !== session.tgId) session = null;
+  if (!auth && session && !sensitive) auth = { tgId: session.tgId, authDate: session.iat };
   if (!auth) {
     // Подпись верна, но сессия устарела для этого действия — это не «чужой»,
     // и клиенту стоит сказать именно «переоткрой», а не «нет доступа».
-    const stale = await verifyInitData(init, d.botToken, d.nowSec(), MAX_AGE_READ);
-    return json(401, { error: stale ? "stale_session" : "unauthorized" });
+    const stale = await verifyInitData(init, d.botToken, now, MAX_AGE_READ);
+    return json(401, { error: stale || session ? "stale_session" : "unauthorized" });
   }
 
+  const res = await serve(req, d, url, path, auth);
+  const next = res.status < 400 ? nextSession(auth, signed, session, now) : null;
+  if (next) res.headers.set("x-session", await mintSession(next, d.botToken));
+  return res;
+}
+
+/**
+ * Какой токен отдать клиенту вместе с ответом, если отдавать вообще.
+ * Новый — по свежей initData, когда своего токена у клиента нет или он старше суток;
+ * продление — когда клиент живёт на токене и тот старше суток. Цепочка продлений
+ * помнит исходный вход (orig), поэтому не тянется дольше SESSION_MAX.
+ */
+function nextSession(auth: Auth, signed: Auth | null, session: Session | null, now: number): Session | null {
+  const young = session !== null && now - session.iat <= SESSION_RENEW_AFTER;
+  if (young) return null;
+  const fresh = signed !== null && signed.tgId === auth.tgId && now - signed.authDate <= SESSION_MINT_MAX_INIT_AGE;
+  if (fresh) return { tgId: auth.tgId, iat: now, orig: signed!.authDate };
+  if (session) return { tgId: session.tgId, iat: now, orig: session.orig };
+  return null;
+}
+
+async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Auth): Promise<Response> {
   try {
     const user = await d.db.userByTg(auth.tgId);
     if (!user || !user.is_allowed || !user.onboarded_at) return json(403, { error: "forbidden" });

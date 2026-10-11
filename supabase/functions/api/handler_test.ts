@@ -2,6 +2,7 @@ import { assertEquals } from "jsr:@std/assert@1";
 import { handleApi } from "./handler.ts";
 import type { ApiDb, ApiUser, InboxInsert } from "./db.ts";
 import { signInitData } from "./initdata.ts";
+import { mintSession, SESSION_MAX } from "./session.ts";
 
 const TOKEN = "123:ABC";
 const NOW = 1_790_900_000;
@@ -50,12 +51,13 @@ class FakeApiDb implements ApiDb {
   }
 }
 
-async function req(path: string, opts: { init?: string; method?: string; body?: unknown } = {}) {
+async function req(path: string, opts: { init?: string; method?: string; body?: unknown; session?: string } = {}) {
   const init = opts.init ?? await signInitData({ auth_date: String(NOW - 10), user: JSON.stringify({ id: 7 }) }, TOKEN);
   return new Request(`https://x.supabase.co/functions/v1/api${path}`, {
     method: opts.method ?? "GET",
     headers: {
       ...(init ? { "x-init-data": init } : {}),
+      ...(opts.session ? { "x-session": opts.session } : {}),
       ...(opts.body !== undefined ? { "content-type": "application/json" } : {}),
     },
     ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
@@ -65,7 +67,10 @@ async function req(path: string, opts: { init?: string; method?: string; body?: 
 async function run(r: Request, db = new FakeApiDb()) {
   const res = await handleApi(r, { db, botToken: TOKEN, nowSec: () => NOW, newId: () => "f-1" });
   const body = res.status === 204 ? null : await res.json();
-  return { status: res.status, body, db, cors: res.headers.get("access-control-allow-origin") };
+  return {
+    status: res.status, body, db, cors: res.headers.get("access-control-allow-origin"),
+    session: res.headers.get("x-session"), expose: res.headers.get("access-control-expose-headers"),
+  };
 }
 
 Deno.test("OPTIONS preflight", async () => {
@@ -557,4 +562,74 @@ Deno.test("POST /subscription/invoice creates a Stars invoice link for the plan"
   assertEquals(bad.status, 400);
   const off = await run(await req("/subscription/invoice", { method: "POST", body: { plan: "month" } }));
   assertEquals(off.status, 503);
+});
+
+// ——— Токен сессии: свёрнутый миниапп живёт со старой initData ———
+
+const initAged = async (ageSec: number, id = 7) =>
+  await signInitData({ auth_date: String(NOW - ageSec), user: JSON.stringify({ id }) }, TOKEN);
+const creatingDb = () => {
+  const db = new FakeApiDb();
+  db.rpc = () => Promise.resolve("new-id");
+  return db;
+};
+
+Deno.test("сессия: свежая initData получает токен, CORS его отдаёт странице", async () => {
+  const r = await run(await req("/today", { init: await initAged(60) }));
+  assertEquals(r.status, 200);
+  assertEquals(r.session?.startsWith("v1.7."), true);
+  assertEquals(r.expose, "x-session");
+});
+
+Deno.test("сессия: initData старше часа токен не выдаёт", async () => {
+  const r = await run(await req("/today", { init: await initAged(2 * 3600) }));
+  assertEquals([r.status, r.session], [200, null]);
+});
+
+Deno.test("сессия: с токеном двухдневная initData и читает, и пишет", async () => {
+  const token = await mintSession({ tgId: 7, iat: NOW - 3600, orig: NOW - 3600 }, TOKEN);
+  const init = await initAged(2 * 86400);
+  assertEquals((await run(await req("/today", { init }))).body, { error: "unauthorized" });
+  assertEquals((await run(await req("/today", { init, session: token }))).status, 200);
+  const w = await run(await req("/tasks", { method: "POST", body: { title: "x" }, init, session: token }), creatingDb());
+  assertEquals([w.status, w.session], [201, null]); // токену меньше суток — не продлеваем
+});
+
+Deno.test("сессия: токен старше суток продлевается с тем же исходным входом", async () => {
+  const orig = NOW - 3 * 86400;
+  const token = await mintSession({ tgId: 7, iat: NOW - 2 * 86400, orig }, TOKEN);
+  const r = await run(await req("/today", { init: await initAged(3 * 86400), session: token }));
+  assertEquals(r.status, 200);
+  assertEquals(r.session?.split(".").slice(0, 4), ["v1", "7", String(NOW), String(orig)]);
+});
+
+Deno.test("сессия: токен чужого человека не принимается", async () => {
+  const token = await mintSession({ tgId: 8, iat: NOW - 60, orig: NOW - 60 }, TOKEN);
+  const r = await run(await req("/today", { init: await initAged(2 * 86400, 7), session: token }));
+  assertEquals([r.status, r.body], [401, { error: "unauthorized" }]);
+});
+
+Deno.test("сессия: подделанная initData с валидным токеном — отказ", async () => {
+  const token = await mintSession({ tgId: 7, iat: NOW - 60, orig: NOW - 60 }, TOKEN);
+  const r = await run(await req("/today", { init: "auth_date=1&hash=00", session: token }));
+  assertEquals(r.status, 401);
+});
+
+Deno.test("сессия: необратимым действиям токен не помогает", async () => {
+  const token = await mintSession({ tgId: 7, iat: NOW - 60, orig: NOW - 60 }, TOKEN);
+  const r = await run(await req("/account/export", { init: await initAged(2 * 3600), session: token }));
+  assertEquals([r.status, r.body], [401, { error: "stale_session" }]);
+});
+
+Deno.test("сессия: месяц от входа — и продления больше не спасают", async () => {
+  const token = await mintSession({ tgId: 7, iat: NOW - 3600, orig: NOW - SESSION_MAX - 1 }, TOKEN);
+  const r = await run(await req("/today", { init: await initAged(SESSION_MAX + 1), session: token }));
+  assertEquals(r.status, 401);
+});
+
+Deno.test("сессия: при ошибке токен не выдаётся", async () => {
+  const db = new FakeApiDb();
+  db.user = null;
+  const r = await run(await req("/today", { init: await initAged(60) }), db);
+  assertEquals([r.status, r.session], [403, null]);
 });

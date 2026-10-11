@@ -14,39 +14,82 @@ export class ApiError extends Error {
   }
 }
 
-export function makeApi(baseUrl: string, initData: string, fetchFn: typeof fetch = fetch) {
+/** Где живёт токен сессии между перезапусками WebView. */
+export type SessionStore = { get(): string | null; set(token: string | null): void };
+
+const SESSION_KEY = "planner.session";
+
+/**
+ * localStorage, но без падений: в приватном режиме и с заблокированными данными
+ * доступ к нему бросает — тогда токен живёт только в памяти до закрытия миниаппа.
+ */
+export function browserSessionStore(): SessionStore {
+  let memory: string | null = null;
+  return {
+    get() {
+      try {
+        return globalThis.localStorage?.getItem(SESSION_KEY) ?? memory;
+      } catch {
+        return memory;
+      }
+    },
+    set(token) {
+      memory = token;
+      try {
+        if (token) globalThis.localStorage?.setItem(SESSION_KEY, token);
+        else globalThis.localStorage?.removeItem(SESSION_KEY);
+      } catch {
+        // остаётся в памяти
+      }
+    },
+  };
+}
+
+export function makeApi(
+  baseUrl: string,
+  initData: string,
+  fetchFn: typeof fetch = fetch,
+  session: SessionStore = browserSessionStore(),
+) {
   const base = baseUrl.replace(/\/$/, "");
+  /**
+   * Каждый запрос несёт initData и токен сессии. initData свёрнутого миниаппа стареет,
+   * а токен сервер продлевает — новый приходит в заголовке ответа.
+   */
+  async function send(url: URL, init: { method?: string; headers?: Record<string, string>; body?: BodyInit } = {}) {
+    const token = session.get();
+    const res = await fetchFn(url, {
+      ...init,
+      headers: { "X-Init-Data": initData, ...(token ? { "X-Session": token } : {}), ...init.headers },
+    });
+    const next = res.headers?.get?.("x-session");
+    if (next) session.set(next);
+    else if (res.status === 401 && token) session.set(null); // протух или чужой — не слать его дальше
+    if (!res.ok) throw new ApiError(res.status);
+    return res;
+  }
   async function get<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
     const url = new URL(base + path);
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
-    const res = await fetchFn(url, { headers: { "X-Init-Data": initData } });
-    if (!res.ok) throw new ApiError(res.status);
-    return (await res.json()) as T;
+    return (await (await send(url)).json()) as T;
   }
   async function post(path: string, body: unknown): Promise<void> {
-    const res = await fetchFn(new URL(base + path), {
+    await send(new URL(base + path), {
       method: "POST",
-      headers: { "X-Init-Data": initData, "content-type": "application/json" },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new ApiError(res.status);
   }
   async function postJson<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetchFn(new URL(base + path), {
+    const res = await send(new URL(base + path), {
       method: "POST",
-      headers: { "X-Init-Data": initData, "content-type": "application/json" },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new ApiError(res.status);
     return (await res.json()) as T;
   }
   async function postFor<T>(path: string, body: BodyInit, contentType: string): Promise<T> {
-    const res = await fetchFn(new URL(base + path), {
-      method: "POST",
-      headers: { "X-Init-Data": initData, "content-type": contentType },
-      body,
-    });
-    if (!res.ok) throw new ApiError(res.status);
+    const res = await send(new URL(base + path), { method: "POST", headers: { "content-type": contentType }, body });
     return (await res.json()) as T;
   }
   // Категории меняются редко, а нужны сразу при открытии шторки: без кэша форма операции

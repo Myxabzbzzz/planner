@@ -133,3 +133,43 @@ describe("audio upload", () => {
     expect(seen?.body).toBe(blob);
   });
 });
+
+describe("токен сессии", () => {
+  const memory = () => {
+    let v: string | null = null;
+    return { get: () => v, set: (t: string | null) => { v = t; } };
+  };
+
+  it("запоминает токен из ответа и шлёт его дальше", async () => {
+    const sent: (string | undefined)[] = [];
+    let issue: string | null = "v1.7.1.1.aa";
+    const fetchFn = (async (_u: URL, init: RequestInit) => {
+      sent.push((init.headers as Record<string, string>)["X-Session"]);
+      const headers = issue ? { "x-session": issue } : undefined;
+      issue = null;
+      return new Response(JSON.stringify({}), { status: 200, headers });
+    }) as unknown as typeof fetch;
+    const store = memory();
+    const api = makeApi("https://x", "INIT", fetchFn, store);
+    await api.today();
+    await api.setTaskDone("t1", true);
+    expect(sent).toEqual([undefined, "v1.7.1.1.aa"]);
+    expect(store.get()).toBe("v1.7.1.1.aa");
+  });
+
+  it("продлённый токен заменяет старый", async () => {
+    const store = memory();
+    store.set("old");
+    const fetchFn = (async () => new Response("{}", { headers: { "x-session": "new" } })) as unknown as typeof fetch;
+    await makeApi("https://x", "INIT", fetchFn, store).today();
+    expect(store.get()).toBe("new");
+  });
+
+  it("после 401 токен забывается", async () => {
+    const store = memory();
+    store.set("dead");
+    const fetchFn = (async () => new Response("{}", { status: 401 })) as unknown as typeof fetch;
+    await expect(makeApi("https://x", "INIT", fetchFn, store).today()).rejects.toMatchObject({ status: 401 });
+    expect(store.get()).toBeNull();
+  });
+});
