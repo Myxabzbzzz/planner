@@ -32,12 +32,16 @@ def _log_failure(what: str) -> None:
         log.exception(what)
 
 
-def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None) -> float:
-    """One loop iteration; never raises on transient errors. Returns new last_beat."""
+def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None, claim_inbox: bool = True) -> float:
+    """One loop iteration; never raises on transient errors. Returns new last_beat.
+
+    claim_inbox=False — воркер только подписывает быстрые команды. Пульс он тогда не шлёт:
+    по пульсу бот говорит «разберу сейчас», а сообщения этот воркер не разбирает."""
     if time.monotonic() - last_beat >= HEARTBEAT_EVERY:
         last_beat = time.monotonic()
         try:
-            store.heartbeat(cfg.worker_id)
+            if claim_inbox:
+                store.heartbeat(cfg.worker_id)
         except Exception:
             _log_failure("heartbeat failed")
         try:
@@ -45,7 +49,7 @@ def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None) -> float:
         except Exception:
             _log_failure("notify_failed failed")
     try:
-        row = store.claim()
+        row = store.claim() if claim_inbox else None
         if row is None:
             job = store.claim_job() if job_runner else None
             if job:
@@ -74,7 +78,7 @@ def main() -> None:
     store = Store(create_client(cfg.supabase_url, cfg.supabase_service_key))
     tg = TelegramClient(cfg.telegram_bot_token, http)
     classifier = LayaClassifier() if cfg.use_laya else None
-    stt = Transcriber(cfg.whisper_model)
+    stt = Transcriber(cfg.whisper_model, backend=cfg.whisper_backend)
     llm = OllamaClient(cfg.ollama_url, cfg.ollama_model, http)
     pipeline = Pipeline(
         store=store,
@@ -88,15 +92,18 @@ def main() -> None:
         answerer=Answerer(QuestionParser(llm), store),
     )
 
-    log.info("warming up models (laya=%s, llm=%s)…", cfg.use_laya, cfg.ollama_model)
-    try:
-        stt.warm_up()
-    except Exception as e:  # без сети на старте — модель подгрузится при первом голосовом
-        log.warning("whisper warm-up failed: %s", type(e).__name__)
-    if classifier:
-        classifier.warm_up()
-    http.post(f"{cfg.ollama_url}/api/generate", json={"model": cfg.ollama_model, "keep_alive": "30m"}, timeout=180).raise_for_status()
-    log.info("ready")
+    if cfg.inbox:
+        log.info("warming up models (whisper=%s %s, laya=%s, llm=%s)…",
+                 cfg.whisper_backend, cfg.whisper_model, cfg.use_laya, cfg.ollama_model)
+        try:
+            stt.warm_up()
+        except Exception as e:  # без сети на старте — модель подгрузится при первом голосовом
+            log.warning("whisper warm-up failed: %s", type(e).__name__)
+        if classifier:
+            classifier.warm_up()
+        http.post(f"{cfg.ollama_url}/api/generate", json={"model": cfg.ollama_model, "keep_alive": "30m"},
+                  timeout=180).raise_for_status()
+    log.info("ready (inbox=%s, shortcut jobs=%s)", cfg.inbox, ShortcutSigner.available())
 
     tmp_dir = Path(__file__).resolve().parents[1] / "tmp"
     log.info("removed %s leftover shortcut files", cleanup_tmp(tmp_dir))
@@ -105,11 +112,14 @@ def main() -> None:
     except Exception as e:  # noqa: BLE001 — без сети на старте уберём при следующем запуске
         log.warning("audio sweep failed: %s", type(e).__name__)
     signer = ShortcutSigner()
-    job_runner = lambda job: run_job(job, store, tg, signer, cfg.supabase_url, tmp_dir)  # noqa: E731
+    job_runner = (lambda job: run_job(job, store, tg, signer, cfg.supabase_url, tmp_dir)  # noqa: E731
+                  if ShortcutSigner.available() else None)
+    if not cfg.inbox and job_runner is None:
+        raise SystemExit("WORKER_INBOX=false, а подписывать быстрые команды здесь нечем — воркеру нечего делать")
 
     last_beat = 0.0
     while True:
-        last_beat = tick(store, tg, pipeline, cfg, last_beat, job_runner=job_runner)
+        last_beat = tick(store, tg, pipeline, cfg, last_beat, job_runner=job_runner, claim_inbox=cfg.inbox)
 
 
 if __name__ == "__main__":

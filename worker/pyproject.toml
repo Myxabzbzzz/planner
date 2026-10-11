@@ -7,12 +7,18 @@ dependencies = [
   "pydantic>=2.7",
   "supabase>=2.10",
   "python-dotenv>=1.0",
-  "mlx-whisper>=0.4",
-  "laya>=0.3.22",
+  # голос: на Mac (Apple Silicon) — mlx-whisper, на Linux — faster-whisper (CUDA или CPU)
+  "mlx-whisper>=0.4; sys_platform == 'darwin'",
+  "faster-whisper>=1.1; sys_platform == 'linux'",
+  # PyAV 17+ убрал аргумент, которым faster-whisper 1.2 открывает аудио, — голосовые падали бы
+  "av>=11,<17; sys_platform == 'linux'",
+  "laya>=0.3.22; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# библиотеки CUDA 12 / cuDNN 9 для faster-whisper на видеокарте NVIDIA — без системного CUDA
+cuda = ["nvidia-cublas-cu12", "nvidia-cudnn-cu12>=9,<10"]
 
 [build-system]
 requires = ["setuptools>=68"]

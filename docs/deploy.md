@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Mini App (`miniapp/`) | GitHub Pages | workflow `.github/workflows/pages.yml` (авто на push в `main`) |
 | Облако (`supabase/`) | Supabase | `scripts/deploy-supabase.sh` — **руками**, с подтверждением |
-| ИИ-воркер (`worker/`) | ноутбук | `worker/scripts/install-agent.sh` (см. README) |
+| ИИ-воркер (`worker/`) | домашний сервер (Linux) или ноутбук | `worker/scripts/install-linux.sh` / `install-agent.sh` (см. README) |
 
 CI (`.github/workflows/ci.yml`) гоняется на каждый push и PR в `main`: сборка и
 тесты Mini App, `pytest` воркера, Deno-тесты Edge Functions.
@@ -117,6 +117,12 @@ production-сборки сам — отдельный secret в GitHub не ну
 
 ### Воркер
 
+На сервере (Linux):
+
+    cd ~/planner && git pull && worker/scripts/install-linux.sh   # зависимости + перезапуск сервиса
+
+На Mac:
+
     cd worker
     .venv/bin/pip install -e '.[dev]'     # если менялись зависимости
     launchctl kickstart -k gui/$(id -u)/com.planner.worker   # перезапуск агента
@@ -180,7 +186,9 @@ production-сборки сам — отдельный secret в GitHub не ну
 | `TELEGRAM_BOT_TOKEN` | ответы пользователю |
 
 Необязательные, со значениями по умолчанию: `OLLAMA_URL`, `OLLAMA_MODEL`,
-`WHISPER_MODEL`, `USE_LAYA`, `LAYA_THRESHOLD`, `WORKER_ID`, `POLL_INTERVAL`.
+`WHISPER_MODEL`, `WHISPER_BACKEND` (`mlx` на Mac, `faster` на Linux — выбирается сам),
+`USE_LAYA`, `LAYA_THRESHOLD`, `WORKER_ID`, `POLL_INTERVAL`,
+`WORKER_INBOX` (`false` — воркер только подписывает быстрые команды; так оставляют Mac рядом с сервером).
 
 ### Telegram-вебхук
 

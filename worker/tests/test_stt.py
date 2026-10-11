@@ -1,8 +1,9 @@
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
-from planner_worker.stt import Transcriber
+from planner_worker.stt import Transcriber, model_for
 
 
 def test_transcribe_calls_mlx_whisper(monkeypatch):
@@ -35,3 +36,57 @@ def test_warm_up_resolves_local_model_and_loads_it(monkeypatch):
     t.transcribe(Path("/tmp/a.oga"))
     assert calls == [("ndarray", "/cache/mlx-community/whisper-large-v3-turbo"),
                      ("str", "/cache/mlx-community/whisper-large-v3-turbo")]
+
+
+class FakeFaster:
+    def __init__(self, device, fail=False):
+        self.device, self.fail, self.calls = device, fail, []
+
+    def transcribe(self, audio, language):
+        self.calls.append((audio if isinstance(audio, str) else "array", language))
+        if self.fail:
+            raise RuntimeError("Library libcudnn_ops.so.9 is not found")
+        return iter([SimpleNamespace(text=" кофе "), SimpleNamespace(text="сорок тысяч ")]), None
+
+
+def test_faster_whisper_joins_segments_on_gpu():
+    made = []
+    t = Transcriber("large-v3-turbo", backend="faster",
+                    load_faster=lambda name, device: made.append((name, device)) or FakeFaster(device))
+    assert t.transcribe(Path("/tmp/a.oga")) == "кофе сорок тысяч"
+    assert made == [("large-v3-turbo", "cuda")]
+
+
+def test_faster_whisper_falls_back_to_cpu_when_cuda_libs_are_missing():
+    made = []
+
+    def load(name, device):
+        made.append(device)
+        return FakeFaster(device, fail=device == "cuda")
+
+    t = Transcriber("large-v3-turbo", backend="faster", load_faster=load)
+    t.warm_up()
+    assert t.transcribe(Path("/tmp/a.oga")) == "кофе сорок тысяч"
+    assert made == ["cuda", "cpu"], "на CPU переходим один раз и дальше там и остаёмся"
+
+
+def test_model_name_follows_the_backend():
+    assert model_for("mlx", None) == "mlx-community/whisper-large-v3-turbo"
+    assert model_for("faster", None) == "large-v3-turbo"
+    # .env, перенесённый с Mac, не ломает Linux
+    assert model_for("faster", "mlx-community/whisper-large-v3-turbo") == "large-v3-turbo"
+    assert model_for("faster", "medium") == "medium"
+
+
+def test_faster_whisper_uses_cpu_when_cuda_is_not_compiled_in():
+    made = []
+
+    def load(name, device):
+        made.append(device)
+        if device == "cuda":
+            raise ValueError("This CTranslate2 package was not compiled with CUDA support")
+        return FakeFaster(device)
+
+    t = Transcriber("large-v3-turbo", backend="faster", load_faster=load)
+    assert t.transcribe(Path("/tmp/a.oga")) == "кофе сорок тысяч"
+    assert made == ["cuda", "cpu"]

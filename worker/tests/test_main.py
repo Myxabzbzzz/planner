@@ -130,3 +130,13 @@ def test_finished_message_is_logged_with_duration(monkeypatch, caplog):
     caplog.set_level(logging.INFO)
     m.tick(OneRow(), None, None, CFG, last_beat=time.monotonic())
     assert "finished i1 in" in caplog.text
+
+
+def test_jobs_only_worker_skips_inbox_and_heartbeat(monkeypatch):
+    s = Store()
+    s.jobs = [{"id": "j1"}]
+    ran = []
+    monkeypatch.setattr(m.time, "sleep", lambda _: None)
+    m.tick(s, None, None, CFG, 0.0, job_runner=lambda j: ran.append(j) or True, claim_inbox=False)
+    assert (s.claim_calls, s.hb_calls) == (0, 0)
+    assert ran == [{"id": "j1"}]

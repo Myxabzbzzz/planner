@@ -30,6 +30,38 @@ Telegram-бот + Mini App «вся жизнь в одном месте» с л�
 Пока Mac на зарядке, он не засыпает (`caffeinate -s`). На батарее с закрытой крышкой Mac уснёт —
 бот ответит «разберу, когда ИИ проснётся», очередь разберётся после пробуждения.
 
+## Воркер на домашнем сервере (Linux)
+
+Чтобы ноутбук можно было закрывать и выключать, воркер живёт на сервере с Arch / Omarchy.
+Он ходит в Supabase и Telegram сам, поэтому белый IP и открытые порты не нужны.
+Голос там распознаёт faster-whisper (на видеокарте NVIDIA, без неё — на процессоре).
+
+На сервере:
+
+    sudo pacman -S --needed git github-cli openssh
+    gh auth login                                 # репозиторий приватный
+    gh repo clone Myxabzbzzz/planner ~/planner
+    sudo systemctl enable --now sshd              # чтобы перенести .env с Mac
+
+На Mac — перенести секреты (`<user>@<server>` — пользователь и адрес сервера в домашней сети):
+
+    scp worker/.env <user>@<server>:~/planner/worker/.env
+
+Снова на сервере:
+
+    ~/planner/worker/scripts/install-linux.sh     # Ollama, модель, окружение, systemd-сервис
+    journalctl --user -u planner-worker -f        # лог; ждём строку «ready»
+
+Пришли боту «кофе 100» и голосовое — ответить должен уже сервер. Два воркера одновременно
+не мешают друг другу (очередь отдаёт каждую запись одному), так что ноутбук выключается после проверки.
+
+**Быстрая команда для iPhone.** Файл `.shortcut` подписывает только macOS (`shortcuts sign`),
+на Linux такие запросы воркер не берёт. Если оставить на Mac воркер только для них —
+в `worker/.env` на Mac `WORKER_INBOX=false`, затем `launchctl kickstart -k gui/$(id -u)/com.planner.worker` —
+файл придёт, как только ноутбук будет включён. Иначе — `worker/scripts/uninstall-agent.sh`.
+
+Обновить сервер после изменений в коде: `cd ~/planner && git pull && worker/scripts/install-linux.sh`.
+
 ## Двойной тап по задней крышке
 
 В боте: ⚙️ Настройки → 📲 Двойной тап — пошаговая инструкция с личным токеном для приложения «Команды».

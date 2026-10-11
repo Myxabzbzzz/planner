@@ -63,12 +63,20 @@ class ShortcutSignError(RuntimeError):
     """Текст — наш и вывод `shortcuts`, токена в нём нет: его можно логировать целиком."""
 
 
+SHORTCUTS_CLI = "/usr/bin/shortcuts"
+
+
 class ShortcutSigner:
     def __init__(self, run=subprocess.run):
         self.run = run
 
+    @staticmethod
+    def available() -> bool:
+        """Подписать быструю команду умеет только macOS: на Linux такие задачи ждут воркер на Mac."""
+        return Path(SHORTCUTS_CLI).exists()
+
     def sign(self, unsigned: Path, signed: Path) -> None:
-        r = self.run(["/usr/bin/shortcuts", "sign", "--mode", "anyone", "--input", str(unsigned),
+        r = self.run([SHORTCUTS_CLI, "sign", "--mode", "anyone", "--input", str(unsigned),
                       "--output", str(signed)], capture_output=True, timeout=120)
         if r.returncode != 0 or not signed.exists():
             why = (getattr(r, "stderr", None) or b"").decode(errors="replace").strip().splitlines()
