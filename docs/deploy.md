@@ -186,6 +186,7 @@ production-сборки сам — отдельный secret в GitHub не ну
 | `TELEGRAM_BOT_TOKEN` | ответы пользователю |
 
 Необязательные, со значениями по умолчанию: `OLLAMA_URL`, `OLLAMA_MODEL`,
+`OLLAMA_KEEP_ALIVE` (сколько держать модель в памяти: на Linux-сервере всегда, `-1`; на Mac `30m`),
 `WHISPER_MODEL`, `WHISPER_BACKEND` (`mlx` на Mac, `faster` на Linux — выбирается сам),
 `USE_LAYA`, `LAYA_THRESHOLD`, `WORKER_ID`, `POLL_INTERVAL`,
 `WORKER_INBOX` (`false` — воркер только подписывает быстрые команды; так оставляют Mac рядом с сервером).

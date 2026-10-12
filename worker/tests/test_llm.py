@@ -62,7 +62,7 @@ def test_ollama_client_request_shape():
         seen.update(json.loads(req.content))
         return httpx.Response(200, json={"message": {"role": "assistant", "content": GOOD}})
 
-    client = OllamaClient("http://ollama", "qwen3:8b", httpx.Client(transport=httpx.MockTransport(handler)))
+    client = OllamaClient("http://ollama", "qwen3:8b", httpx.Client(transport=httpx.MockTransport(handler)), -1)
     out = client.chat_json([{"role": "user", "content": "hi"}], EXTRACTION_SCHEMA)
     assert out == GOOD
     assert seen["model"] == "qwen3:8b"
@@ -70,6 +70,7 @@ def test_ollama_client_request_shape():
     assert seen["think"] is False
     assert seen["options"]["temperature"] == 0
     assert seen["format"] == EXTRACTION_SCHEMA
+    assert seen["keep_alive"] == -1
 
 
 def test_messages_contain_calendar(ctx):

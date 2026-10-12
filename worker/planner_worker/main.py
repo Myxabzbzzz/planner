@@ -79,7 +79,7 @@ def main() -> None:
     tg = TelegramClient(cfg.telegram_bot_token, http)
     classifier = LayaClassifier() if cfg.use_laya else None
     stt = Transcriber(cfg.whisper_model, backend=cfg.whisper_backend)
-    llm = OllamaClient(cfg.ollama_url, cfg.ollama_model, http)
+    llm = OllamaClient(cfg.ollama_url, cfg.ollama_model, http, cfg.ollama_keep_alive)
     pipeline = Pipeline(
         store=store,
         tg=tg,
@@ -101,7 +101,7 @@ def main() -> None:
             log.warning("whisper warm-up failed: %s", type(e).__name__)
         if classifier:
             classifier.warm_up()
-        http.post(f"{cfg.ollama_url}/api/generate", json={"model": cfg.ollama_model, "keep_alive": "30m"},
+        http.post(f"{cfg.ollama_url}/api/generate", json={"model": cfg.ollama_model, "keep_alive": cfg.ollama_keep_alive},
                   timeout=180).raise_for_status()
     log.info("ready (inbox=%s, shortcut jobs=%s)", cfg.inbox, ShortcutSigner.available())
 

@@ -10,10 +10,11 @@ class ExtractionError(Exception):
 
 
 class OllamaClient:
-    def __init__(self, base_url: str, model: str, http: httpx.Client):
+    def __init__(self, base_url: str, model: str, http: httpx.Client, keep_alive: str | int = "30m"):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.http = http
+        self.keep_alive = keep_alive
 
     def chat_json(self, messages: list[dict], schema: dict) -> str:
         r = self.http.post(
@@ -25,6 +26,8 @@ class OllamaClient:
                 "stream": False,
                 "think": False,
                 "options": {"temperature": 0},
+                # без него каждый запрос сбрасывает срок на 5 минут Ollama по умолчанию
+                "keep_alive": self.keep_alive,
             },
             timeout=180,
         )
