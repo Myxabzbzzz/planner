@@ -1,0 +1,35 @@
+name: Notify server to deploy
+
+# Домашний сервер недоступен из интернета, поэтому GitHub не может сам на него зайти.
+# Вместо этого после зелёного CI по main шлём сообщение в приватный топик ntfy.sh,
+# который сервер слушает (worker/scripts/deploy-listener.sh) — и он сразу запускает
+# автодеплой. Отдельный workflow, а не job в CI: пока job идёт, CI ещё не «completed»,
+# а автодеплой выкатывает только коммит, чей CI уже завершён успешно.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  notify:
+    # branches: [main] сработает и на PR из форка с веткой main — берём только push в этот репозиторий
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the server via ntfy
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "::notice::Секрет NTFY_TOPIC не задан — сервер подхватит обновление по запасному таймеру"
+            exit 0
+          fi
+          curl -fsS --retry 3 -d "$SHA" "https://ntfy.sh/$NTFY_TOPIC" >/dev/null
+          echo "Сервер уведомлён о ${SHA:0:7}"

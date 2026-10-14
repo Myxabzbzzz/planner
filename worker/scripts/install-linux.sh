@@ -83,10 +83,14 @@ systemctl --user daemon-reload
 systemctl --user enable "$UNIT"
 systemctl --user restart "$UNIT"
 
-# Автодеплой: раз в 2 минуты сервер сам берёт main, если CI по нему зелёный (scripts/autodeploy.sh).
+# Автодеплой: сервер сам берёт main, если CI по нему зелёный (scripts/autodeploy.sh).
 # Нужен git-клон репозитория — копия, перенесённая rsync, обновляться не умеет.
+# С DEPLOY_NTFY_TOPIC в .env — сразу по сигналу GitHub через ntfy.sh, таймер раз в 15 минут лишь подстраховка;
+# без него — проверка раз в 2 минуты.
 if git -C "$WORKER_DIR/.." rev-parse --git-dir >/dev/null 2>&1; then
-  say "Автодеплой (planner-autodeploy.timer)"
+  NTFY_TOPIC="$(grep -E '^DEPLOY_NTFY_TOPIC=' "$WORKER_DIR/.env" | cut -d= -f2- || true)"
+  if [ -n "$NTFY_TOPIC" ]; then EVERY=15min; else EVERY=2min; fi
+  say "Автодеплой (planner-autodeploy.timer, раз в $EVERY)"
   cat > "$(dirname "$UNIT_FILE")/planner-autodeploy.service" <<EOF
 [Unit]
 Description=Planner: deploy fresh main when CI is green
@@ -97,17 +101,37 @@ ExecStart=$WORKER_DIR/scripts/autodeploy.sh
 EOF
   cat > "$(dirname "$UNIT_FILE")/planner-autodeploy.timer" <<EOF
 [Unit]
-Description=Planner: check GitHub for a green main every 2 minutes
+Description=Planner: check GitHub for a green main every $EVERY
 
 [Timer]
 OnBootSec=2min
-OnUnitInactiveSec=2min
+OnUnitInactiveSec=$EVERY
 
 [Install]
 WantedBy=timers.target
 EOF
   systemctl --user daemon-reload
   systemctl --user enable --now planner-autodeploy.timer
+  systemctl --user restart planner-autodeploy.timer   # новый интервал
+
+  if [ -n "$NTFY_TOPIC" ]; then
+    say "Мгновенный деплой после CI (planner-deploy-listener)"
+    cat > "$(dirname "$UNIT_FILE")/planner-deploy-listener.service" <<EOF
+[Unit]
+Description=Planner: deploy right after green CI (signal from GitHub via ntfy.sh)
+
+[Service]
+ExecStart=$WORKER_DIR/scripts/deploy-listener.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+    systemctl --user daemon-reload
+    systemctl --user enable planner-deploy-listener.service
+    systemctl --user restart planner-deploy-listener.service
+  fi
 else
   say "Автодеплой пропущен: $(cd "$WORKER_DIR/.." && pwd) — не git-клон (нужен git clone https://github.com/Myxabzbzzz/planner)"
 fi
