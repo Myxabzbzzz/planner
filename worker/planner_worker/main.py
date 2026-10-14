@@ -1,5 +1,7 @@
 import logging
+import signal
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -69,6 +71,19 @@ def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None, claim_inbo
     return last_beat
 
 
+def stop_on_sigterm() -> threading.Event:
+    """systemd останавливает воркер (автодеплой, перезагрузка) по SIGTERM — дорабатываем текущее
+    сообщение и выходим, а не бросаем его на полпути (иначе его подберут только через 5 минут)."""
+    stop = threading.Event()
+
+    def handler(signum, frame):
+        log.info("stopping after the current message (signal %s)", signum)
+        stop.set()
+
+    signal.signal(signal.SIGTERM, handler)
+    return stop
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpcore"):  # their INFO logs contain the bot token in URLs
@@ -117,9 +132,11 @@ def main() -> None:
     if not cfg.inbox and job_runner is None:
         raise SystemExit("WORKER_INBOX=false, а подписывать быстрые команды здесь нечем — воркеру нечего делать")
 
+    stop = stop_on_sigterm()
     last_beat = 0.0
-    while True:
+    while not stop.is_set():
         last_beat = tick(store, tg, pipeline, cfg, last_beat, job_runner=job_runner, claim_inbox=cfg.inbox)
+    log.info("stopped")
 
 
 if __name__ == "__main__":

@@ -38,9 +38,8 @@ Telegram-бот + Mini App «вся жизнь в одном месте» с л�
 
 На сервере:
 
-    sudo pacman -S --needed git github-cli openssh
-    gh auth login                                 # репозиторий приватный
-    gh repo clone Myxabzbzzz/planner ~/planner
+    sudo pacman -S --needed git openssh
+    git clone https://github.com/Myxabzbzzz/planner ~/planner   # именно клон — по нему работает автодеплой
     sudo systemctl enable --now sshd              # чтобы перенести .env с Mac
 
 На Mac — перенести секреты (`<user>@<server>` — пользователь и адрес сервера в домашней сети):
@@ -60,7 +59,12 @@ Telegram-бот + Mini App «вся жизнь в одном месте» с л�
 в `worker/.env` на Mac `WORKER_INBOX=false`, затем `launchctl kickstart -k gui/$(id -u)/com.planner.worker` —
 файл придёт, как только ноутбук будет включён. Иначе — `worker/scripts/uninstall-agent.sh`.
 
-Обновить сервер после изменений в коде: `cd ~/planner && git pull && worker/scripts/install-linux.sh`.
+**Обновления выкатываются сами.** Раз в 2 минуты таймер `planner-autodeploy.timer` смотрит `main` на GitHub;
+когда по новому коммиту CI зелёный — сервер делает `git pull` и перезапускает воркер (тот сначала дорабатывает
+текущее сообщение). Если воркер за 3 минуты не написал «ready» — откат на прежний коммит, и этот коммит больше
+не берётся. Красный или ещё идущий CI — сервер ничего не трогает. Лог: `journalctl --user -u planner-autodeploy -e`.
+Раннер GitHub на сервере не используется намеренно: репозиторий публичный, чужой PR выполнил бы на нём код.
+Если поменялся сам `install-linux.sh` (systemd-юнит, пакеты) — его нужно перезапустить вручную.
 
 ## Двойной тап по задней крышке
 

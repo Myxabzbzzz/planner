@@ -140,3 +140,17 @@ def test_jobs_only_worker_skips_inbox_and_heartbeat(monkeypatch):
     m.tick(s, None, None, CFG, 0.0, job_runner=lambda j: ran.append(j) or True, claim_inbox=False)
     assert (s.claim_calls, s.hb_calls) == (0, 0)
     assert ran == [{"id": "j1"}]
+
+
+def test_sigterm_asks_loop_to_stop_instead_of_killing():
+    import os
+    import signal
+
+    old = signal.getsignal(signal.SIGTERM)
+    try:
+        stop = m.stop_on_sigterm()
+        assert not stop.is_set()
+        os.kill(os.getpid(), signal.SIGTERM)
+        assert stop.is_set()
+    finally:
+        signal.signal(signal.SIGTERM, old)

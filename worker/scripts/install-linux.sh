@@ -28,7 +28,7 @@ fi
 say "Пакеты: uv, Ollama"
 if [ "$GPU" = 1 ]; then OLLAMA_PKG=ollama-cuda; else OLLAMA_PKG=ollama; fi
 # sudo — только если чего-то нет: повторный запуск (обновление) пароль не спрашивает
-pacman -Q uv "$OLLAMA_PKG" >/dev/null 2>&1 || sudo pacman -S --needed --noconfirm uv "$OLLAMA_PKG"
+pacman -Q uv jq "$OLLAMA_PKG" >/dev/null 2>&1 || sudo pacman -S --needed --noconfirm uv jq "$OLLAMA_PKG"
 systemctl is-enabled --quiet ollama.service && systemctl is-active --quiet ollama.service \
   || sudo systemctl enable --now ollama.service
 
@@ -73,6 +73,8 @@ Environment=PYTHONUNBUFFERED=1
 Environment=LD_LIBRARY_PATH=$LD_PATH
 Restart=always
 RestartSec=10
+# по SIGTERM воркер дорабатывает текущее сообщение (голосовое — до пары минут), потом выходит
+TimeoutStopSec=300
 
 [Install]
 WantedBy=default.target
@@ -80,6 +82,35 @@ EOF
 systemctl --user daemon-reload
 systemctl --user enable "$UNIT"
 systemctl --user restart "$UNIT"
+
+# Автодеплой: раз в 2 минуты сервер сам берёт main, если CI по нему зелёный (scripts/autodeploy.sh).
+# Нужен git-клон репозитория — копия, перенесённая rsync, обновляться не умеет.
+if git -C "$WORKER_DIR/.." rev-parse --git-dir >/dev/null 2>&1; then
+  say "Автодеплой (planner-autodeploy.timer)"
+  cat > "$(dirname "$UNIT_FILE")/planner-autodeploy.service" <<EOF
+[Unit]
+Description=Planner: deploy fresh main when CI is green
+
+[Service]
+Type=oneshot
+ExecStart=$WORKER_DIR/scripts/autodeploy.sh
+EOF
+  cat > "$(dirname "$UNIT_FILE")/planner-autodeploy.timer" <<EOF
+[Unit]
+Description=Planner: check GitHub for a green main every 2 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=2min
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl --user daemon-reload
+  systemctl --user enable --now planner-autodeploy.timer
+else
+  say "Автодеплой пропущен: $(cd "$WORKER_DIR/.." && pwd) — не git-клон (нужен git clone https://github.com/Myxabzbzzz/planner)"
+fi
 # без этого сервисы пользователя живут, только пока он залогинен
 [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" = yes ] || sudo loginctl enable-linger "$USER"
 
@@ -98,7 +129,7 @@ fi
 say "Готово"
 echo "Статус:     systemctl --user status $UNIT"
 echo "Лог:        journalctl --user -u $UNIT -f"
-echo "Обновить:   git pull && $0"
-echo "Удалить:    systemctl --user disable --now $UNIT && rm $UNIT_FILE"
+echo "Обновления: сами после зелёного CI, лог — journalctl --user -u planner-autodeploy -e"
+echo "Удалить:    systemctl --user disable --now $UNIT planner-autodeploy.timer && rm $UNIT_FILE"
 sleep 3
 systemctl --user --no-pager status "$UNIT" | head -5 || true
