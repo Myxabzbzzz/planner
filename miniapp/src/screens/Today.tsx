@@ -5,7 +5,7 @@ import { Check } from "../components/Check";
 import { EventSheet, TaskSheet } from "../components/ItemSheets";
 import { Meter, Ring } from "../components/Meter";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
-import { IconChevron, IconStar, IconTick } from "../components/Icons";
+import { IconChevron, IconRepeat, IconStar, IconTick } from "../components/Icons";
 import { fmtAmount, fmtDayTitle, todayIso } from "../format";
 import { useLoad } from "../load";
 import { proBanner } from "../subscription";
@@ -136,7 +136,7 @@ export function Today({ api, me, refresh = 0, onAdd, onSettings, pending = 0, on
                   <button type="button" className={done ? "row-title ellipsis done-text" : "row-title ellipsis"}
                     onClick={() => setEditing(
                       r.kind === "event" ? { kind: "event", item: r.item } : { kind: "task", item: r.item })}>
-                    {r.item.title}
+                    {r.item.repeat && <span className="repeat-mark" aria-label="повторяется"><IconRepeat /></span>}{r.item.title}
                   </button>
                   {overdue && <span className="meta danger">просрочено</span>}
                   {r.kind === "event" && r.item.with_whom && <span className="meta">{r.item.with_whom}</span>}

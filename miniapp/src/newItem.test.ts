@@ -104,3 +104,16 @@ describe("новая операция", () => {
       .toBeNull();
   });
 });
+
+describe("повтор при создании", () => {
+  it("задача с повтором требует дату и уносит правило в тело", () => {
+    expect(buildNewTask({ title: "Зарядка", date: "", time: "", repeat: "daily" })).toBeNull();
+    expect(buildNewTask({ title: "Зарядка", date: "2026-10-19", time: "07:30", repeat: "weekdays" }))
+      .toEqual({ title: "Зарядка", due_date: "2026-10-19", due_time: "07:30", repeat: { freq: "weekdays" } });
+    expect(buildNewTask({ title: "Хлеб", date: "", time: "", repeat: null })).toEqual({ title: "Хлеб" });
+  });
+  it("встреча с повтором", () => {
+    expect(buildNewEvent({ title: "Созвон", date: "2026-10-15", time: "10:00", withWhom: "", repeat: "weekly" }))
+      .toEqual({ title: "Созвон", date: "2026-10-15", time: "10:00", repeat: { freq: "weekly" } });
+  });
+});

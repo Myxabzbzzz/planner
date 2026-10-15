@@ -313,6 +313,9 @@ h2 {
   opacity: .75;
 }
 
+/* значок повтора перед названием — приглушённый, чтобы не спорить с текстом */
+.repeat-mark { display: inline-flex; vertical-align: -2px; margin-right: 6px; color: var(--fg-3); }
+
 button.link {
   appearance: none;
   border: 0;

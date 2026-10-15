@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Api } from "../api";
 import { Check } from "../components/Check";
+import { IconRepeat } from "../components/Icons";
 import { EventSheet, TaskSheet } from "../components/ItemSheets";
 import { Segmented } from "../components/Segmented";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
@@ -86,7 +87,7 @@ export function Tasks({ api, me, refresh = 0, onAdd }: {
                 <span className="time-chip num">{e.time}</span>
                 <button type="button" className={done ? "row-title ellipsis done-text" : "row-title ellipsis"}
                   onClick={() => setEditing({ kind: "event", item: { ...e, date: day } })}>
-                  {e.title}
+                  {e.repeat && <span className="repeat-mark" aria-label="повторяется"><IconRepeat /></span>}{e.title}
                 </button>
                 {e.with_whom && <span className="meta">{e.with_whom}</span>}
               </div>
@@ -111,7 +112,7 @@ export function Tasks({ api, me, refresh = 0, onAdd }: {
                     onToggle={() => void toggle(k, done, (v) => api.setTaskDone(t.id, v))} />
                   <button type="button" className={done ? "row-title ellipsis done-text" : "row-title ellipsis"}
                     onClick={() => setEditing({ kind: "task", item: t })}>
-                    {t.title}
+                    {t.repeat && <span className="repeat-mark" aria-label="повторяется"><IconRepeat /></span>}{t.title}
                   </button>
                   {t.due && filter !== "done" && (
                     <span className={t.overdue && !done ? "meta danger" : "meta"}>{dueLabel(t.due, today, t.due_has_time)}</span>

@@ -88,7 +88,8 @@ class Store:
             .eq("id", inbox_id).execute()
 
     def clear_records(self, inbox_id: str) -> None:
-        for table in ("items", "transactions", "notes", "habit_logs"):
+        # recurrences — первыми: иначе их экземпляры потеряют связь, но правило останется
+        for table in ("recurrences", "items", "transactions", "notes", "habit_logs"):
             self.sb.table(table).delete().eq("inbox_id", inbox_id).execute()
 
     def claim_job(self) -> dict | None:
@@ -113,6 +114,15 @@ class Store:
 
     def remove_audio(self, key: str) -> None:
         self.sb.storage.from_(AUDIO_BUCKET).remove([key])
+
+    def is_pro(self, user_id: str) -> bool:
+        return self.sb.rpc("is_pro", {"p_user": user_id}).execute().data is not False
+
+    def create_recurrence(self, user_id: str, kind: str, title: str, day, at: str | None, with_whom: str | None,
+                          freq: str, inbox_id: str) -> str:
+        return self.sb.rpc("create_recurrence", {
+            "p_user": user_id, "p_kind": kind, "p_title": title, "p_date": day.isoformat(), "p_time": at,
+            "p_with_whom": with_whom, "p_freq": freq, "p_inbox": inbox_id}).execute().data
 
     def ai_quota_use(self, user_id: str) -> bool:
         return self.sb.rpc("ai_quota_use", {"p_user": user_id}).execute().data is not False

@@ -370,6 +370,44 @@ Deno.test("POST /tasks trims, keeps due date and time, rejects time without a da
   assertEquals((await mk({ title: "x", due_date: "2026-02-30" })).status, 400);
 });
 
+Deno.test("повтор: задача и встреча с repeat создают правило, на Free — 402, без даты — 400", async () => {
+  const mk = async (path: string, body: unknown, pro = true) => {
+    const db = new FakeApiDb();
+    db.pro = pro;
+    db.rpc = async (fn: string, args: unknown[]) => {
+      db.calls.push([fn, args]);
+      return "first-id";
+    };
+    return await run(await req(path, { method: "POST", body }), db);
+  };
+  const task = await mk("/tasks", { title: "Зарядка", due_date: "2026-10-19", repeat: { freq: "weekdays" } });
+  assertEquals([task.status, task.body], [201, { id: "first-id" }]);
+  assertEquals(task.db.calls, [["create_recurrence", ["u1", "task", "Зарядка", "2026-10-19", null, null, "weekdays"]]]);
+
+  const ev = await mk("/events", { title: "Созвон", date: "2026-10-15", time: "10:00", with_whom: "Андрей", repeat: { freq: "weekly" } });
+  assertEquals(ev.db.calls, [["create_recurrence", ["u1", "event", "Созвон", "2026-10-15", "10:00", "Андрей", "weekly"]]]);
+
+  const free = await mk("/tasks", { title: "Зарядка", due_date: "2026-10-19", repeat: { freq: "daily" } }, false);
+  assertEquals([free.status, free.body, free.db.calls], [402, { error: "pro_required" }, []]);
+  assertEquals((await mk("/tasks", { title: "Зарядка", repeat: { freq: "daily" } })).status, 400);
+  assertEquals((await mk("/tasks", { title: "Зарядка", due_date: "2026-10-19", repeat: { freq: "hourly" } })).status, 400);
+  // без repeat — обычная задача, Pro не спрашиваем
+  const plain = await mk("/tasks", { title: "Хлеб", repeat: null }, false);
+  assertEquals([plain.status, plain.db.calls[0][0], plain.db.proChecks], [201, "create_task", 0]);
+});
+
+Deno.test("POST /recurrences/:id/stop останавливает повтор и на Free", async () => {
+  const db = new FakeApiDb();
+  db.pro = false;
+  db.rpc = async (fn: string, args: unknown[]) => {
+    db.calls.push([fn, args]);
+    return true;
+  };
+  const id = "11111111-2222-3333-4444-555555555555";
+  const r = await run(await req(`/recurrences/${id}/stop`, { method: "POST", body: {} }), db);
+  assertEquals([r.status, r.db.calls], [200, [["stop_recurrence", ["u1", id]]]]);
+});
+
 Deno.test("POST /events requires a real date and time", async () => {
   const mk = async (body: unknown) => {
     const db = new FakeApiDb();

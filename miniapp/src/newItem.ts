@@ -6,9 +6,10 @@
 import { DATE, TIME } from "./itemEdit";
 import type { NoteKind } from "./itemEdit";
 import { parseAmount } from "./opEdit";
+import type { Freq } from "./repeat";
 
-export type NewTask = { title: string; due_date?: string; due_time?: string };
-export type NewEvent = { title: string; date: string; time: string; with_whom?: string };
+export type NewTask = { title: string; due_date?: string; due_time?: string; repeat?: { freq: Freq } };
+export type NewEvent = { title: string; date: string; time: string; with_whom?: string; repeat?: { freq: Freq } };
 export type NewNote = { text: string; kind: NoteKind };
 export type NewHabit = { name: string; target: number };
 export type NewTransaction = {
@@ -20,20 +21,24 @@ const title = (s: string) => {
   return t !== "" && t.length <= 200 ? t : null;
 };
 
-export function buildNewTask(f: { title: string; date: string; time: string }): NewTask | null {
+export function buildNewTask(f: { title: string; date: string; time: string; repeat?: Freq | null }): NewTask | null {
   const t = title(f.title);
   if (t === null) return null;
-  if (f.date === "") return { title: t };
+  // повторять задачу без даты не от чего — сервер ответит 400, форма не даёт до этого дойти
+  if (f.date === "") return f.repeat ? null : { title: t };
   if (!DATE.test(f.date)) return null;
   if (f.time !== "" && !TIME.test(f.time)) return null;
-  return f.time === "" ? { title: t, due_date: f.date } : { title: t, due_date: f.date, due_time: f.time };
+  const base: NewTask = f.time === "" ? { title: t, due_date: f.date } : { title: t, due_date: f.date, due_time: f.time };
+  return f.repeat ? { ...base, repeat: { freq: f.repeat } } : base;
 }
 
-export function buildNewEvent(f: { title: string; date: string; time: string; withWhom: string }): NewEvent | null {
+export function buildNewEvent(f: { title: string; date: string; time: string; withWhom: string; repeat?: Freq | null }):
+  NewEvent | null {
   const t = title(f.title);
   const who = f.withWhom.trim();
   if (t === null || !DATE.test(f.date) || !TIME.test(f.time) || who.length > 200) return null;
-  return who === "" ? { title: t, date: f.date, time: f.time } : { title: t, date: f.date, time: f.time, with_whom: who };
+  const base: NewEvent = who === "" ? { title: t, date: f.date, time: f.time } : { title: t, date: f.date, time: f.time, with_whom: who };
+  return f.repeat ? { ...base, repeat: { freq: f.repeat } } : base;
 }
 
 export function buildNewNote(f: { text: string; kind: NoteKind }): NewNote | null {

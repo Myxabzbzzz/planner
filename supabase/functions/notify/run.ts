@@ -14,6 +14,8 @@ import {
 } from "./render.ts";
 
 export interface NotifyDb {
+  /** Повторяющиеся дела: создать следующие экземпляры (Pro). Возвращает, сколько создано. */
+  spawnRecurrences(): Promise<number>;
   dueReminders(): Promise<Reminder[]>;
   markReminded(ids: string[]): Promise<void>;
   dueDigests(): Promise<DueDigest[]>;
@@ -33,7 +35,13 @@ const GONE = /bot was blocked|user is deactivated|chat not found/i;
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export async function runNotify(d: { db: NotifyDb; tg: Tg; miniappUrl?: string }) {
-  let reminders = 0, digests = 0, pings = 0, queues = 0;
+  let reminders = 0, digests = 0, pings = 0, queues = 0, spawned = 0;
+  // До напоминаний: у только что созданного экземпляра тоже должно сработать «через 30 минут»
+  try {
+    spawned = await d.db.spawnRecurrences();
+  } catch (e) {
+    console.error("spawn recurrences failed:", errText(e));
+  }
   const mark: string[] = [];
   for (const r of await d.db.dueReminders()) {
     try {
@@ -138,5 +146,5 @@ export async function runNotify(d: { db: NotifyDb; tg: Tg; miniappUrl?: string }
     console.error("purge rate events failed:", errText(e));
   }
 
-  return { reminders, digests, pings, queues };
+  return { reminders, digests, pings, queues, spawned };
 }

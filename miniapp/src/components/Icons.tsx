@@ -40,3 +40,5 @@ export const IconCalm = ({ size = 28 }: { size?: number }) => svg(<><circle cx="
 export const IconFlame = ({ size = 20 }: { size?: number }) => svg(<path d="M12 3c3.5 4 5.5 6.3 5.5 9a5.5 5.5 0 0 1-11 0c0-1.3.5-2.5 1.5-3.8.3 1.6 1 2.3 2 2.3 1.3 0 2-1 2-2.8 0-1.4-.3-2.9-1-4.7z" />, size);
 export const IconMedal = ({ size = 20 }: { size?: number }) => svg(<><circle cx="12" cy="14.5" r="5.5" /><path d="M9 9L7 3h10l-2 6M12 12.5l.9 1.8 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2L9 14.6l2-.3z" /></>, size);
 export const IconLock = ({ size = 20 }: { size?: number }) => svg(<><rect x="5" y="10.5" width="14" height="10" rx="2.5" /><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" /></>, size);
+export const IconRepeat = ({ size = 14 }: { size?: number }) =>
+  svg(<><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H19l-3-3" /><path d="M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H5l3 3" /></>, size);

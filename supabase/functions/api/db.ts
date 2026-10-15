@@ -44,6 +44,8 @@ export const ARG_NAMES: Record<string, string[]> = {
   unarchive_habit: ["p_user", "p_id"],
   create_task: ["p_user", "p_title", "p_due_date", "p_due_time"],
   create_event: ["p_user", "p_title", "p_date", "p_time", "p_with_whom"],
+  create_recurrence: ["p_user", "p_kind", "p_title", "p_date", "p_time", "p_with_whom", "p_freq"],
+  stop_recurrence: ["p_user", "p_id"],
   create_note: ["p_user", "p_text", "p_kind"],
   create_habit: ["p_user", "p_name", "p_target"],
   create_transaction: ["p_user", "p_type", "p_amount", "p_title", "p_category", "p_date"],

@@ -27,12 +27,12 @@ function data() {
     Array.from({ length: 28 }, (_, i) => ({ date: shift(today, i - 27), done: i === 27 ? doneToday : rnd() < rate }));
 
   const events = [
-    { id: "e1", title: "Созвон с Андреем по ремонту", time: "10:30", with_whom: "Андрей", done: true },
+    { id: "e1", title: "Созвон с Андреем по ремонту", time: "10:30", with_whom: "Андрей", done: true, repeat: { id: "r1", freq: "weekly" as const } },
     { id: "e2", title: "Стоматолог, ул. Лесная 12", time: "15:00", with_whom: null, done: false },
     { id: "e3", title: "Ужин в «Пушкине»", time: "19:30", with_whom: "Катя", done: false },
   ];
   const tasks = [
-    { id: "t1", title: "Оплатить интернет и коммуналку", due: shift(today, -1) + "T23:59:00", overdue: true, done_at: null },
+    { id: "t1", title: "Оплатить интернет и коммуналку", due: shift(today, -1) + "T23:59:00", overdue: true, done_at: null, repeat: { id: "r2", freq: "monthly" as const } },
     { id: "t2", title: "Отправить договор Игорю на подпись", due: today + "T14:00:00", overdue: false, done_at: null },
     { id: "t3", title: "Купить корм коту", due: today + "T23:59:00", overdue: false, done_at: null },
     { id: "t4", title: "Записаться на ТО машины", due: shift(today, 3) + "T23:59:00", overdue: false, done_at: null },

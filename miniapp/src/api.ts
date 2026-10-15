@@ -145,6 +145,7 @@ export function makeApi(
     // Создание без ИИ: когда воркер спит, приложение всё равно работает.
     createTask: (body: NewTask) => postJson<Created>("/tasks", body),
     createEvent: (body: NewEvent) => postJson<Created>("/events", body),
+    stopRecurrence: (id: string) => postJson<{ ok: true }>(`/recurrences/${id}/stop`, {}),
     createNote: (body: NewNote) => postJson<Created>("/notes", body),
     createHabit: (body: NewHabit) => postJson<Created>("/habits", body),
     createTransaction: (body: NewTransaction) => dropCategories(postJson<Created>("/transactions", body)),

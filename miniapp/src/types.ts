@@ -1,8 +1,10 @@
+import type { Repeat } from "./repeat";
+
 export type Me = { name: string; tz: string; base_currency: string };
 export type Today = {
   base_currency: string;
-  events: { id: string; title: string; time: string; date: string; with_whom: string | null; done: boolean }[];
-  tasks: { id: string; title: string; due: string; overdue: boolean; due_has_time?: boolean }[];
+  events: { id: string; title: string; time: string; date: string; with_whom: string | null; done: boolean; repeat?: Repeat | null }[];
+  tasks: { id: string; title: string; due: string; overdue: boolean; due_has_time?: boolean; repeat?: Repeat | null }[];
   tasks_more: number;
   spent_today: number;
   month_spent: number;
@@ -13,10 +15,11 @@ export type TaskItem = {
   id: string; title: string; due: string | null; overdue: boolean; done_at: string | null;
   /** Новая схема отдаёт флаг явно; у старой его нет — тогда работает запасной разбор по 23:59. */
   due_has_time?: boolean;
+  repeat?: Repeat | null;
 };
 /** `total` — сколько задач под фильтром всего; список обрезан сотней. */
 export type TasksResp = { tasks: TaskItem[]; total?: number };
-export type EventItem = { id: string; title: string; time: string; with_whom: string | null; done: boolean };
+export type EventItem = { id: string; title: string; time: string; with_whom: string | null; done: boolean; repeat?: Repeat | null };
 export type EventsResp = { days: { date: string; events: EventItem[] }[] };
 export type Operation = {
   id: string; date: string; type: "expense" | "income"; title: string; amount: number; category: string;

@@ -22,6 +22,13 @@ class FakeDb implements NotifyDb {
   sleeping: SleepingQueue[] = [];
   warned: string[][] = [];
   purged = 0;
+  spawns = 0;
+  failSpawn = false;
+  async spawnRecurrences() {
+    if (this.failSpawn) throw new Error("нет связи");
+    this.spawns++;
+    return 2;
+  }
   async dueReminders() { return this.reminders; }
   async markReminded(ids: string[]) { this.reminded.push(ids); }
   async dueDigests() { return this.digests; }
@@ -164,4 +171,14 @@ Deno.test("уборка: корзина 30 дней, журнал лимитов
   const out = await runNotify({ db: broken, tg: new FakeTg() });
   assertEquals(typeof out.reminders, "number");
   assertEquals(broken.purgedRate.length, 1);
+});
+
+Deno.test("recurring items are spawned every run, and a failure does not stop reminders", async () => {
+  const db = new FakeDb();
+  const tg = new FakeTg();
+  assertEquals((await runNotify({ db, tg })).spawned, 2);
+  db.failSpawn = true;
+  db.reminders = [{ item_id: "i1", chat_id: 1, kind: "event", title: "Созвон", local_time: "10:00", minutes_left: 30 }];
+  const r = await runNotify({ db, tg });
+  assertEquals([r.spawned, r.reminders], [0, 1]);
 });

@@ -64,6 +64,16 @@ class FakeStore:
     def reply_message_id(self, inbox_id):
         return self.acks.get(inbox_id)
 
+    pro = True
+    recurrences: list[tuple] = []
+
+    def is_pro(self, user_id):
+        return self.pro
+
+    def create_recurrence(self, *args):
+        self.recurrences = [*self.recurrences, args]
+        return "rec-item"
+
     def ai_quota_use(self, user_id):
         self.ai_calls += 1
         if self.ai_left is None:
@@ -850,3 +860,48 @@ def test_retry_does_not_charge_again(ctx):
     store.ai_left = 0
     p.process(row(text=None, source="voice", audio_ref="f1", attempts=2))
     assert store.inserted[0][0] == "transactions" and store.ai_calls == 0
+
+
+# ---------- повтор: «каждый понедельник созвон» ----------
+
+def test_weekly_event_becomes_a_repeat_rule(ctx):
+    call = item(kind="event", title="Созвон с командой", source_text="в понедельник (2026-10-05) созвон с командой в 10 (10:00)",
+                starts_at=datetime(2026, 10, 5, 10, 0), with_whom="команда")
+    ex = FakeExtractor([call])
+    p, store, tg = make(ctx, ex)
+    p.process(row(text="каждый понедельник созвон с командой в 10"))
+    # модель видит дату первого раза, а не «каждый»
+    assert ex.calls[0]["text"].startswith("в понедельник")
+    assert store.inserted == []
+    assert store.recurrences == [("u1", "event", "Созвон с командой", date(2026, 10, 5), "10:00", "команда", "weekly", "i1")]
+    assert "🔁 каждую неделю" in tg.edited[0][2]
+    # повторный разбор начинается с очистки — правило уйдёт вместе с записями
+    assert store.events[0] == "clear"
+
+
+def test_monthly_task_without_time_keeps_no_time(ctx):
+    bill = item(kind="task", title="Оплатить ЖКУ", source_text="10 октября оплатить ЖКУ",
+                due_at=datetime(2026, 10, 10, 23, 59))
+    p, store, _ = make(ctx, FakeExtractor([bill]))
+    p.process(row(text="10-го числа каждого месяца оплатить ЖКУ"))
+    assert store.recurrences[0][3:7] == (date(2026, 10, 10), None, None, "monthly")
+
+
+def test_free_user_gets_one_record_and_a_hint(ctx):
+    call = item(kind="event", title="Созвон", source_text="в понедельник (2026-10-05) созвон в 10 (10:00)", starts_at=datetime(2026, 10, 5, 10, 0))
+    store = FakeStore(ctx)
+    store.pro = False
+    p, store, tg = make(ctx, FakeExtractor([call]), store=store)
+    p.process(row(text="каждый понедельник созвон в 10"))
+    assert [t for t, _ in store.inserted] == ["items"]
+    assert store.recurrences == []
+    assert "функция Pro" in tg.edited[0][2]
+
+
+def test_repeat_is_ignored_when_the_message_has_several_tasks(ctx):
+    a = item(kind="task", title="Вынести мусор", source_text="в пятницу вынести мусор", due_at=datetime(2026, 10, 2, 23, 59))
+    b = item(kind="task", title="Купить хлеб", source_text="купить хлеб")
+    p, store, _ = make(ctx, FakeExtractor([a, b]))
+    p.process(row(text="по пятницам вынести мусор и купить хлеб"))
+    assert store.recurrences == []
+    assert [t for t, _ in store.inserted] == ["items", "items"]

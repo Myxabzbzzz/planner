@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
 import type { Api } from "../api";
 import { buildEventPatch, buildHabitPatch, buildNotePatch, buildTaskPatch, splitDue, type NoteKind } from "../itemEdit";
+import { type Repeat, repeatLabel } from "../repeat";
+import { IconRepeat } from "./Icons";
 import { saveError } from "../saveError";
 import { hapticResult } from "../telegram";
 import { useUndo } from "../undo";
@@ -51,8 +53,23 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <label className="field"><span>{label}</span>{children}</label>
 );
 
+/** «Повторяется каждую неделю» и кнопка остановки. Правка меняет только этот экземпляр. */
+function RepeatNote({ repeat, busy, onStop }: { repeat: Repeat; busy: boolean; onStop: () => void }) {
+  return (
+    <>
+      <div className="field"><span>Повтор</span></div>
+      <div className="card-foot" style={{ marginTop: 0 }}>
+        <span className="repeat-mark"><IconRepeat /></span>Повторяется {repeatLabel(repeat.freq)}. Изменения здесь касаются только этого раза.
+      </div>
+      <div className="chips" style={{ marginTop: 8 }}>
+        <button type="button" className="pill" onClick={onStop} disabled={busy}>Остановить повтор</button>
+      </div>
+    </>
+  );
+}
+
 export function TaskSheet({ api, item, onClose, onSaved }:
-  Base<{ id: string; title: string; due: string | null; due_has_time?: boolean }>) {
+  Base<{ id: string; title: string; due: string | null; due_has_time?: boolean; repeat?: Repeat | null }>) {
   const was = splitDue(item.due, item.due_has_time);
   const [title, setTitle] = useState(item.title);
   const [date, setDate] = useState(was.date);
@@ -92,13 +109,16 @@ export function TaskSheet({ api, item, onClose, onSaved }:
           </button>
         </div>
       )}
+      {item.repeat && (
+        <RepeatNote repeat={item.repeat} busy={busy} onStop={() => void run(() => api.stopRecurrence(item.repeat!.id))} />
+      )}
       {patch === "invalid" && <div className="sub danger">Проверь название и срок.</div>}
     </Sheet>
   );
 }
 
 export function EventSheet({ api, item, onClose, onSaved }: Base<{
-  id: string; title: string; date: string; time: string; with_whom: string | null;
+  id: string; title: string; date: string; time: string; with_whom: string | null; repeat?: Repeat | null;
 }>) {
   const [title, setTitle] = useState(item.title);
   const [date, setDate] = useState(item.date);
@@ -132,6 +152,9 @@ export function EventSheet({ api, item, onClose, onSaved }: Base<{
         <input value={withWhom} maxLength={200} placeholder="необязательно"
           onChange={(e) => setWithWhom(e.target.value)} disabled={busy} />
       </Field>
+      {item.repeat && (
+        <RepeatNote repeat={item.repeat} busy={busy} onStop={() => void run(() => api.stopRecurrence(item.repeat!.id))} />
+      )}
       {patch === "invalid" && <div className="sub danger">Проверь дату и время.</div>}
     </Sheet>
   );

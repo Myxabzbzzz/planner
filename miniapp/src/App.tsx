@@ -152,6 +152,7 @@ export default function App() {
           kind={adding}
           onClose={() => setAdding(null)}
           onSaved={() => { setAdding(null); bump(); }}
+          onPro={() => { setAdding(null); setProOpen(true); }}
         />
       )}
 

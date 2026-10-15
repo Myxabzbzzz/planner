@@ -240,6 +240,24 @@ function newTransaction(b: Record<string, unknown>, u: string): unknown[] {
   return [u, type, amount, typeof title === "string" ? title.trim() : null, category ?? null, optDate(b.date)];
 }
 
+const FREQS = ["daily", "weekdays", "weekly", "monthly"] as const;
+
+/**
+ * Задача или встреча с повтором (Pro): правило + первый экземпляр. Без даты повторять нечего,
+ * поэтому у задачи дата обязательна. Аргументы — для create_recurrence.
+ */
+function newRecurrence(path: string, b: Record<string, unknown>, u: string): unknown[] {
+  const freq = (b.repeat as { freq?: unknown } | null)?.freq;
+  if (!FREQS.includes(freq as typeof FREQS[number])) throw new BadRequest();
+  if (path === "/events") {
+    const [, title, date, time, withWhom] = newEvent(b, u);
+    return [u, "event", title, date, time, withWhom, freq];
+  }
+  const [, title, date, time] = newTask(b, u);
+  if (date === null) throw new BadRequest();
+  return [u, "task", title, date, time, null, freq];
+}
+
 const CREATE_ROUTES: Record<string, [string, (b: Record<string, unknown>, u: string) => unknown[]]> = {
   "/tasks": ["create_task", newTask],
   "/events": ["create_event", newEvent],
@@ -321,6 +339,8 @@ const POST_ROUTES: [RegExp, string, BodyParser][] = [
   }],
   [/^\/settings\/category-limit$/, "set_category_limit", categoryLimit],
   [/^\/account\/delete$/, "delete_account", (_b, u) => [u]],
+  // остановить повтор можно и без Pro — иначе после подписки его было бы не выключить
+  [new RegExp(`^/recurrences/(${UUID})/stop$`, "i"), "stop_recurrence", (_b, u, id) => [u, id]],
   [/^\/settings\/limit$/, "api_set_limit", limitArg],
   [/^\/settings\/notify$/, "api_set_notify", notifyArg],
   [new RegExp(`^/habits/(${UUID})/day$`, "i"), "set_habit_on", habitDay],
@@ -367,8 +387,12 @@ async function readJson(req: Request): Promise<Record<string, unknown>> {
   return body as Record<string, unknown>;
 }
 
-/** Создание: в ответ уходит id новой записи, а не просто ok. */
-async function createRoute(path: string, req: Request, userId: string): Promise<[string, unknown[]] | null> {
+/**
+ * Создание: в ответ уходит id новой записи, а не просто ok.
+ * pro — задача или встреча с повтором: её можно создать только в Pro.
+ */
+async function createRoute(path: string, req: Request, userId: string):
+  Promise<{ fn: string; args: unknown[]; pro: boolean } | null> {
   const hit = CREATE_ROUTES[path];
   if (!hit) return null;
   let body: unknown;
@@ -378,7 +402,11 @@ async function createRoute(path: string, req: Request, userId: string): Promise<
     throw new BadRequest();
   }
   if (body === null || typeof body !== "object" || Array.isArray(body)) throw new BadRequest();
-  return [hit[0], hit[1](body as Record<string, unknown>, userId)];
+  const b = body as Record<string, unknown>;
+  if ((path === "/tasks" || path === "/events") && b.repeat !== undefined && b.repeat !== null) {
+    return { fn: "create_recurrence", args: newRecurrence(path, b, userId), pro: true };
+  }
+  return { fn: hit[0], args: hit[1](b, userId), pro: false };
 }
 
 const MAX_TEXT = 4000;
@@ -591,7 +619,8 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
       }
       const cr = await createRoute(path, req, user.id);
       if (cr) {
-        const id = await d.db.call(cr[0], cr[1]);
+        if (cr.pro && !await isPro(d.db, user.id)) return PRO_REQUIRED();
+        const id = await d.db.call(cr.fn, cr.args);
         return typeof id === "string" ? json(201, { id }) : json(404, { error: "not_found" });
       }
       const pr = await postRoute(path, req, user.id);

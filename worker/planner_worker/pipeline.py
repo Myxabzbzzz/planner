@@ -12,6 +12,8 @@ from .format import (KIND_LABELS, failure_buttons, future_message, past_time_mes
                      render_summary, review_message, summary_buttons, time_message)
 from .fx import FxApplied, FxError, RateTable, convert
 from .llm import ExtractionError
+from .recurrence import LABELS as REPEAT_LABELS
+from .recurrence import detect as detect_repeat
 from .rows import to_row
 from .router import is_question
 from .schemas import ExtractedItem, InboxRow, UserContext
@@ -24,6 +26,7 @@ REPHRASE_TEXT = "😵 Не смог разобрать. Переформулир
 NOT_HEARD = "🙉 Не расслышал. Повтори, пожалуйста."
 AI_LIMIT = ("🔒 Бесплатные действия ИИ на сегодня закончились: 3 голосовых или вопроса в день.\n"
             "Текстом записывать можно без ограничений. Безлимит — в Pro: /pro")
+REPEAT_PRO = "🔁 Повторять запись — функция Pro, поэтому записал один раз. Подробнее: /pro"
 PREFIXES = {"shortcut": "📲 ", "miniapp": "📱 "}
 STORAGE = "storage:"
 PAST_GRACE = timedelta(minutes=15)
@@ -84,8 +87,13 @@ class Pipeline:
 
         lines: list[str] = []
         review: list[dict] = []
-        checked = self._extract_checked(text, ctx)
+        repeat = detect_repeat(text, ctx.now.date())
+        checked = self._extract_checked(repeat.text if repeat else text, ctx)
         self.store.clear_records(row.id)  # retried main pass must not duplicate records
+        # повтор относится к записи, только если она в сообщении одна: иначе непонятно, к какой
+        targets = [it for it, errs in checked if not errs and it.kind in ("task", "event")]
+        repeat_item = targets[0] if repeat and len(targets) == 1 else None
+        repeat_locked = False
         for it, errs in checked:
             if errs:
                 reason = ("time" if errs == [NO_TIME] else "future" if all(e.startswith(FUTURE) for e in errs)
@@ -101,12 +109,18 @@ class Pipeline:
                 review.append(self._review_entry(it, "laya", cls))
                 continue
             try:
-                lines.append(self._save(it, ctx, row.id))
+                if it is repeat_item and self._pro(row.user_id):
+                    lines.append(self._save_repeat(it, ctx, row.id, repeat.freq))
+                else:
+                    repeat_locked = repeat_locked or it is repeat_item
+                    lines.append(self._save(it, ctx, row.id))
             except FxError as e:
                 review.append(self._review_entry(it, f"нет курса валюты: {e}", cls))
 
         status = "needs_review" if review else "done"
         summary = render_summary(lines, len(review))
+        if repeat_locked:
+            summary += "\n\n" + REPEAT_PRO
         self.store.finish(row.id, status, {"text": text, "saved": len(lines), "pending_review": review,
                                            "reply": summary})
         self._best_effort(reply, self.tg, with_ack(self.store, row), chat_text(row, summary),
@@ -195,6 +209,25 @@ class Pipeline:
                 raise FxError(f"не удалось получить курс: {e}") from e
             self.store.save_rates(table)
         return convert(Decimal(str(it.amount)), it.currency, ctx.base_currency, table)
+
+    def _pro(self, user_id: str) -> bool:
+        try:
+            return self.store.is_pro(user_id)
+        except Exception as e:  # noqa: BLE001 — сбой проверки не должен стоить платящему повтора
+            log.warning("pro check failed for %s: %s", user_id, type(e).__name__)
+            return True
+
+    def _save_repeat(self, it: ExtractedItem, ctx: UserContext, inbox_id: str, freq: str) -> str:
+        """Правило повтора и первый экземпляр — одной функцией базы, как в мини-приложении."""
+        tz = ZoneInfo(ctx.tz)
+        when = it.starts_at if it.kind == "event" else it.due_at
+        local = when.astimezone(tz) if when else None
+        day = local.date() if local else ctx.now.date()
+        # у задачи 23:59 значит «без времени» — так же решает база
+        at = local.strftime("%H:%M") if local and (it.kind == "event" or local.strftime("%H:%M") != "23:59") else None
+        self.store.create_recurrence(ctx.user_id, it.kind, it.title, day, at,
+                                     it.with_whom if it.kind == "event" else None, freq, inbox_id)
+        return f"{render_line(it, None, ctx)} · 🔁 {REPEAT_LABELS[freq]}"
 
     def _save(self, it: ExtractedItem, ctx: UserContext, inbox_id: str) -> str:
         fx = self._fx(it, ctx)

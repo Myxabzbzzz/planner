@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import type { Api } from "../api";
+import { needsPro, type Api } from "../api";
 import { fmtAmount, todayIso } from "../format";
 import {
   buildNewEvent, buildNewHabit, buildNewNote, buildNewTask, buildNewTransaction,
 } from "../newItem";
 import type { NoteKind } from "../itemEdit";
+import { type Freq, REPEAT_CHOICES } from "../repeat";
 import { saveError } from "../saveError";
 import { hapticResult } from "../telegram";
 import type { Categories } from "../types";
@@ -43,18 +44,21 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
  * задача «позвонить врачу» просто повисала в очереди. Теперь запись уходит в базу
  * сразу, а композер с ИИ остаётся быстрым путём.
  */
-export function NewSheet({ api, tz, currency, kind, onClose, onSaved }: {
+export function NewSheet({ api, tz, currency, kind, onClose, onSaved, onPro }: {
   api: Api;
   tz: string;
   currency: string;
   kind: NewKind | null;
   onClose: () => void;
   onSaved: (kind: NewKind) => void;
+  /** повтор — функция Pro: на Free показываем, что даёт Pro */
+  onPro: () => void;
 }) {
   const today = todayIso(tz);
   const [pick, setPick] = useState<NewKind>(kind ?? "task");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
 
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
@@ -65,6 +69,7 @@ export function NewSheet({ api, tz, currency, kind, onClose, onSaved }: {
   const [text, setText] = useState("");
   const [noteKind, setNoteKind] = useState<NoteKind>("thought");
   const [target, setTarget] = useState(7);
+  const [repeat, setRepeat] = useState<Freq | null>(null);
   const [cats, setCats] = useState<Categories | null>(() => api.cachedCategories());
 
   // Встреча без даты и времени невозможна — подставляем сегодня и ближайший час.
@@ -82,8 +87,8 @@ export function NewSheet({ api, tz, currency, kind, onClose, onSaved }: {
     return () => { alive = false; };
   }, [api, pick]);
 
-  const body = pick === "task" ? buildNewTask({ title, date, time })
-    : pick === "event" ? buildNewEvent({ title, date, time, withWhom })
+  const body = pick === "task" ? buildNewTask({ title, date, time, repeat })
+    : pick === "event" ? buildNewEvent({ title, date, time, withWhom, repeat })
     : pick === "note" ? buildNewNote({ text, kind: noteKind })
     : pick === "habit" ? buildNewHabit({ name: title, target })
     : buildNewTransaction({ type: pick === "income" ? "income" : "expense", amount, title, category, date });
@@ -104,10 +109,38 @@ export function NewSheet({ api, tz, currency, kind, onClose, onSaved }: {
       onSaved(pick);
     } catch (e) {
       hapticResult(false);
-      setError(saveError(e));
+      if (needsPro(e)) setLocked(true);
+      else setError(saveError(e));
       setBusy(false);
     }
   }
+
+  // Повтор начинается с даты: у задачи без срока подставляем сегодня
+  const chooseRepeat = (f: Freq | null) => {
+    setRepeat(f);
+    setLocked(false);
+    if (f && pick === "task" && date === "") setDate(today);
+  };
+
+  const repeatField = (pick === "task" || pick === "event") && (
+    <div className="field">
+      <span>Повтор</span>
+      <div className="chips">
+        {REPEAT_CHOICES.map((c) => (
+          <button type="button" key={c.label} className={c.key === repeat ? "pill on" : "pill"}
+            aria-pressed={c.key === repeat} onClick={() => chooseRepeat(c.key)} disabled={busy}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {locked && (
+        <div className="card-foot">
+          Повторяющиеся дела и встречи — в Pro.{" "}
+          <button type="button" className="link" onClick={onPro}>Что даёт Pro</button>
+        </div>
+      )}
+    </div>
+  );
 
   const options = cats ? cats[pick === "income" ? "income" : "expense"].map((c) => c.name) : [];
 
@@ -154,6 +187,8 @@ export function NewSheet({ api, tz, currency, kind, onClose, onSaved }: {
         </div>
       )}
 
+      {pick === "task" && repeatField}
+
       {pick === "habit" && (
         <div className="field">
           <span>Сколько раз в неделю</span>
@@ -186,6 +221,7 @@ export function NewSheet({ api, tz, currency, kind, onClose, onSaved }: {
             <input value={withWhom} maxLength={200} placeholder="необязательно"
               onChange={(e) => setWithWhom(e.target.value)} disabled={busy} />
           </Field>
+          {repeatField}
         </>
       )}
 
