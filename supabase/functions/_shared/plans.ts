@@ -31,7 +31,9 @@ export function planNote(plan: Plan, founderSold: number): string | null {
   return null;
 }
 
-export const PRO_PITCH = "Безлимит голосовых и вопросов к ИИ, итоги недели по воскресеньям.";
+/** Описание счёта в Telegram — не длиннее 255 символов; полный список — в мини-приложении и на pricing.html. */
+export const PRO_PITCH =
+  "Безлимит голоса и вопросов к ИИ, чеки по фото, напоминания о регулярных платежах, прогноз трат, повторяющиеся дела, календарь iPhone и Google, заморозка серий, Excel с графиками, темы.";
 
 export const planPayload = (plan: Plan) => `pro:${plan}`;
 
