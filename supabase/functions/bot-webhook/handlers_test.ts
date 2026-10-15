@@ -659,3 +659,21 @@ Deno.test("«Записать трату» под напоминанием за�
   await handleUpdate(cb(`rp:${id}`), deps);
   assertEquals(tg.answerTexts.at(-1), "Этот платёж больше не отслеживается");
 });
+
+Deno.test("фото чека в Pro уходит в очередь с подписью, на Free — предложение Pro", async () => {
+  const { db, tg, deps } = setup();
+  onboarded(db);
+  db.sub = { status: "pro", pro_until: "2026-11-01T00:00", ai_left: null, ai_per_day: 3 };
+  await handleUpdate(msg(ADMIN, { photo: [{ file_id: "small" }, { file_id: "BIG" }], caption: "обед с командой" }), deps);
+  assertEquals(db.inbox.at(-1), { user_id: db.users[0].id, source: "photo", image_ref: "BIG", text: "обед с командой", reply_chat_id: ADMIN });
+
+  await handleUpdate(msg(ADMIN, { document: { file_id: "DOC", mime_type: "image/jpeg" } }), deps);
+  assertEquals(db.inbox.at(-1)!.image_ref, "DOC");
+
+  db.sub = { status: "free", pro_until: null, ai_left: 3, ai_per_day: 3 };
+  const before = db.inbox.length;
+  await handleUpdate(msg(ADMIN, { photo: [{ file_id: "X" }] }), deps);
+  assertEquals(db.inbox.length, before);
+  assert(tg.sent.at(-1)!.text.includes("функция Pro"));
+  assertEquals(tg.sent.at(-1)!.buttons, [[{ text: "⭐ Pro", callback_data: "pro" }]]);
+});

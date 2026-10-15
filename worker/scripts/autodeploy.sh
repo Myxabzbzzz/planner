@@ -45,6 +45,7 @@ main() {
     exit 0
   fi
   if grep -q '^worker/pyproject.toml$' <<<"$changed"; then install_deps; fi
+  ensure_models
 
   if restart_and_wait "$unit"; then
     echo "Готово: воркер работает на ${new:0:7}"
@@ -57,6 +58,21 @@ main() {
   if grep -q '^worker/pyproject.toml$' <<<"$changed"; then install_deps; fi
   restart_and_wait "$unit" || echo "И на ${cur:0:7} воркер не поднялся — нужен человек" >&2
   exit 1
+}
+
+# Новая версия могла начать пользоваться новой моделью (например, для фото чеков):
+# скачиваем недостающие до перезапуска. Уже скачанные проверяются за доли секунды.
+ensure_models() {
+  local env=worker/.env main vision m
+  main="$(grep -E '^OLLAMA_MODEL=' "$env" | cut -d= -f2- || true)"
+  vision="$(grep -E '^VISION_MODEL=' "$env" | cut -d= -f2- || true)"
+  # умолчания — как в config.py
+  for m in "${main:-qwen3:8b}" "${vision:-qwen2.5vl:7b}"; do
+    ollama show "$m" >/dev/null 2>&1 && continue
+    echo "Скачиваю модель $m"
+    # не скачалась — воркер всё равно выкатываем: без неё не заработает только то, что ей пользуется
+    ollama pull "$m" >/dev/null || echo "Модель $m не скачалась — повторю при следующем деплое" >&2
+  done
 }
 
 install_deps() {

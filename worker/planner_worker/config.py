@@ -15,6 +15,8 @@ class Config:
     telegram_bot_token: str
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:8b"
+    # читает фото чеков (Pro); грузится по требованию и выгружается через минуту
+    vision_model: str = "qwen2.5vl:7b"
     # сколько Ollama держит модель в памяти после запроса; -1 — всегда
     ollama_keep_alive: str | int = "30m"
     whisper_model: str = MLX_DEFAULT
@@ -46,6 +48,7 @@ def load_config() -> Config:
         ollama_url=env.get("OLLAMA_URL", Config.ollama_url),
         ollama_model=env.get("OLLAMA_MODEL", Config.ollama_model),
         ollama_keep_alive=keep_alive(env.get("OLLAMA_KEEP_ALIVE")),
+        vision_model=env.get("VISION_MODEL", Config.vision_model),
         whisper_backend=backend,
         whisper_model=model_for(backend, env.get("WHISPER_MODEL")),
         use_laya=env.get("USE_LAYA", "true").lower() == "true",

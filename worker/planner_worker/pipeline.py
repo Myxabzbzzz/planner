@@ -12,6 +12,7 @@ from .format import (KIND_LABELS, failure_buttons, future_message, past_time_mes
                      render_summary, review_message, summary_buttons, time_message)
 from .fx import FxApplied, FxError, RateTable, convert
 from .llm import ExtractionError
+from .receipt import compose as receipt_phrase
 from .recurrence import LABELS as REPEAT_LABELS
 from .recurrence import detect as detect_repeat
 from .rows import to_row
@@ -27,7 +28,8 @@ NOT_HEARD = "🙉 Не расслышал. Повтори, пожалуйста.
 AI_LIMIT = ("🔒 Бесплатные действия ИИ на сегодня закончились: 3 голосовых или вопроса в день.\n"
             "Текстом записывать можно без ограничений. Безлимит — в Pro: /pro")
 REPEAT_PRO = "🔁 Повторять запись — функция Pro, поэтому записал один раз. Подробнее: /pro"
-PREFIXES = {"shortcut": "📲 ", "miniapp": "📱 "}
+NOT_RECEIPT = "🧾 Не нашёл на фото итог чека. Пришли фото поближе или напиши сумму текстом."
+PREFIXES = {"shortcut": "📲 ", "miniapp": "📱 ", "photo": "🧾 "}
 STORAGE = "storage:"
 PAST_GRACE = timedelta(minutes=15)
 
@@ -50,11 +52,12 @@ def remembered_kind(item: ExtractedItem, ctx: UserContext) -> bool:
 
 class Pipeline:
     def __init__(self, store, tg, stt, extractor, classifier, fetch_rates: Callable[[], RateTable],
-                 threshold: float, tmp_dir: Path, answerer=None):
+                 threshold: float, tmp_dir: Path, answerer=None, receipts=None):
         self.store, self.tg, self.stt = store, tg, stt
         self.extractor, self.classifier = extractor, classifier
         self.fetch_rates, self.threshold, self.tmp_dir = fetch_rates, threshold, tmp_dir
         self.answerer = answerer
+        self.receipts = receipts
 
     # ---------- public ----------
 
@@ -64,8 +67,16 @@ class Pipeline:
             self._process_review(row, ctx)
             return
 
+        if row.image_ref:
+            # Фото чека (Pro проверил бот): читаем и дальше разбираем как обычную фразу.
+            # Распознанное пишется в text, а image_ref стирается — повтор не гоняет картинку снова.
+            if not self._read_receipt(row, ctx):
+                self.store.finish(row.id, "done", {"text": row.text or "", "reply": NOT_RECEIPT})
+                self._best_effort(reply, self.tg, with_ack(self.store, row), chat_text(row, NOT_RECEIPT))
+                return
+
         text = row.text
-        charged = False
+        charged = row.source == "photo"  # чек — функция Pro, лимит Free его не касается
         if text is None:
             if not self._ai_allowed(row):
                 self._refuse_ai(row, "")
@@ -166,6 +177,21 @@ class Pipeline:
         answer, question = answered
         self.store.finish(row.id, "done", {"text": text, "question": question, "answered": True, "reply": answer})
         self._best_effort(reply, self.tg, with_ack(self.store, row), chat_text(row, answer))
+        return True
+
+    def _read_receipt(self, row: InboxRow, ctx: UserContext) -> bool:
+        if self.receipts is None:
+            return False
+        path = self.tg.download(row.image_ref, self.tmp_dir)
+        try:
+            rc = self.receipts.read(path)
+        finally:
+            path.unlink(missing_ok=True)
+        if rc is None:
+            return False
+        text = receipt_phrase(rc, row.text, ctx.now.date())
+        self.store.set_photo_text(row.id, text)
+        row.text, row.image_ref = text, None
         return True
 
     def _transcribe(self, row: InboxRow) -> str:

@@ -58,6 +58,9 @@ class FakeStore:
     def set_text(self, inbox_id, text):
         self.texts.append((inbox_id, text))
 
+    def set_photo_text(self, inbox_id, text):
+        self.texts.append((inbox_id, text))
+
     def remove_audio(self, key):
         self.removed_audio.append(key)
 
@@ -920,3 +923,50 @@ def test_repeat_save_failure_still_saves_once_without_a_pro_hint(ctx):
     p.process(row(text="каждый понедельник созвон в 10"))
     assert [t for t, _ in store.inserted] == ["items"]
     assert "Pro" not in tg.edited[0][2]
+
+
+
+# ---------- фото чека ----------
+
+def fake_download(file_id, dest):
+    path = dest / "r.jpg"
+    path.write_bytes(b"x")
+    return path
+
+
+class FakeReceipts:
+    def __init__(self, receipt):
+        self.receipt, self.read_paths = receipt, []
+
+    def read(self, path):
+        self.read_paths.append(path)
+        return self.receipt
+
+
+def test_receipt_photo_becomes_an_expense_phrase(ctx, tmp_path):
+    from planner_worker.receipt import Receipt
+    food = item(kind="expense", title="Пятёрочка", source_text="потратил 823.55 в «Пятёрочка»", amount=823.55,
+                category="еда")
+    ex = FakeExtractor([food])
+    p, store, tg = make(ctx, ex)
+    p.tmp_dir = tmp_path
+    p.tg.download = fake_download
+    p.receipts = FakeReceipts(Receipt(is_receipt=True, merchant="Пятёрочка", total=823.55, currency=None, date="2026-09-30"))
+    p.process(row(source="photo", text=None, image_ref="FILE1"))
+    assert ex.calls[0]["text"].startswith("30.09.2026 потратил 823.55")
+    assert store.texts == [("i1", "30.09.2026 потратил 823.55 в «Пятёрочка»")]
+    assert [t for t, _ in store.inserted] == ["transactions"]
+    assert store.ai_calls == 0  # чек — Pro, лимит Free не трогаем
+    assert tg.edited[0][2].startswith("🧾 ")
+    assert not (tmp_path / "r.jpg").exists()
+
+
+def test_not_a_receipt_is_said_plainly(ctx, tmp_path):
+    p, store, tg = make(ctx, FakeExtractor())
+    p.tmp_dir = tmp_path
+    p.tg.download = fake_download
+    p.receipts = FakeReceipts(None)
+    p.process(row(source="photo", text="обед", image_ref="FILE1"))
+    assert store.finished[-1][1] == "done"
+    assert "Не нашёл на фото итог чека" in tg.edited[0][2]
+    assert store.inserted == []

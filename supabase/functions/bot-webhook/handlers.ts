@@ -65,6 +65,9 @@ const termsText = (miniappUrl?: string) =>
     ].join("\n")
     : "📄 Условия скоро появятся здесь.";
 
+const RECEIPT_PRO = "🧾 Чек по фото — функция Pro: пришли фото, и я запишу трату с суммой, магазином и датой. " +
+  "Текстом и голосом записывать можно и так.";
+
 const SAVE_FAILED = "😵 Не смог принять запись — база не ответила. Пришли её, пожалуйста, ещё раз.";
 
 const currencyButtons = (): Button[][] => [
@@ -249,12 +252,23 @@ async function handleMessage(msg: any, d: Deps) {
   if (key) return await handleMenuButton(user, chatId, key, d);
   if (text && !text.startsWith("/") && await handlePendingInput(user, chatId, text, d)) return;
 
-  let payload: { source: "text" | "voice"; text?: string; audio_ref?: string };
-  if (msg.voice) payload = { source: "voice", audio_ref: msg.voice.file_id };
+  let payload: { source: "text" | "voice" | "photo"; text?: string; audio_ref?: string; image_ref?: string };
+  // фото чека: самое крупное из размеров Telegram, или картинка, присланная файлом
+  const image: string | undefined = msg.photo?.at(-1)?.file_id ??
+    (String(msg.document?.mime_type ?? "").startsWith("image/") ? msg.document.file_id : undefined);
+  if (image) {
+    const s = await d.db.subscription(user.id).catch(() => null);
+    if (s && s.status === "free") {
+      await d.tg.sendMessage(chatId, RECEIPT_PRO, [[{ text: "⭐ Pro", callback_data: "pro" }]]);
+      return;
+    }
+    const caption = typeof msg.caption === "string" && msg.caption.trim() ? msg.caption.slice(0, MAX_TEXT) : undefined;
+    payload = { source: "photo", image_ref: image, ...(caption ? { text: caption } : {}) };
+  } else if (msg.voice) payload = { source: "voice", audio_ref: msg.voice.file_id };
   // #38: в inbox из чата текст уходил без ограничения длины, в отличие от capture и api
   else if (text && !text.startsWith("/")) payload = { source: "text", text: text.slice(0, MAX_TEXT) };
   else {
-    await d.tg.sendMessage(chatId, "Пришли текст или голосовое.");
+    await d.tg.sendMessage(chatId, "Пришли текст, голосовое или фото чека.");
     return;
   }
 
@@ -263,7 +277,7 @@ async function handleMessage(msg: any, d: Deps) {
     return;
   }
   // очередь на ноутбуке одна на всех: без лимита один человек задержит разбор у остальных
-  if (!await d.db.rateLimit(user.id, payload.source === "voice" ? "audio" : "inbox")) {
+  if (!await d.db.rateLimit(user.id, payload.source === "text" ? "inbox" : "audio")) {
     await d.tg.sendMessage(chatId, TOO_MANY);
     return;
   }

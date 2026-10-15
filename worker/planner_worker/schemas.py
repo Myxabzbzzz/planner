@@ -54,6 +54,7 @@ class InboxRow:
     result: dict = field(default_factory=dict)
     reply_chat_id: int | None = None
     reply_message_id: int | None = None
+    image_ref: str | None = None  # file_id фото чека в Telegram (Pro)
 
     @classmethod
     def from_db(cls, r: dict) -> InboxRow:
@@ -67,6 +68,7 @@ class InboxRow:
             result=r.get("result") or {},
             reply_chat_id=r.get("reply_chat_id"),
             reply_message_id=r.get("reply_message_id"),
+            image_ref=r.get("image_ref"),
         )
 
 

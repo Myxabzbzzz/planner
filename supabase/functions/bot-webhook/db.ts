@@ -15,9 +15,10 @@ export type User = {
 
 export type NewInbox = {
   user_id: string;
-  source: "text" | "voice";
+  source: "text" | "voice" | "photo";
   text?: string;
   audio_ref?: string;
+  image_ref?: string;
   reply_chat_id: number;
   reply_message_id?: number;
 };

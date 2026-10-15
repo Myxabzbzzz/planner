@@ -15,6 +15,7 @@ from .config import load_config
 from .fx import fetch_latest
 from .jobs import cleanup_tmp, run_job
 from .llm import Extractor, OllamaClient
+from .receipt import ReceiptReader
 from .pipeline import Pipeline, notify_failed, run_one
 from .shortcut import ShortcutSigner
 from .store import Store
@@ -105,6 +106,7 @@ def main() -> None:
         threshold=cfg.laya_threshold,
         tmp_dir=Path(__file__).resolve().parents[1] / "tmp",
         answerer=Answerer(QuestionParser(llm), store),
+        receipts=ReceiptReader(cfg.ollama_url, cfg.vision_model, http),
     )
 
     if cfg.inbox:

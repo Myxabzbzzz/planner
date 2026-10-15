@@ -41,6 +41,12 @@ MODEL="${MODEL:-qwen3:8b}"
 say "Модель $MODEL (первый раз — несколько ГБ)"
 ollama pull "$MODEL"
 
+# фото чеков (Pro): своя модель, понимающая картинки; грузится только когда пришёл чек
+VMODEL="$(grep -E '^VISION_MODEL=' "$WORKER_DIR/.env" | cut -d= -f2- || true)"
+VMODEL="${VMODEL:-qwen2.5vl:7b}"
+say "Модель для чеков $VMODEL"
+ollama pull "$VMODEL"
+
 say "Окружение Python"
 cd "$WORKER_DIR"
 [ -x .venv/bin/python ] || uv venv --python 3.12 .venv

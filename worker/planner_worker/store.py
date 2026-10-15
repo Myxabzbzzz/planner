@@ -137,6 +137,9 @@ class Store:
         data = self.sb.table("inbox").select("reply_message_id").eq("id", inbox_id).execute().data
         return data[0]["reply_message_id"] if data else None
 
+    def set_photo_text(self, inbox_id: str, text: str) -> None:
+        self.sb.table("inbox").update({"text": text, "image_ref": None}).eq("id", inbox_id).execute()
+
     def set_text(self, inbox_id: str, text: str) -> None:
         self.sb.table("inbox").update({"text": text}).eq("id", inbox_id).execute()
 
