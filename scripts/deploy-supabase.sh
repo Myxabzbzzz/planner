@@ -209,12 +209,12 @@ post_deploy_notes() {
        TELEGRAM_WEBHOOK_SECRET=... \\
        ADMIN_TG_ID=... \\
        OPEN_ACCESS=false \\
-       MINIAPP_ORIGIN=https://<user>.github.io \\
+       MINIAPP_ORIGIN=https://miniapp-seven-psi.vercel.app \\
        CRON_SECRET=... \\
-       MINIAPP_URL=https://<user>.github.io/<repo>/
+       MINIAPP_URL=https://miniapp-seven-psi.vercel.app/
    SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY платформа подставляет сама.
 
-2. MINIAPP_URL — адрес Mini App на GitHub Pages. Без него бот и notify
+2. MINIAPP_URL — адрес Mini App на Vercel. Без него бот и notify
    не покажут кнопку открытия приложения. Его же надо прописать в
    @BotFather (Bot Settings → Menu Button).
 

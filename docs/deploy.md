@@ -4,7 +4,7 @@
 
 | Часть | Куда | Чем |
 | --- | --- | --- |
-| Mini App (`miniapp/`) | GitHub Pages | workflow `.github/workflows/pages.yml` (авто на push в `main`) |
+| Mini App (`miniapp/`) | Vercel | `npx vercel --prod` из `miniapp/` — **руками** |
 | Облако (`supabase/`) | Supabase | `scripts/deploy-supabase.sh` — **руками**, с подтверждением |
 | ИИ-воркер (`worker/`) | домашний сервер (Linux) или ноутбук | `worker/scripts/install-linux.sh` / `install-agent.sh` (см. README) |
 
@@ -56,30 +56,17 @@ Docker не обязателен:
 Dashboard → Settings → Database. Можно передать его флагом `-p`, но тогда он
 останется в истории шелла.
 
-### GitHub Pages
+### Vercel
 
-1. Settings → Pages → **Source: GitHub Actions** (не «Deploy from a branch»).
-2. Первый запуск: Actions → *Deploy Mini App to GitHub Pages* → **Run workflow**,
-   либо просто push в `main`.
-3. Адрес приложения будет `https://<user>.github.io/<repo>/` — для этого репозитория
-   `https://myxabzbzzz.github.io/planner/`. Его дальше нужно положить в `MINIAPP_URL`
-   (см. ниже) и в @BotFather → Bot Settings → Menu Button.
-
-**Почему `base`.** Pages отдаёт приложение не из корня домена, а из `/<repo>/`.
-`miniapp/vite.config.ts` про это не знает, поэтому workflow передаёт путь флагом
-при сборке — имя репозитория берётся из `GITHUB_REPOSITORY`, руками ничего
-прописывать не надо:
-
-    REPO_NAME="${GITHUB_REPOSITORY#*/}"
-    npx vite build --base="/${REPO_NAME}/"
-
-После сборки workflow проверяет, что `dist/index.html` ссылается на
-`/<repo>/assets/`, а `VITE_API_URL` действительно попал в бандл. Если забыть
-`--base`, приложение откроется белым экраном: ассеты будут искаться в корне домена.
+Mini App живёт на Vercel, проект `miniapp` (привязка — `miniapp/.vercel/project.json`).
+Адрес: `https://miniapp-seven-psi.vercel.app/` — он же в `MINIAPP_URL` и в
+@BotFather → Bot Settings → Menu Button.
 
 `VITE_API_URL` лежит в `miniapp/.env.production`, Vite подхватывает этот файл для
-production-сборки сам — отдельный secret в GitHub не нужен. Это не секрет: адрес
-публичной функции `api`.
+production-сборки сам. Это не секрет: адрес публичной функции `api`.
+
+Рядом с приложением лежат публичные страницы из `miniapp/public/`: `terms.html`,
+`privacy.html`, `pricing.html` — их же бот отдаёт по `/terms` и `/privacy`.
 
 ---
 
@@ -87,8 +74,7 @@ production-сборки сам — отдельный secret в GitHub не ну
 
 ### Mini App
 
-Ничего делать не надо: push в `main` → workflow `pages.yml` собирает и публикует.
-Вручную — Actions → *Deploy Mini App to GitHub Pages* → Run workflow.
+    cd miniapp && npx vercel --prod
 
 ### Облако
 
@@ -141,7 +127,7 @@ production-сборки сам — отдельный secret в GitHub не ну
 | `TELEGRAM_WEBHOOK_SECRET` | `bot-webhook` | сверяется с `secret_token` вебхука |
 | `ADMIN_TG_ID` | `bot-webhook` | кто админ |
 | `OPEN_ACCESS` | `bot-webhook` | `"true"` — пускать всех, иначе только по приглашению |
-| `MINIAPP_ORIGIN` | `api` | origin мини-аппа для CORS, например `https://myxabzbzzz.github.io`. Пока не задан — `api` отвечает `Access-Control-Allow-Origin: *`, как раньше. Задать после первого деплоя Pages. Только схема и домен, без пути и без слэша на конце |
+| `MINIAPP_ORIGIN` | `api` | origin мини-аппа для CORS, например `https://miniapp-seven-psi.vercel.app`. Пока не задан — `api` отвечает `Access-Control-Allow-Origin: *`, как раньше. Только схема и домен, без пути и без слэша на конце |
 | `MINIAPP_URL` | `bot-webhook`, `notify` | адрес Mini App для кнопки; без него кнопки нет |
 | `CRON_SECRET` | `notify`, `fx-sync` | заголовок `x-cron-secret` у cron-вызовов |
 
@@ -152,9 +138,9 @@ production-сборки сам — отдельный secret в GitHub не ну
       TELEGRAM_WEBHOOK_SECRET=... \
       ADMIN_TG_ID=... \
       OPEN_ACCESS=false \
-      MINIAPP_ORIGIN=https://<user>.github.io \
+      MINIAPP_ORIGIN=https://miniapp-seven-psi.vercel.app \
       CRON_SECRET=... \
-      MINIAPP_URL=https://<user>.github.io/<repo>/
+      MINIAPP_URL=https://miniapp-seven-psi.vercel.app/
 
 Проверить список имён: `supabase secrets list --project-ref <ref>`.
 
@@ -201,8 +187,8 @@ production-сборки сам — отдельный secret в GitHub не ну
 
 ### GitHub
 
-Никаких secrets в репозитории заводить не нужно: Pages-деплой работает на
-`id-token: write` + `pages: write`, а `VITE_API_URL` лежит в `.env.production`.
+Один необязательный secret — `NTFY_TOPIC` для `deploy-notify.yml`: после зелёного CI
+он будит автодеплой воркера на домашнем сервере. Без него сервер подхватит обновление по таймеру.
 
 ---
 
@@ -210,9 +196,9 @@ production-сборки сам — отдельный secret в GitHub не ну
 
 ### Mini App
 
-Самое быстрое — Actions → *Deploy Mini App to GitHub Pages* → выбрать прошлый
-успешный запуск → **Re-run all jobs**. Либо `git revert` проблемного коммита и
-push в `main` — workflow соберёт заново.
+Самое быстрое — Vercel Dashboard → проект `miniapp` → Deployments → прошлый
+деплой → **Promote to Production** (или `npx vercel rollback`). Либо `git revert`
+проблемного коммита и снова `npx vercel --prod`.
 
 ### Edge Functions
 
@@ -247,8 +233,8 @@ push в `main` — workflow соберёт заново.
 4. `scripts/deploy-supabase.sh` → набрать `push <ref>`.
 5. `supabase secrets set ...` — все переменные из таблицы выше, кроме `MINIAPP_URL`.
 6. Vault: `project_url` и `cron_secret`.
-7. Settings → Pages → Source: GitHub Actions; дождаться первого деплоя.
-8. `supabase secrets set MINIAPP_URL=https://<user>.github.io/<repo>/` и то же в @BotFather.
+7. `cd miniapp && npx vercel --prod` — первый деплой Mini App.
+8. `supabase secrets set MINIAPP_URL=https://miniapp-seven-psi.vercel.app/` и то же в @BotFather.
 9. `setWebhook` с `secret_token`.
 10. Воркер: `worker/.env`, `worker/scripts/install-agent.sh`.
 11. Написать боту `/start` и открыть Mini App.

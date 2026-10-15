@@ -80,9 +80,8 @@ Telegram-бот + Mini App «вся жизнь в одном месте» с л�
 
 Коротко:
 
-- **Mini App** едет на GitHub Pages сам: push в `main` → `.github/workflows/pages.yml`.
-  Pages отдаёт приложение из `/<repo>/`, поэтому workflow передаёт Vite правильный
-  `base` на сборке. Адрес приложения потом нужно положить в `MINIAPP_URL`.
+- **Mini App** выкатывается на Vercel руками: `cd miniapp && npx vercel --prod`.
+  Адрес приложения — в `MINIAPP_URL`.
 - **Облако** (миграции + Edge Functions) деплоится руками:
 
       SUPABASE_PROJECT_REF=<ref> scripts/deploy-supabase.sh --dry-run
