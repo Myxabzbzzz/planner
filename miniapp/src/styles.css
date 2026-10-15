@@ -328,6 +328,18 @@ h2 {
   background: var(--accent-dim);
 }
 
+/* ссылка на календарь: видна целиком, чтобы выделить вручную, если буфер обмена закрыт */
+.mono-link {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--fg-3);
+}
+
 button.link {
   appearance: none;
   border: 0;

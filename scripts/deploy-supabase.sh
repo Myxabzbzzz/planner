@@ -22,7 +22,7 @@ SKIP_FUNCTIONS=0
 
 # Функции из supabase/config.toml, где verify_jwt = false,
 # деплоятся с --no-verify-jwt. Список проверяется против config.toml ниже.
-FUNCTIONS=(api bot-webhook capture notify fx-sync)
+FUNCTIONS=(api bot-webhook capture notify fx-sync calendar)
 
 die() { printf '\033[31mОшибка:\033[0m %s\n' "$*" >&2; exit 1; }
 # Мало, чтобы был установлен docker CLI: без запущенного демона db diff и сборка функций падают.

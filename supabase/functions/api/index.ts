@@ -12,6 +12,7 @@ const deps = {
   botToken,
   pay: tg,
   files: tg,
+  calendarBase: `${Deno.env.get("SUPABASE_URL")}/functions/v1/calendar/`,
   nowSec: () => Math.floor(Date.now() / 1000),
 };
 

@@ -1,5 +1,5 @@
 import { Heat, MoneyMonths, TaskWeeks } from "../components/Charts";
-import { IconFlame, IconGear, IconHome, IconLock, IconMedal, IconStar } from "../components/Icons";
+import { IconFlame, IconGear, IconHome, IconLock, IconMedal, IconStar, IconToday } from "../components/Icons";
 import { Meter, Ring } from "../components/Meter";
 import { Card, ErrorCard, Loading } from "../components/States";
 import type { Api } from "../api";
@@ -30,8 +30,9 @@ function BadgeCard({ b }: { b: Badge }) {
  * серия не обрывается до конца дня, пропуск нигде не осуждается, награды
  * показывают сделанное, а не отнятое.
  */
-export function Profile({ api, refresh = 0, onSettings, onAccount, onPro }: {
+export function Profile({ api, refresh = 0, onSettings, onAccount, onPro, onCalendar }: {
   api: Api; refresh?: number; onSettings: () => void; onAccount: () => void; onPro: () => void;
+  onCalendar: () => void;
 }) {
   const { data, error, loading, reload } = useLoad(() => api.profile(6), [api], refresh);
   const sub = useLoad(() => api.subscription(), [api], refresh);
@@ -188,6 +189,11 @@ export function Profile({ api, refresh = 0, onSettings, onAccount, onPro }: {
             <span className="meta">иконка планера</span>
           </button>
         )}
+        <button type="button" className="row" style={{ width: "100%", padding: "8px 16px" }} onClick={onCalendar}>
+          <span style={{ color: "var(--fg-3)" }}><IconToday size={20} /></span>
+          <span className="grow row-title" style={{ minHeight: 0 }}>Календарь</span>
+          <span className="meta">iPhone, Google</span>
+        </button>
         <button type="button" className="row" style={{ width: "100%", padding: "8px 16px" }} onClick={onSettings}>
           <span style={{ color: "var(--fg-3)" }}><IconGear /></span>
           <span className="grow row-title" style={{ minHeight: 0 }}>Настройки</span>

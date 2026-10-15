@@ -12,7 +12,8 @@ const svg = (d: ReactNode, size = 24) => (
   <svg width={size} height={size} viewBox="0 0 24 24" {...P} aria-hidden="true">{d}</svg>
 );
 
-export const IconToday = () => svg(<><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 10h18M8 15h4" /></>);
+export const IconToday = ({ size = 24 }: { size?: number }) =>
+  svg(<><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 10h18M8 15h4" /></>, size);
 export const IconTasks = () => svg(<><path d="M4 7h10M4 12h10M4 17h6" /><path d="M18 6.5l2 2 3-3.5" /></>);
 export const IconMoney = () => svg(<><path d="M4 19V9M10 19V5M16 19v-6M22 19H3" /></>);
 export const IconHabits = () => svg(<><path d="M20.5 12a8.5 8.5 0 1 1-2.8-6.3" /><path d="M21 4v4.5h-4.5" /><path d="M9 12.5l2 2 4-4.5" /></>);

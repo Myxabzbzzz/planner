@@ -286,6 +286,9 @@ export const devFetch: typeof fetch = async (input, init) => {
   }
   // ?mock=free — как видит экран человек без Pro
   const free = location.search.includes("mock=free");
+  if (p === "/calendar") {
+    return json(free ? { locked: true } : { url: "https://izyysokbzcveohrfrtsn.supabase.co/functions/v1/calendar/3f9a1c2b7d4e8f60a1b2c3d4e5f60718293a4b5c6d7e8f90.ics" });
+  }
   if (p === "/forecast") {
     return json(free ? { locked: true } : {
       base_currency: "RUB", month: d.today.slice(0, 7), spent: 61240, forecast: 118500, prev_month: 104300,

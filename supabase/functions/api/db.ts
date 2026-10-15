@@ -50,6 +50,8 @@ export const ARG_NAMES: Record<string, string[]> = {
   add_regular_payment: ["p_user", "p_title", "p_amount", "p_day", "p_category"],
   set_regular_payment: ["p_user", "p_id", "p_status"],
   api_forecast: ["p_user"],
+  api_calendar: ["p_user"],
+  reset_calendar_token: ["p_user"],
   create_note: ["p_user", "p_text", "p_kind"],
   create_habit: ["p_user", "p_name", "p_target"],
   create_transaction: ["p_user", "p_type", "p_amount", "p_title", "p_category", "p_date"],

@@ -448,6 +448,29 @@ Deno.test("регулярный платёж: добавить и подтвер
   assertEquals([no.status, no.db.calls], [200, [["set_regular_payment", ["u1", id, "dismissed"]]]]);
 });
 
+Deno.test("календарь: ссылка только в Pro, сброс выдаёт новую", async () => {
+  const mk = (pro: boolean, base: string | undefined = "https://p.supabase.co/functions/v1/calendar/") => {
+    const db = new FakeApiDb();
+    db.pro = pro;
+    db.rpc = async (fn: string, args: unknown[]) => {
+      db.calls.push([fn, args]);
+      return { token: fn === "reset_calendar_token" ? "new" : "tok" };
+    };
+    return { db, base };
+  };
+  const call = async (path: string, pro: boolean, method = "GET", base?: string | null) => {
+    const { db, base: b } = mk(pro, base === null ? undefined : base ?? undefined);
+    const res = await handleApi(await req(path, method === "POST" ? { method, body: {} } : {}),
+      { db, botToken: TOKEN, nowSec: () => NOW, calendarBase: base === null ? undefined : b });
+    return { status: res.status, body: await res.json() };
+  };
+  assertEquals((await call("/calendar", true)).body, { url: "https://p.supabase.co/functions/v1/calendar/tok.ics" });
+  assertEquals((await call("/calendar", false)).body, { locked: true });
+  assertEquals((await call("/calendar/reset", true, "POST")).body, { url: "https://p.supabase.co/functions/v1/calendar/new.ics" });
+  assertEquals((await call("/calendar/reset", false, "POST")).status, 402);
+  assertEquals((await call("/calendar", true, "GET", null)).status, 503);
+});
+
 Deno.test("POST /events requires a real date and time", async () => {
   const mk = async (body: unknown) => {
     const db = new FakeApiDb();

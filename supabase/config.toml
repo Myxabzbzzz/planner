@@ -428,3 +428,7 @@ verify_jwt = false
 
 [functions.notify]
 verify_jwt = false
+
+# лента календаря: календари iPhone и Google ходят без ключей, доступ — по секретному токену в ссылке
+[functions.calendar]
+verify_jwt = false

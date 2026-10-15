@@ -135,3 +135,4 @@ export type RegularResp = { base_currency: string; monthly_total: number; items:
   | { locked: true; found: number };
 export type NewRegular = { title: string; amount: number; day: number; category?: string };
 
+export type CalendarResp = { url: string } | { locked: true };

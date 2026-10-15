@@ -13,6 +13,7 @@ export type ApiDeps = {
   newId?: () => string;
   pay?: Payments; // счета в Telegram Stars
   files?: Files; // выгрузка файлом в чат с ботом
+  calendarBase?: string; // …/functions/v1/calendar/ — к нему приклеивается токен ленты
 };
 
 /**
@@ -637,6 +638,12 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
         const id = await d.db.call(cr.fn, cr.args);
         return typeof id === "string" ? json(201, { id }) : json(404, { error: "not_found" });
       }
+      if (path === "/calendar/reset") {
+        if (!await isPro(d.db, user.id)) return PRO_REQUIRED();
+        if (!d.calendarBase) return json(503, { error: "calendar_unavailable" });
+        const r = await d.db.call("reset_calendar_token", [user.id]) as { token: string } | null;
+        return r === null ? json(404, { error: "not_found" }) : json(200, { url: `${d.calendarBase}${r.token}.ics` });
+      }
       const confirm = new RegExp(`^/regular/(${UUID})/confirm$`, "i").exec(path);
       if (confirm) {
         if (!await isPro(d.db, user.id)) return PRO_REQUIRED();
@@ -653,6 +660,13 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
       const data = await d.db.call("api_regular_payments", [user.id]) as { items?: unknown[] } | null;
       if (data === null) return json(404, { error: "not_found" });
       return json(200, await isPro(d.db, user.id) ? data : { locked: true, found: data.items?.length ?? 0 });
+    }
+    // Подписка на календарь — Pro. Ссылка секретная: её отдаём только владельцу.
+    if (path === "/calendar") {
+      if (!await isPro(d.db, user.id)) return json(200, { locked: true });
+      if (!d.calendarBase) return json(503, { error: "calendar_unavailable" });
+      const r = await d.db.call("api_calendar", [user.id]) as { token: string } | null;
+      return r === null ? json(404, { error: "not_found" }) : json(200, { url: `${d.calendarBase}${r.token}.ics` });
     }
     if (path === "/forecast") {
       if (!await isPro(d.db, user.id)) return json(200, { locked: true });
