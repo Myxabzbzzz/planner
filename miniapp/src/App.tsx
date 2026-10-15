@@ -167,7 +167,8 @@ export default function App() {
 
       {accountOpen && settings !== null && (
         <AccountSheet api={api} settings={settings} onClose={() => setAccountOpen(false)}
-          onChanged={(s) => { setSettings(s); bump(); }} />
+          onChanged={(s) => { setSettings(s); bump(); }}
+          onPro={() => { setAccountOpen(false); setProOpen(true); }} />
       )}
 
       {proOpen && <SubscriptionSheet api={api} onClose={() => setProOpen(false)} onChanged={bump} />}

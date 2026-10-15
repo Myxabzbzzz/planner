@@ -29,7 +29,14 @@ class FakeApiDb implements ApiDb {
    */
   rateChecks: Array<[string, number, string]> = [];
   rateAllows = true;
+  /** Проверка Pro — тоже служебная, как и лимит: в calls не попадает. */
+  pro = true;
+  proChecks = 0;
   async call(fn: string, args: unknown[]): Promise<unknown> {
+    if (fn === "is_pro") {
+      this.proChecks++;
+      return this.pro;
+    }
     if (fn === "rate_limit") {
       this.rateChecks.push([args[1] as string, args[2] as number, args[3] as string]);
       return this.rateAllows;
@@ -514,6 +521,20 @@ Deno.test("выгрузка в Excel уходит файлом в чат с бо
   assertEquals(r.files!.sent[0].chatId, 7);
   assertEquals(r.files!.sent[0].mime, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   assertEquals(r.db.rateChecks.map((c) => c[0]), ["write", "export"]);
+});
+
+Deno.test("Excel с графиками — Pro, а JSON со всеми данными доступен и на Free", async () => {
+  const free = () => {
+    const db = new ExportDb();
+    db.pro = false;
+    return db;
+  };
+  const xlsx = await sendExport({ format: "xlsx" }, { db: free() });
+  assertEquals([xlsx.status, xlsx.body], [402, { error: "pro_required" }]);
+  assertEquals(xlsx.files!.sent, []);
+  const asJson = await sendExport({ format: "json" }, { db: free() });
+  assertEquals(asJson.status, 200);
+  assertEquals(asJson.db.proChecks, 0);
 });
 
 Deno.test("выгрузка в JSON — тоже в чат, с цветами категорий", async () => {

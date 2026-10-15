@@ -390,6 +390,20 @@ const MAX_TEXT = 4000;
  * Пороги щедрые для человека и тесные для скрипта.
  */
 
+/**
+ * Функции Pro. Сбой проверки пропускает: лучше один раз отдать Pro бесплатно,
+ * чем сломать платящему человеку то, за что он заплатил.
+ */
+async function isPro(db: ApiDb, userId: string): Promise<boolean> {
+  try {
+    return await db.call("is_pro", [userId]) !== false;
+  } catch {
+    return true;
+  }
+}
+
+const PRO_REQUIRED = () => json(402, { error: "pro_required" });
+
 /** false — лимит исчерпан. Сбой самой проверки не должен ломать приложение. */
 async function allow(db: ApiDb, userId: string, action: keyof typeof LIMITS): Promise<boolean> {
   const { limit, window } = LIMITS[action];
@@ -518,6 +532,8 @@ async function sendExport(req: Request, d: ApiDeps, userId: string, tgId: number
   const format = (await readJson(req)).format;
   if (format !== "xlsx" && format !== "json") throw new BadRequest();
   if (!d.files) return json(503, { error: "files_unavailable" });
+  // Excel с графиками — Pro; JSON со всеми данными остаётся у всех (так обещано в политике)
+  if (format === "xlsx" && !await isPro(d.db, userId)) return PRO_REQUIRED();
   if (!await allow(d.db, userId, "export")) return json(429, { error: "too_many" });
   const data = await d.db.call("export_data", [userId]) as ExportData | null;
   if (data === null) return json(404, { error: "not_found" });

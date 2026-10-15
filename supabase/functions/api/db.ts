@@ -64,6 +64,7 @@ export const ARG_NAMES: Record<string, string[]> = {
   export_data: ["p_user"],
   delete_account: ["p_user"],
   rate_limit: ["p_user", "p_action", "p_limit", "p_window"],
+  is_pro: ["p_user"],
 };
 
 export function supabaseApiDb(sb: SupabaseClient): ApiDb {

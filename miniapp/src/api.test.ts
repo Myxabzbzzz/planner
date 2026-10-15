@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ApiError, makeApi } from "./api";
+import { ApiError, makeApi, needsPro } from "./api";
 
 describe("api client", () => {
   it("sends X-Init-Data and query params", async () => {
@@ -80,6 +80,14 @@ describe("api client", () => {
     await expect(api.categories()).rejects.toBeInstanceOf(ApiError);
     fail = false;
     await expect(api.categories()).resolves.toEqual({ expense: [], income: [] });
+  });
+});
+
+describe("функции Pro", () => {
+  it("402 значит «нужен Pro», остальные ошибки — нет", () => {
+    expect(needsPro(new ApiError(402))).toBe(true);
+    expect(needsPro(new ApiError(403))).toBe(false);
+    expect(needsPro(new Error("x"))).toBe(false);
   });
 });
 

@@ -14,6 +14,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Сервер ответил «это функция Pro» (402) — показываем, что даёт Pro, а не ошибку. */
+export const needsPro = (e: unknown) => e instanceof ApiError && e.status === 402;
+
 /** Где живёт токен сессии между перезапусками WebView. */
 export type SessionStore = { get(): string | null; set(token: string | null): void };
 

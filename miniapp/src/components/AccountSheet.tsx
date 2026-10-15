@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ApiError, type Api } from "../api";
+import { ApiError, needsPro, type Api } from "../api";
 import { fmtAmount } from "../format";
 import { saveError } from "../saveError";
 import { confirmDialog, hapticResult } from "../telegram";
@@ -16,16 +16,19 @@ const COMMON = ["UZS", "RUB", "USD", "EUR", "KZT"];
  * получал год неверных сумм и бессмысленный лимит без единого выхода: ни смены
  * валюты, ни экспорта, ни удаления аккаунта во всём проекте не было.
  */
-export function AccountSheet({ api, settings, onClose, onChanged }: {
+export function AccountSheet({ api, settings, onClose, onChanged, onPro }: {
   api: Api;
   settings: Settings;
   onClose: () => void;
   onChanged: (s: Settings) => void;
+  /** открыть «Что даёт Pro» — Excel с графиками доступен только в Pro */
+  onPro: () => void;
 }) {
   const [currency, setCurrency] = useState(settings.base_currency);
   const [busy, setBusy] = useState<null | "currency" | "xlsx" | "json" | "delete">(null);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
   const [result, setResult] = useState<CurrencyChange | null>(null);
   const choices = COMMON.includes(currency) ? COMMON : [currency, ...COMMON];
   const changed = currency !== settings.base_currency;
@@ -64,6 +67,7 @@ export function AccountSheet({ api, settings, onClose, onChanged }: {
       setSent(r.name);
     } catch (e) {
       hapticResult(false);
+      if (needsPro(e)) return setLocked(true);
       setError(e instanceof ApiError && e.status === 502
         ? "Не смог отправить файл в чат. Проверь, что бот не заблокирован, и попробуй ещё раз."
         : saveError(e));
@@ -131,8 +135,13 @@ export function AccountSheet({ api, settings, onClose, onChanged }: {
       <div className="card-foot">
         {sent
           ? `Готово: ${sent} — в чате с ботом.`
+          : locked
+          ? "Excel с графиками — функция Pro. JSON со всеми данными можно выгрузить и на Free."
           : "Файл придёт в чат с ботом. В Excel — операции, задачи, встречи, заметки и привычки по листам, а на первом листе графики по месяцам и категориям."}
       </div>
+      {locked && (
+        <button type="button" className="btn ghost wide block" onClick={onPro}>Что даёт Pro</button>
+      )}
 
       <div className="field" style={{ marginTop: 24 }}><span>Опасная зона</span></div>
       <button type="button" className="btn wide danger-text" disabled={busy !== null} onClick={() => void removeAccount()}>
