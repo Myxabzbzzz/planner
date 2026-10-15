@@ -109,11 +109,13 @@ class Pipeline:
                 review.append(self._review_entry(it, "laya", cls))
                 continue
             try:
-                if it is repeat_item and self._pro(row.user_id):
-                    lines.append(self._save_repeat(it, ctx, row.id, repeat.freq))
-                else:
-                    repeat_locked = repeat_locked or it is repeat_item
-                    lines.append(self._save(it, ctx, row.id))
+                saved_repeat = None
+                if it is repeat_item:
+                    if self._pro(row.user_id):
+                        saved_repeat = self._try_save_repeat(it, ctx, row.id, repeat.freq)
+                    else:
+                        repeat_locked = True
+                lines.append(saved_repeat or self._save(it, ctx, row.id))
             except FxError as e:
                 review.append(self._review_entry(it, f"нет курса валюты: {e}", cls))
 
@@ -216,6 +218,14 @@ class Pipeline:
         except Exception as e:  # noqa: BLE001 — сбой проверки не должен стоить платящему повтора
             log.warning("pro check failed for %s: %s", user_id, type(e).__name__)
             return True
+
+    def _try_save_repeat(self, it: ExtractedItem, ctx: UserContext, inbox_id: str, freq: str) -> str | None:
+        """Не вышло создать повтор (например, миграция ещё не применена) — запись всё равно сохраним, один раз."""
+        try:
+            return self._save_repeat(it, ctx, inbox_id, freq)
+        except Exception as e:  # noqa: BLE001
+            log.warning("repeat save failed for %s, saving once: %s", inbox_id, type(e).__name__)
+            return None
 
     def _save_repeat(self, it: ExtractedItem, ctx: UserContext, inbox_id: str, freq: str) -> str:
         """Правило повтора и первый экземпляр — одной функцией базы, как в мини-приложении."""

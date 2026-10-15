@@ -88,8 +88,14 @@ class Store:
             .eq("id", inbox_id).execute()
 
     def clear_records(self, inbox_id: str) -> None:
-        # recurrences — первыми: иначе их экземпляры потеряют связь, но правило останется
-        for table in ("recurrences", "items", "transactions", "notes", "habit_logs"):
+        # recurrences — первыми: иначе их экземпляры потеряют связь, но правило останется.
+        # Воркер выкатывается сам после пуша, а миграции — руками: пока таблицы нет,
+        # разбор не должен падать из-за неё.
+        try:
+            self.sb.table("recurrences").delete().eq("inbox_id", inbox_id).execute()
+        except Exception as e:  # noqa: BLE001
+            log.warning("clear recurrences skipped: %s", type(e).__name__)
+        for table in ("items", "transactions", "notes", "habit_logs"):
             self.sb.table(table).delete().eq("inbox_id", inbox_id).execute()
 
     def claim_job(self) -> dict | None:

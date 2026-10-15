@@ -905,3 +905,18 @@ def test_repeat_is_ignored_when_the_message_has_several_tasks(ctx):
     p.process(row(text="по пятницам вынести мусор и купить хлеб"))
     assert store.recurrences == []
     assert [t for t, _ in store.inserted] == ["items", "items"]
+
+
+def test_repeat_save_failure_still_saves_once_without_a_pro_hint(ctx):
+    call = item(kind="event", title="Созвон", source_text="в понедельник (2026-10-05) созвон в 10 (10:00)",
+                starts_at=datetime(2026, 10, 5, 10, 0))
+    store = FakeStore(ctx)
+
+    def boom(*_args):
+        raise RuntimeError("relation recurrences does not exist")
+
+    store.create_recurrence = boom
+    p, store, tg = make(ctx, FakeExtractor([call]), store=store)
+    p.process(row(text="каждый понедельник созвон в 10"))
+    assert [t for t, _ in store.inserted] == ["items"]
+    assert "Pro" not in tg.edited[0][2]
