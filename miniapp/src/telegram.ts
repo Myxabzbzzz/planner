@@ -32,6 +32,7 @@ type WebApp = {
   showConfirm?(message: string, cb: (ok: boolean) => void): void;
   openInvoice?(url: string, cb: (status: "paid" | "cancelled" | "failed" | "pending") => void): void;
   openTelegramLink?(url: string): void;
+  openLink?(url: string): void;
   addToHomeScreen?(): void;
   checkHomeScreenStatus?(cb: (status: HomeScreenStatus) => void): void;
   close?(): void;
@@ -196,6 +197,13 @@ export function openInvoice(url: string): Promise<"paid" | "cancelled" | "failed
   if (tg?.openInvoice) return new Promise((resolve) => tg!.openInvoice!(url, resolve));
   window.open(url, "_blank");
   return Promise.resolve("pending");
+}
+
+/** Страница рядом с мини-приложением (соглашение, тарифы): в Telegram — во встроенном браузере, поверх приложения. */
+export function openPage(file: string) {
+  const url = new URL(file, window.location.href).href;
+  if (tg?.openLink) tg.openLink(url);
+  else window.open(url, "_blank");
 }
 
 /**

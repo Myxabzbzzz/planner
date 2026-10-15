@@ -302,6 +302,19 @@ h2 {
 .card.flush { padding: 16px 0; }
 .card.flush > h3,
 .card.flush > .card-foot { padding: 0 16px; }
+/* ссылка-кнопка внутри текста: соглашение, тарифы */
+button.link {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 .card.center { text-align: center; }
 
 .card-head {

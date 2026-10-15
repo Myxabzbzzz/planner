@@ -1,0 +1,35 @@
+/* Общий вид юридических страниц и тарифов: открываются и из Telegram, и просто в браузере. */
+:root { --bg: #FAF8F5; --text: #1B1C1F; --hint: #6B6F76; --accent: #E89B2B; --card: #FFFFFF; --line: #ECE7E0; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0B0D10; --text: #EDEEF0; --hint: #9AA0A8; --card: #12151B; --line: #222832; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+       font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 680px; margin: 0 auto; padding: 32px 16px 48px; }
+h1 { font-size: 28px; margin: 0 0 4px; }
+.date { color: var(--hint); margin: 0 0 24px; }
+.lead { margin: 0 0 16px; }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin: 12px 0; }
+h2 { font-size: 17px; margin: 0 0 8px; }
+h2::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: middle; }
+p, li { margin: 6px 0; }
+ul { padding-left: 20px; margin: 6px 0; }
+a { color: var(--accent); }
+.hint { color: var(--hint); font-size: 14px; }
+
+/* тарифы */
+.plans { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 12px 0; }
+.plan { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; }
+.plan.main { border-color: var(--accent); }
+.plan h3 { font-size: 16px; margin: 0 0 4px; }
+.price { font-size: 28px; font-weight: 700; margin: 4px 0; font-variant-numeric: tabular-nums; }
+.price small { font-size: 15px; font-weight: 400; color: var(--hint); }
+
+nav.docs { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; margin-top: 32px; padding-top: 16px;
+           border-top: 1px solid var(--line); font-size: 14px; }
+nav.docs a[aria-current] { color: var(--hint); text-decoration: none; }
+
+.brand { display: inline-flex; align-items: center; gap: 10px; margin: 0 0 20px; color: var(--text);
+         text-decoration: none; font-weight: 700; font-size: 18px; }
+.brand img { display: block; }

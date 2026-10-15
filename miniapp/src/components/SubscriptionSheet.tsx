@@ -3,7 +3,7 @@ import type { Api } from "../api";
 import { useLoad } from "../load";
 import { saveError } from "../saveError";
 import { planPrice, subStatus } from "../subscription";
-import { hapticResult, openInvoice, tap } from "../telegram";
+import { hapticResult, openInvoice, openPage, tap } from "../telegram";
 import type { SubPlan } from "../types";
 import { ErrorCard, Loading } from "./States";
 import { Sheet } from "./Sheet";
@@ -71,10 +71,19 @@ export function SubscriptionSheet({ api, onClose, onChanged }: { api: Api; onClo
               ))}
               <div className="card-foot">
                 Оплата звёздами Telegram. Месяц продлевается сам — отменить можно в любой момент в настройках Telegram.
+                {" "}Оплачивая, ты принимаешь{" "}
+                <button type="button" className="link" onClick={() => openPage("terms.html")}>пользовательское соглашение</button>.
               </div>
             </>
           )}
           {note && <div className="sub">{note}</div>}
+          <div className="card-foot" style={{ marginTop: 20 }}>
+            <button type="button" className="link" onClick={() => openPage("pricing.html")}>Тарифы</button>
+            {" · "}
+            <button type="button" className="link" onClick={() => openPage("terms.html")}>Соглашение</button>
+            {" · "}
+            <button type="button" className="link" onClick={() => openPage("privacy.html")}>Конфиденциальность</button>
+          </div>
         </>
       )}
     </Sheet>

@@ -49,8 +49,20 @@ const PRIVACY = [
   "Удалённые записи стираются насовсем через 30 дней. В мини-приложении (Профиль → Аккаунт) можно выгрузить все данные или удалить аккаунт целиком.",
   "Чтобы пробный Pro выдавался один раз, после удаления аккаунта остаётся только хэш Telegram id — без имени и записей.",
 ].join("\n");
+const doc = (miniappUrl: string, file: string) => new URL(file, miniappUrl).href;
 const privacyText = (miniappUrl?: string) =>
-  miniappUrl ? `${PRIVACY}\n\nПолностью: ${new URL("privacy.html", miniappUrl).href}` : PRIVACY;
+  miniappUrl ? `${PRIVACY}\n\nПолностью: ${doc(miniappUrl, "privacy.html")}` : PRIVACY;
+// юридические страницы лежат рядом с мини-приложением — их же просит платёжный сервис
+const termsText = (miniappUrl?: string) =>
+  miniappUrl
+    ? [
+      "📄 Условия",
+      "",
+      `Пользовательское соглашение: ${doc(miniappUrl, "terms.html")}`,
+      `Тарифы и цены: ${doc(miniappUrl, "pricing.html")}`,
+      `Политика конфиденциальности: ${doc(miniappUrl, "privacy.html")}`,
+    ].join("\n")
+    : "📄 Условия скоро появятся здесь.";
 
 const SAVE_FAILED = "😵 Не смог принять запись — база не ответила. Пришли её, пожалуйста, ещё раз.";
 
@@ -108,7 +120,8 @@ async function sendPlans(user: User, chatId: number, d: Deps) {
   const links = await invoiceLinks(d.pay);
   await d.tg.sendMessage(
     chatId,
-    `${head}\n\nОплата звёздами Telegram. Месяц продлевается сам, отменить можно в любой момент в настройках Telegram.`,
+    `${head}\n\nОплата звёздами Telegram. Месяц продлевается сам, отменить можно в любой момент в настройках Telegram.` +
+      (d.miniappUrl ? `\nОплачивая, ты принимаешь условия: ${doc(d.miniappUrl, "terms.html")}` : ""),
     PLAN_IDS.map((p) => [{ text: `${PLANS[p].title} — ${PLANS[p].stars} ⭐`, url: links[p] }]),
   );
 }
@@ -182,6 +195,10 @@ async function handleMessage(msg: any, d: Deps) {
     await d.tg.sendMessage(chatId, privacyText(d.miniappUrl));
     return;
   }
+  if (text === "/terms") {
+    await d.tg.sendMessage(chatId, termsText(d.miniappUrl));
+    return;
+  }
 
   if (!user.onboarded_at) {
     const code = text?.trim().toUpperCase();
@@ -202,7 +219,7 @@ async function handleMessage(msg: any, d: Deps) {
     await d.tg.sendMessage(
       chatId,
       "Привет! Выбери базовую валюту — в ней будут все итоги и лимиты. Менять её потом непросто.\n\n" +
-        "Как я храню твои данные — /privacy",
+        "Как я храню твои данные — /privacy, условия и тарифы — /terms",
       currencyButtons(),
     );
     return;

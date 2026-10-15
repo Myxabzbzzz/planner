@@ -539,10 +539,19 @@ Deno.test("/privacy answers even before onboarding and links the full page", asy
   assertEquals(db.inbox.length, 0);
 });
 
-Deno.test("first greeting mentions /privacy", async () => {
+Deno.test("first greeting mentions /privacy and /terms", async () => {
   const { tg, deps } = setup();
   await handleUpdate(msg(ADMIN, { text: "/start" }), deps);
   assert(tg.sent.at(-1)!.text.includes("/privacy"));
+  assert(tg.sent.at(-1)!.text.includes("/terms"));
+});
+
+Deno.test("/terms links the agreement, prices and privacy even before onboarding", async () => {
+  const { db, tg, deps } = setup();
+  await handleUpdate(msg(ADMIN, { text: "/terms" }), { ...deps, miniappUrl: "https://app.example/" });
+  const t = tg.sent.at(-1)!.text;
+  for (const page of ["terms.html", "pricing.html", "privacy.html"]) assert(t.includes(`https://app.example/${page}`));
+  assertEquals(db.inbox.length, 0);
 });
 
 
@@ -569,6 +578,13 @@ Deno.test("/pro shows the status and three plans as Stars invoice links", async 
   assertEquals(pay.invoices[0].subscriptionPeriod, 2592000);
   assertEquals(pay.invoices[1].subscriptionPeriod, undefined);
   assertEquals(m.buttons!.flat().map((b) => b.url), ["https://t.me/$inv1", "https://t.me/$inv2", "https://t.me/$inv3"]);
+});
+
+Deno.test("/pro links the agreement before payment", async () => {
+  const { db, tg, deps } = paySetup();
+  onboarded(db);
+  await handleUpdate(msg(ADMIN, { text: "/pro" }), { ...deps, miniappUrl: "https://app.example/" });
+  assert(tg.sent.at(-1)!.text.includes("https://app.example/terms.html"));
 });
 
 Deno.test("the «⭐ Pro» button under the limit message opens the same plans", async () => {
