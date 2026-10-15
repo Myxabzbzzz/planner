@@ -218,6 +218,17 @@ function newEvent(b: Record<string, unknown>, u: string): unknown[] {
   return [u, reqTitle(b.title), date, time, b.with_whom ?? null];
 }
 
+function newRegular(b: Record<string, unknown>, u: string): unknown[] {
+  const { title, amount, day, category } = b;
+  if (!(typeof title === "string" && title.trim() !== "" && title.trim().length <= 200)) throw new BadRequest();
+  if (!(typeof amount === "number" && Number.isFinite(amount) && amount > 0 && amount < 1e13)) throw new BadRequest();
+  if (!(Number.isInteger(day) && (day as number) >= 1 && (day as number) <= 31)) throw new BadRequest();
+  if (category !== undefined && category !== null && !(typeof category === "string" && category.length <= 50)) {
+    throw new BadRequest();
+  }
+  return [u, title.trim(), amount, day, category ?? null];
+}
+
 function newNote(b: Record<string, unknown>, u: string): unknown[] {
   const { text, kind } = b;
   if (!(typeof text === "string" && text.trim() !== "" && text.trim().length <= 4000)) throw new BadRequest();
@@ -264,6 +275,7 @@ const CREATE_ROUTES: Record<string, [string, (b: Record<string, unknown>, u: str
   "/notes": ["create_note", newNote],
   "/habits": ["create_habit", newHabit],
   "/transactions": ["create_transaction", newTransaction],
+  "/regular": ["add_regular_payment", newRegular],
 };
 
 function habitDay(b: Record<string, unknown>, u: string, id: string): unknown[] {
@@ -341,6 +353,8 @@ const POST_ROUTES: [RegExp, string, BodyParser][] = [
   [/^\/account\/delete$/, "delete_account", (_b, u) => [u]],
   // остановить повтор можно и без Pro — иначе после подписки его было бы не выключить
   [new RegExp(`^/recurrences/(${UUID})/stop$`, "i"), "stop_recurrence", (_b, u, id) => [u, id]],
+  // и сказать «не регулярный» тоже
+  [new RegExp(`^/regular/(${UUID})/dismiss$`, "i"), "set_regular_payment", (_b, u, id) => [u, id, "dismissed"]],
   [/^\/settings\/limit$/, "api_set_limit", limitArg],
   [/^\/settings\/notify$/, "api_set_notify", notifyArg],
   [new RegExp(`^/habits/(${UUID})/day$`, "i"), "set_habit_on", habitDay],
@@ -406,7 +420,7 @@ async function createRoute(path: string, req: Request, userId: string):
   if ((path === "/tasks" || path === "/events") && b.repeat !== undefined && b.repeat !== null) {
     return { fn: "create_recurrence", args: newRecurrence(path, b, userId), pro: true };
   }
-  return { fn: hit[0], args: hit[1](b, userId), pro: false };
+  return { fn: hit[0], args: hit[1](b, userId), pro: path === "/regular" };
 }
 
 const MAX_TEXT = 4000;
@@ -623,10 +637,27 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
         const id = await d.db.call(cr.fn, cr.args);
         return typeof id === "string" ? json(201, { id }) : json(404, { error: "not_found" });
       }
+      const confirm = new RegExp(`^/regular/(${UUID})/confirm$`, "i").exec(path);
+      if (confirm) {
+        if (!await isPro(d.db, user.id)) return PRO_REQUIRED();
+        const ok = await d.db.call("set_regular_payment", [user.id, confirm[1].toLowerCase(), "active"]);
+        return ok === true ? json(200, { ok: true }) : json(404, { error: "not_found" });
+      }
       const pr = await postRoute(path, req, user.id);
       if (!pr) return json(404, { error: "not_found" });
       const ok = await d.db.call(pr[0], pr[1]);
       return ok === true ? json(200, { ok: true }) : json(404, { error: "not_found" });
+    }
+    // Pro: на Free отдаём только «закрыто» и сколько регулярных нашлось — для честного тизера
+    if (path === "/regular") {
+      const data = await d.db.call("api_regular_payments", [user.id]) as { items?: unknown[] } | null;
+      if (data === null) return json(404, { error: "not_found" });
+      return json(200, await isPro(d.db, user.id) ? data : { locked: true, found: data.items?.length ?? 0 });
+    }
+    if (path === "/forecast") {
+      if (!await isPro(d.db, user.id)) return json(200, { locked: true });
+      const data = await d.db.call("api_forecast", [user.id]);
+      return data === null ? json(404, { error: "not_found" }) : json(200, data);
     }
     if (path === "/subscription") {
       const sub = await d.db.call("api_subscription", [user.id]);

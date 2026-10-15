@@ -2,6 +2,7 @@ import type { Db, Subscription, User } from "./db.ts";
 import type { Button, Payments, Tg } from "../_shared/telegram.ts";
 import { invoiceLinks, planFromPayload, planNote, PLANS, plansOnSale, PRO_PITCH } from "../_shared/plans.ts";
 import { MAX_VOICE_SEC, TOO_LONG_VOICE, TOO_MANY } from "../_shared/limits.ts";
+import { fmtAmount } from "../_shared/money.ts";
 
 import type { MenuDb } from "./menu_db.ts";
 import { MENU_ROWS, menuKey } from "./keyboard.ts";
@@ -382,6 +383,21 @@ async function handleCallback(cq: any, d: Deps) {
     await d.db.onboard(user.id, code);
     await d.tg.editMessage(chatId, messageId, onboardedText(code) + await trialNote(user.id, d));
     await d.tg.sendMessage(chatId, MENU_HINT, undefined, { replyKeyboard: MENU_ROWS });
+    return;
+  }
+
+  if (action === "rp") {
+    if (!UUID_RE.test(rest[0] ?? "")) {
+      await d.tg.answerCallback(cq.id, "Уже неактуально");
+      return;
+    }
+    const r = await d.db.recordRegular(user.id, rest[0]);
+    if (!r) {
+      await d.tg.answerCallback(cq.id, "Этот платёж больше не отслеживается");
+      return;
+    }
+    await d.tg.answerCallback(cq.id, r.created ? "Записал" : "Уже записано");
+    await d.tg.editMessage(chatId, messageId, `💸 Записал: ${r.title} — ${fmtAmount(Number(r.amount), r.base_currency)}`);
     return;
   }
 

@@ -28,6 +28,7 @@ class MiniDb implements Db {
   async workerOnline() { return true; }
   async rateLimit() { return true; }
   async applyPayment() { return true; }
+  async recordRegular() { return null; }
   async subscription() { return { status: "free" as const, pro_until: null, ai_left: 3, ai_per_day: 3 }; }
   async createInbox(row: NewInbox) { this.inbox.push(row); return "11111111-1111-1111-1111-111111111111"; }
   async setInboxReply() {}

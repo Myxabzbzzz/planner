@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import type { Button, SendOpts, Tg } from "../_shared/telegram.ts";
-import type { Daily, DueDigest, Reminder, ReviewPing, SleepingQueue, Weekly } from "./render.ts";
+import type { Daily, DueDigest, PaymentReminder, Reminder, ReviewPing, SleepingQueue, Weekly } from "./render.ts";
 import { type NotifyDb, runNotify } from "./run.ts";
 
 const DAILY: Daily = { date: "2026-10-04", base_currency: "UZS", tasks_done: 1, events_done: 0, events_past: 0,
@@ -29,6 +29,10 @@ class FakeDb implements NotifyDb {
     this.spawns++;
     return 2;
   }
+  payments: PaymentReminder[] = [];
+  paidMarked: string[][] = [];
+  async duePaymentReminders() { return this.payments; }
+  async markPaymentReminded(ids: string[]) { this.paidMarked.push(ids); }
   async dueReminders() { return this.reminders; }
   async markReminded(ids: string[]) { this.reminded.push(ids); }
   async dueDigests() { return this.digests; }
@@ -181,4 +185,16 @@ Deno.test("recurring items are spawned every run, and a failure does not stop re
   db.reminders = [{ item_id: "i1", chat_id: 1, kind: "event", title: "Созвон", local_time: "10:00", minutes_left: 30 }];
   const r = await runNotify({ db, tg });
   assertEquals([r.spawned, r.reminders], [0, 1]);
+});
+
+Deno.test("regular payment: reminded the day before with a button that records it, marked once sent", async () => {
+  const db = new FakeDb();
+  const tg = new FakeTg();
+  db.payments = [{ id: "p1", chat_id: 7, title: "Яндекс Плюс", amount: 299, base_currency: "RUB", charge_on: "2026-11-06" }];
+  const r = await runNotify({ db, tg });
+  assertEquals(r.payments, 1);
+  const m = tg.sent.find((x) => x.text.includes("Яндекс Плюс"))!;
+  assertEquals(m.text, "💳 Завтра, 6 ноября, спишется 299 ₽ — Яндекс Плюс");
+  assertEquals(m.buttons, [[{ text: "✅ Записать трату", callback_data: "rp:p1" }]]);
+  assertEquals(db.paidMarked, [["p1"]]);
 });

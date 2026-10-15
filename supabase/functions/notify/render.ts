@@ -8,6 +8,7 @@ export type Reminder = {
   local_time: string | null;
   minutes_left: number;
 };
+export type PaymentReminder = { id: string; chat_id: number; title: string; amount: number; base_currency: string; charge_on: string };
 export type ReviewPing = { inbox_id: string; user_id: string; chat_id: number; pending: number; sample: string | null };
 export type SleepingQueue = { user_id: string; chat_id: number; queued: number; oldest_hours: number };
 export type DueDigest = { user_id: string; chat_id: number; kind: "daily" | "weekly"; local_date: string };
@@ -43,6 +44,10 @@ export function renderReminder(r: Reminder): string {
   }
   const when = r.minutes_left >= 28 ? "Через 30 минут" : `Через ${r.minutes_left} мин`;
   return `⏰ ${when} — ${r.title} (${r.local_time})`;
+}
+
+export function renderPaymentReminder(p: PaymentReminder): string {
+  return `💳 Завтра, ${dayTitle(p.charge_on)}, спишется ${fmtAmount(p.amount, p.base_currency)} — ${p.title}`;
 }
 
 // #8: вопрос «куда отнести» мог навсегда утонуть в чате

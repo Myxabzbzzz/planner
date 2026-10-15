@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import type { Daily, DueDigest, Reminder, ReviewPing, SleepingQueue, Weekly } from "./render.ts";
+import type { Daily, DueDigest, PaymentReminder, Reminder, ReviewPing, SleepingQueue, Weekly } from "./render.ts";
 import type { NotifyDb } from "./run.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -11,6 +11,8 @@ function check<T>(r: { data: T; error: any }): T {
 export function supabaseNotifyDb(sb: SupabaseClient): NotifyDb {
   return {
     spawnRecurrences: async () => Number(check(await sb.rpc("spawn_recurrences")) ?? 0),
+    duePaymentReminders: async () => check(await sb.rpc("due_payment_reminders")) as PaymentReminder[],
+    markPaymentReminded: async (ids) => { check(await sb.rpc("mark_payment_reminded", { p_ids: ids })); },
     dueReminders: async () => check(await sb.rpc("due_reminders")) as Reminder[],
     markReminded: async (ids) => { check(await sb.rpc("mark_reminded", { p_items: ids })); },
     dueDigests: async () => check(await sb.rpc("due_digests")) as DueDigest[],

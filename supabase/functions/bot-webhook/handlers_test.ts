@@ -77,6 +77,13 @@ class FakeDb implements Db {
     this.sub = { status: plan === "lifetime" ? "lifetime" : "pro", pro_until: plan === "lifetime" ? null : "2026-11-07T10:00", ai_left: null, ai_per_day: 3 };
     return true;
   }
+  regular: { id: string; created: boolean; title: string; amount: number; base_currency: string } | null =
+    { id: "tx1", created: true, title: "Яндекс Плюс", amount: 299, base_currency: "RUB" };
+  async recordRegular() {
+    const r = this.regular;
+    if (r) this.regular = { ...r, created: false };
+    return r;
+  }
   failSubscription = false;
   async subscription() {
     if (this.failSubscription) throw new Error("db is down");
@@ -118,7 +125,11 @@ class FakeTg implements Tg {
   async editMessage(chatId: number, messageId: number, text: string, buttons?: Button[][]) {
     this.edited.push({ chatId, messageId, text, buttons });
   }
-  async answerCallback(id: string) { this.answered.push(id); }
+  answerTexts: Array<string | undefined> = [];
+  async answerCallback(id: string, text?: string) {
+    this.answered.push(id);
+    this.answerTexts.push(text);
+  }
   deleted: Array<[number, number]> = [];
   async deleteMessage(chatId: number, messageId: number) { this.deleted.push([chatId, messageId]); }
 }
@@ -634,4 +645,17 @@ Deno.test("successful payment turns Pro on once, even if Telegram repeats it", a
   assertEquals(db.payments[0], ["u-on", "ch-1", "month", 150, new Date(1791108000 * 1000).toISOString(), true]);
   assertEquals(db.inbox.length, 0);
   assertEquals(tg.sent.filter((m) => m.text.includes("Pro активен")).length, 1);
+});
+
+Deno.test("«Записать трату» под напоминанием записывает один раз и правит сообщение", async () => {
+  const { db, tg, deps } = setup();
+  onboarded(db);
+  const id = "11111111-2222-3333-4444-555555555555";
+  await handleUpdate(cb(`rp:${id}`), deps);
+  assertEquals(tg.edited.at(-1)!.text, "💸 Записал: Яндекс Плюс — 299 ₽");
+  await handleUpdate(cb(`rp:${id}`), deps);
+  assertEquals(tg.answerTexts.at(-1), "Уже записано");
+  db.regular = null;
+  await handleUpdate(cb(`rp:${id}`), deps);
+  assertEquals(tg.answerTexts.at(-1), "Этот платёж больше не отслеживается");
 });

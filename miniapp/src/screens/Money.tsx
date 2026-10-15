@@ -4,8 +4,11 @@ import { DayBars, RankedBars, ShareBar } from "../components/Charts";
 import { IconChevron } from "../components/Icons";
 import { Meter } from "../components/Meter";
 import { OpSheet } from "../components/OpSheet";
+import { ProTeaser } from "../components/ProTeaser";
+import { RegularCard } from "../components/RegularCard";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { barHeights, catColor, categoryShares, RAMP } from "../charts";
+import { forecastText } from "../forecast";
 import { currentMonth, fmtAmount, fmtDayTitle, fmtRateNote, monthTitle, shiftMonth, todayIso } from "../format";
 import { useLoad } from "../load";
 import { haptic } from "../telegram";
@@ -17,12 +20,17 @@ function groupByDay(ops: Operation[]) {
   return [...map.entries()];
 }
 
-export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
+export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets, onPro }: {
   api: Api; me: Me; refresh?: number; onAdd: () => void; onSettings: () => void; onBudgets: () => void;
+  /** прогноз и регулярные платежи — Pro */
+  onPro: () => void;
 }) {
   const thisMonth = currentMonth(me.tz);
   const [month, setMonth] = useState(thisMonth);
   const { data, error, loading, reload } = useLoad(() => api.money(month), [api, month], refresh);
+  // прогноз только у текущего месяца; сбой прогноза не должен ломать экран
+  const forecast = useLoad(() => (month === thisMonth ? api.forecast().catch(() => null) : Promise.resolve(null)),
+    [api, month, thisMonth], refresh);
   // Свои цвета категорий; заодно кэш категорий прогрет к открытию шторки операции.
   const cats = useLoad(() => api.categories().catch(() => null), [api], refresh);
   const [editing, setEditing] = useState<Operation | null>(null);
@@ -111,6 +119,24 @@ export function Money({ api, me, refresh = 0, onAdd, onSettings, onBudgets }: {
           </div>
         )}
       </Card>
+
+      {forecast.data && ("locked" in forecast.data ? (
+        <Card className="flush">
+          <ProTeaser title="Прогноз трат до конца месяца" hint="Сколько уйдёт при твоём темпе и уложишься ли в лимит"
+            onPro={onPro} />
+        </Card>
+      ) : (() => {
+        const f = forecastText(forecast.data);
+        return (
+          <Card>
+            <div className="hero-label">Прогноз</div>
+            <div className="row-title" style={{ minHeight: 0, fontWeight: 600 }}>{f.title}</div>
+            <div className={f.warn ? "sub danger" : "sub"}>{f.hint}</div>
+          </Card>
+        );
+      })())}
+
+      {month === thisMonth && <RegularCard api={api} refresh={refresh} onPro={onPro} onChanged={() => forecast.reload()} />}
 
       {data.expense === 0 && data.income === 0 ? (
         <Empty

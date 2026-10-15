@@ -3,8 +3,7 @@ import type { OpEdit, OpPatch } from "./opEdit";
 import { baseMime } from "./recorder";
 import { flattenReviews, type ReviewsWire } from "./reviews";
 import type {
-  BudgetsResp, Categories, CategoryColor, Created, CurrencyChange, EventsResp, HabitsResp, InboxStatus, Me, MoneyResp, NotesResp,
-  NotifyKind, OperationsResp, Profile, ReviewKind, ReviewsResp, Sent, Settings, SubPlan, Subscription, TasksResp, Today,
+  BudgetsResp, Categories, CategoryColor, Created, CurrencyChange, EventsResp, ForecastResp, HabitsResp, InboxStatus, Me, MoneyResp, NewRegular, NotesResp, NotifyKind, OperationsResp, Profile, RegularResp, ReviewKind, ReviewsResp, Sent, Settings, SubPlan, Subscription, TasksResp, Today,
 } from "./types";
 import type { NewEvent, NewHabit, NewNote, NewTask, NewTransaction } from "./newItem";
 
@@ -179,6 +178,11 @@ export function makeApi(
     deleteAccount: () => post("/account/delete", {}),
 
     subscription: () => get<Subscription>("/subscription"),
+    forecast: () => get<ForecastResp>("/forecast"),
+    regular: () => get<RegularResp>("/regular"),
+    addRegular: (body: NewRegular) => postJson<{ id: string }>("/regular", body),
+    confirmRegular: (id: string) => postJson<{ ok: true }>(`/regular/${id}/confirm`, {}),
+    dismissRegular: (id: string) => postJson<{ ok: true }>(`/regular/${id}/dismiss`, {}),
     invoice: (plan: SubPlan["id"]) => postJson<{ url: string }>("/subscription/invoice", { plan }),
 
     profile: (months = 6) => get<Profile>("/profile", { months }),

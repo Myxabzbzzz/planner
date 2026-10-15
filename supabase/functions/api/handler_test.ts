@@ -408,6 +408,46 @@ Deno.test("POST /recurrences/:id/stop останавливает повтор и
   assertEquals([r.status, r.db.calls], [200, [["stop_recurrence", ["u1", id]]]]);
 });
 
+Deno.test("регулярные платежи и прогноз: полные данные в Pro, на Free — только «закрыто»", async () => {
+  const mk = (pro: boolean) => {
+    const db = new FakeApiDb();
+    db.pro = pro;
+    db.rpc = async (fn: string, args: unknown[]) => {
+      db.calls.push([fn, args]);
+      return fn === "api_regular_payments" ? { base_currency: "RUB", monthly_total: 299, items: [{ id: "r1" }, { id: "r2" }] }
+        : { forecast: 90000 };
+    };
+    return db;
+  };
+  assertEquals((await run(await req("/regular"), mk(true))).body.monthly_total, 299);
+  assertEquals((await run(await req("/regular"), mk(false))).body, { locked: true, found: 2 });
+  assertEquals((await run(await req("/forecast"), mk(true))).body, { forecast: 90000 });
+  const free = await run(await req("/forecast"), mk(false));
+  assertEquals([free.body, free.db.calls], [{ locked: true }, []]);
+});
+
+Deno.test("регулярный платёж: добавить и подтвердить — Pro, «не регулярный» — всем", async () => {
+  const id = "11111111-2222-3333-4444-555555555555";
+  const mk = async (path: string, body: unknown, pro: boolean) => {
+    const db = new FakeApiDb();
+    db.pro = pro;
+    db.rpc = async (fn: string, args: unknown[]) => {
+      db.calls.push([fn, args]);
+      return fn === "add_regular_payment" ? "new-id" : true;
+    };
+    return await run(await req(path, { method: "POST", body }), db);
+  };
+  const add = await mk("/regular", { title: " Аренда ", amount: 50000, day: 1, category: "дом" }, true);
+  assertEquals([add.status, add.db.calls], [201, [["add_regular_payment", ["u1", "Аренда", 50000, 1, "дом"]]]]);
+  assertEquals((await mk("/regular", { title: "Аренда", amount: 50000, day: 1 }, false)).status, 402);
+  assertEquals((await mk("/regular", { title: "Аренда", amount: 50000, day: 32 }, true)).status, 400);
+  assertEquals((await mk(`/regular/${id}/confirm`, {}, false)).status, 402);
+  const ok = await mk(`/regular/${id}/confirm`, {}, true);
+  assertEquals(ok.db.calls, [["set_regular_payment", ["u1", id, "active"]]]);
+  const no = await mk(`/regular/${id}/dismiss`, {}, false);
+  assertEquals([no.status, no.db.calls], [200, [["set_regular_payment", ["u1", id, "dismissed"]]]]);
+});
+
 Deno.test("POST /events requires a real date and time", async () => {
   const mk = async (body: unknown) => {
     const db = new FakeApiDb();

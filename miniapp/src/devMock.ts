@@ -284,6 +284,24 @@ export const devFetch: typeof fetch = async (input, init) => {
       ],
     });
   }
+  // ?mock=free — как видит экран человек без Pro
+  const free = location.search.includes("mock=free");
+  if (p === "/forecast") {
+    return json(free ? { locked: true } : {
+      base_currency: "RUB", month: d.today.slice(0, 7), spent: 61240, forecast: 118500, prev_month: 104300,
+      regular_left: 1798, days_left: 16, limit: 90000,
+    });
+  }
+  if (p === "/regular") {
+    return json(free ? { locked: true, found: 3 } : {
+      base_currency: "RUB", monthly_total: 1798,
+      items: [
+        { id: "rp1", title: "Яндекс Плюс", amount: 399, day: 6, category: "подписки", status: "suggested", next_on: "2026-11-06" },
+        { id: "rp2", title: "Мобильная связь", amount: 600, day: 18, category: "связь", status: "active", next_on: "2026-10-18" },
+        { id: "rp3", title: "Интернет", amount: 799, day: 25, category: "связь", status: "active", next_on: "2026-10-25" },
+      ],
+    });
+  }
   if (p === "/reviews") return json(REVIEWS);
   if (p === "/budgets") return json(budgets(url.searchParams.get("month") ?? d.today.slice(0, 7)));
   if (p === "/operations") {

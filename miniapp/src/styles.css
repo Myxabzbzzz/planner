@@ -316,6 +316,18 @@ h2 {
 /* значок повтора перед названием — приглушённый, чтобы не спорить с текстом */
 .repeat-mark { display: inline-flex; vertical-align: -2px; margin-right: 6px; color: var(--fg-3); }
 
+/* «это есть в Pro»: строка с замком и плашкой */
+.row.pro-teaser { width: 100%; text-align: left; color: var(--fg); }
+.pro-teaser-ico { display: inline-flex; color: var(--accent-text); }
+.pro-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent-dim);
+}
+
 button.link {
   appearance: none;
   border: 0;

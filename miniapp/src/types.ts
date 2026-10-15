@@ -119,3 +119,19 @@ export type Subscription = {
   ai_per_day: number;
   plans: SubPlan[];
 };
+
+/** Прогноз трат до конца месяца (Pro). forecast — null в первые два дня месяца. */
+export type Forecast = {
+  base_currency: string; month: string; spent: number; forecast: number | null; prev_month: number;
+  regular_left: number; days_left: number; limit: number | null;
+};
+export type ForecastResp = Forecast | { locked: true };
+
+export type RegularPayment = {
+  id: string; title: string; amount: number; day: number; category: string;
+  status: "suggested" | "active"; next_on: string;
+};
+export type RegularResp = { base_currency: string; monthly_total: number; items: RegularPayment[] }
+  | { locked: true; found: number };
+export type NewRegular = { title: string; amount: number; day: number; category?: string };
+

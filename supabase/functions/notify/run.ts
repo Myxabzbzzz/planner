@@ -2,8 +2,10 @@ import type { Button, Tg } from "../_shared/telegram.ts";
 import {
   type Daily,
   type DueDigest,
+  type PaymentReminder,
   type Reminder,
   renderDaily,
+  renderPaymentReminder,
   renderReminder,
   renderReviewPing,
   renderSleeping,
@@ -17,6 +19,9 @@ export interface NotifyDb {
   /** Повторяющиеся дела: создать следующие экземпляры (Pro). Возвращает, сколько создано. */
   spawnRecurrences(): Promise<number>;
   dueReminders(): Promise<Reminder[]>;
+  /** Регулярные платежи (Pro): напомнить накануне списания. */
+  duePaymentReminders(): Promise<PaymentReminder[]>;
+  markPaymentReminded(ids: string[]): Promise<void>;
   markReminded(ids: string[]): Promise<void>;
   dueDigests(): Promise<DueDigest[]>;
   markDigest(userId: string, kind: string, on: string): Promise<void>;
@@ -35,7 +40,7 @@ const GONE = /bot was blocked|user is deactivated|chat not found/i;
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export async function runNotify(d: { db: NotifyDb; tg: Tg; miniappUrl?: string }) {
-  let reminders = 0, digests = 0, pings = 0, queues = 0, spawned = 0;
+  let reminders = 0, digests = 0, pings = 0, queues = 0, spawned = 0, payments = 0;
   // До напоминаний: у только что созданного экземпляра тоже должно сработать «через 30 минут»
   try {
     spawned = await d.db.spawnRecurrences();
@@ -59,6 +64,25 @@ export async function runNotify(d: { db: NotifyDb; tg: Tg; miniappUrl?: string }
     } catch (e) {
       console.error("mark reminded failed:", errText(e));
     }
+  }
+
+  // Регулярные платежи: напоминание накануне, кнопка записывает трату одним нажатием
+  const paid: string[] = [];
+  try {
+    for (const p of await d.db.duePaymentReminders()) {
+      try {
+        await d.tg.sendMessage(p.chat_id, renderPaymentReminder(p),
+          [[{ text: "✅ Записать трату", callback_data: `rp:${p.id}` }]]);
+        paid.push(p.id);
+        payments++;
+      } catch (e) {
+        if (GONE.test(errText(e))) paid.push(p.id);
+        else console.error("payment reminder failed:", errText(e));
+      }
+    }
+    if (paid.length) await d.db.markPaymentReminded(paid);
+  } catch (e) {
+    console.error("payment reminders failed:", errText(e));
   }
 
   const buttons: Button[][] | undefined = d.miniappUrl
@@ -146,5 +170,5 @@ export async function runNotify(d: { db: NotifyDb; tg: Tg; miniappUrl?: string }
     console.error("purge rate events failed:", errText(e));
   }
 
-  return { reminders, digests, pings, queues, spawned };
+  return { reminders, digests, pings, queues, spawned, payments };
 }
