@@ -54,6 +54,7 @@ export const ARG_NAMES: Record<string, string[]> = {
   freeze_habit_day: ["p_user", "p_habit", "p_date"],
   unfreeze_habit_day: ["p_user", "p_habit", "p_date"],
   api_habit_stats: ["p_user", "p_habit"],
+  set_appearance: ["p_user", "p_theme", "p_accent"],
   reset_calendar_token: ["p_user"],
   create_note: ["p_user", "p_text", "p_kind"],
   create_habit: ["p_user", "p_name", "p_target"],

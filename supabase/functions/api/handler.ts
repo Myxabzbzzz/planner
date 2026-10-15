@@ -253,6 +253,8 @@ function newTransaction(b: Record<string, unknown>, u: string): unknown[] {
 }
 
 const FREQS = ["daily", "weekdays", "weekly", "monthly"] as const;
+const THEMES = ["auto", "light", "dark"];
+const ACCENTS = ["amber", "ocean", "mint", "berry", "violet"];
 
 /**
  * Задача или встреча с повтором (Pro): правило + первый экземпляр. Без даты повторять нечего,
@@ -656,6 +658,14 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
         return code === "ok" ? json(200, { ok: true })
           : code === "not_found" ? json(404, { error: "not_found" })
           : json(409, { error: String(code) });
+      }
+      // Оформление — Pro; вернуть «как по умолчанию» можно и без него
+      if (path === "/settings/appearance") {
+        const { theme, accent } = await readJson(req);
+        if (!THEMES.includes(theme as string) || !ACCENTS.includes(accent as string)) throw new BadRequest();
+        if ((theme !== "auto" || accent !== "amber") && !await isPro(d.db, user.id)) return PRO_REQUIRED();
+        const ok = await d.db.call("set_appearance", [user.id, theme, accent]);
+        return ok === true ? json(200, { ok: true }) : json(404, { error: "not_found" });
       }
       if (path === "/calendar/reset") {
         if (!await isPro(d.db, user.id)) return PRO_REQUIRED();

@@ -118,14 +118,52 @@ function forcedTheme(): "light" | "dark" | null {
   return v === "dark" || v === "light" ? v : null;
 }
 
+// ——— оформление (Pro): тема и акцент ———
+
+export type ThemePref = "auto" | "light" | "dark";
+export type Accent = "amber" | "ocean" | "mint" | "berry" | "violet";
+export type Appearance = { theme: ThemePref; accent: Accent };
+
+const APPEARANCE_KEY = "planner.appearance";
+let themePref: ThemePref = "auto";
+
+/** Последний выбор — из браузера, чтобы при открытии не мелькнули цвета по умолчанию. */
+function savedAppearance(): Appearance | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(APPEARANCE_KEY) ?? "null");
+    return v && typeof v.theme === "string" && typeof v.accent === "string" ? v as Appearance : null;
+  } catch {
+    return null;
+  }
+}
+
+const scheme = (): "light" | "dark" =>
+  forcedTheme() ?? (themePref === "auto" ? tg?.colorScheme ?? "dark" : themePref);
+
+/** Применить оформление и запомнить его. «auto» — как в Telegram. */
+export function setAppearance(a: Appearance) {
+  themePref = a.theme;
+  const root = document.documentElement;
+  if (a.accent === "amber") delete root.dataset.accent;
+  else root.dataset.accent = a.accent;
+  applyTheme(scheme());
+  try {
+    localStorage.setItem(APPEARANCE_KEY, JSON.stringify(a));
+  } catch {
+    // приватный режим — просто не запомним
+  }
+}
+
 export function initTelegram() {
   tg?.ready();
   tg?.expand();
   tg?.disableVerticalSwipes?.();
-  applyTheme(forcedTheme() ?? tg?.colorScheme ?? "dark");
+  const saved = savedAppearance();
+  if (saved) setAppearance(saved);
+  else applyTheme(scheme());
   applyInsets();
   trackKeyboard();
-  tg?.onEvent?.("themeChanged", () => applyTheme(forcedTheme() ?? tg?.colorScheme ?? "dark"));
+  tg?.onEvent?.("themeChanged", () => applyTheme(scheme()));
   tg?.onEvent?.("safeAreaChanged", applyInsets);
   tg?.onEvent?.("contentSafeAreaChanged", applyInsets);
   tg?.onEvent?.("fullscreenChanged", applyInsets);

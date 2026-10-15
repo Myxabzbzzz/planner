@@ -4,11 +4,12 @@ import { thud } from "../telegram";
 /**
  * Марка «bars»: силуэт медведя, внутри три тигриные полосы. Полосы — не краска, а прорезь
  * цветом фона, поэтому марка сама подстраивается под тему (в public/logo-*.svg — по файлу на тему).
+ * Янтарь — цвет бренда (--brand), он не меняется вместе с выбранным акцентом.
  */
 export function Mark({ size = 28 }: { size?: number }) {
   return (
     <svg className="mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
-      <g fill="var(--accent)">
+      <g fill="var(--brand)">
         <circle cx="12" cy="15" r="6.6" />
         <circle cx="36" cy="15" r="6.6" />
         <ellipse cx="24" cy="29" rx="16" ry="13.6" />

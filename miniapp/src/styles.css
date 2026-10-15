@@ -20,6 +20,8 @@
   --fg-2: #AEB6C2;
   --fg-3: #7E8795;
 
+  /* цвет марки — всегда янтарь, даже когда выбран другой акцент */
+  --brand: #E89B2B;
   --accent: #E89B2B;
   --accent-hi: #FFD27A;
   --accent-text: #FFD27A;
@@ -113,6 +115,114 @@
 
   --shadow: 0 1px 2px rgba(20, 16, 8, .05), 0 10px 28px -18px rgba(20, 16, 8, .3);
   --shadow-up: 0 -8px 28px -16px rgba(20, 16, 8, .22);
+}
+
+/* ——— акценты (Pro): у каждого свои ступени для тёмной и светлой темы ———
+   Контраст проверен: --on-accent на --accent ≥ 5:1, --accent-text на фоне ≥ 6:1.
+   Рампа графиков — из того же цвета, светлая → тёмная, как у янтаря. */
+:root[data-accent="ocean"] {
+  --accent: #4C9AFF;
+  --accent-hi: #A9CCFF;
+  --accent-text: #A9CCFF;
+  --accent-dim: rgba(76, 154, 255, 0.14);
+  --accent-ring: rgba(76, 154, 255, 0.26);
+  --on-accent: #06121F;
+  --r1: #9DC7FF;
+  --r2: #67A9FF;
+  --r3: #448BE6;
+  --r4: #356CB2;
+  --r5: #264D80;
+}
+:root[data-theme="light"][data-accent="ocean"] {
+  --accent: #3B86F0;
+  --accent-hi: #3476D3;
+  --accent-text: #1A5BB0;
+  --accent-dim: rgba(59, 134, 240, 0.16);
+  --accent-ring: rgba(59, 134, 240, 0.34);
+  --on-accent: #06121F;
+  --r1: #5898F2;
+  --r2: #3579D8;
+  --r3: #2C64B4;
+  --r4: #235090;
+  --r5: #193865;
+}
+:root[data-accent="mint"] {
+  --accent: #3CC48F;
+  --accent-hi: #9EEBC9;
+  --accent-text: #9EEBC9;
+  --accent-dim: rgba(60, 196, 143, 0.14);
+  --accent-ring: rgba(60, 196, 143, 0.26);
+  --on-accent: #04170F;
+  --r1: #94DFC1;
+  --r2: #59CDA0;
+  --r3: #36B081;
+  --r4: #2A8964;
+  --r5: #1E6248;
+}
+:root[data-theme="light"][data-accent="mint"] {
+  --accent: #2BB07C;
+  --accent-hi: #269B6D;
+  --accent-text: #0E6B47;
+  --accent-dim: rgba(43, 176, 124, 0.16);
+  --accent-ring: rgba(43, 176, 124, 0.34);
+  --on-accent: #04170F;
+  --r1: #4BBC90;
+  --r2: #279E70;
+  --r3: #20845D;
+  --r4: #1A6A4A;
+  --r5: #124A34;
+}
+:root[data-accent="berry"] {
+  --accent: #F0679A;
+  --accent-hi: #FFB3CE;
+  --accent-text: #FFB3CE;
+  --accent-dim: rgba(240, 103, 154, 0.14);
+  --accent-ring: rgba(240, 103, 154, 0.26);
+  --on-accent: #24060F;
+  --r1: #F7ABC7;
+  --r2: #F27EA9;
+  --r3: #D85D8B;
+  --r4: #A8486C;
+  --r5: #78344D;
+}
+:root[data-theme="light"][data-accent="berry"] {
+  --accent: #EC6A97;
+  --accent-hi: #D05D85;
+  --accent-text: #A8285A;
+  --accent-dim: rgba(236, 106, 151, 0.16);
+  --accent-ring: rgba(236, 106, 151, 0.34);
+  --on-accent: #24060F;
+  --r1: #EF80A7;
+  --r2: #D45F88;
+  --r3: #B15071;
+  --r4: #8E405B;
+  --r5: #632D3F;
+}
+:root[data-accent="violet"] {
+  --accent: #9B8CFF;
+  --accent-hi: #CFC7FF;
+  --accent-text: #CFC7FF;
+  --accent-dim: rgba(155, 140, 255, 0.14);
+  --accent-ring: rgba(155, 140, 255, 0.26);
+  --on-accent: #120B2B;
+  --r1: #C8C0FF;
+  --r2: #AA9DFF;
+  --r3: #8C7EE6;
+  --r4: #6C62B2;
+  --r5: #4E4680;
+}
+:root[data-theme="light"][data-accent="violet"] {
+  --accent: #8E7BFF;
+  --accent-hi: #7D6CE0;
+  --accent-text: #5243C2;
+  --accent-dim: rgba(142, 123, 255, 0.16);
+  --accent-ring: rgba(142, 123, 255, 0.34);
+  --on-accent: #120B2B;
+  --r1: #9F8FFF;
+  --r2: #806FE6;
+  --r3: #6A5CBF;
+  --r4: #554A99;
+  --r5: #3C346B;
 }
 
 * {
@@ -351,6 +461,25 @@ h2 {
 .wd-bars { display: flex; justify-content: space-between; align-items: flex-end; gap: 6px; margin-top: 16px; }
 .wd-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--fg-3); }
 .wd-bar i { display: block; width: 100%; max-width: 24px; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--accent); }
+
+/* выбор цвета акцента: кружок цвета и подпись. Цвета — тёмные ступени, видны в обеих темах */
+.accent-picks { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.accent-pick { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; color: var(--fg-3); }
+.accent-pick::before {
+  content: "";
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sw);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12);
+}
+.accent-pick.on { color: var(--fg); }
+.accent-pick.on::before { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg-2); }
+.accent-pick[data-accent-pick="amber"] { --sw: #E89B2B; }
+.accent-pick[data-accent-pick="ocean"] { --sw: #3B86F0; }
+.accent-pick[data-accent-pick="mint"] { --sw: #2BB07C; }
+.accent-pick[data-accent-pick="berry"] { --sw: #EC6A97; }
+.accent-pick[data-accent-pick="violet"] { --sw: #8E7BFF; }
 
 button.link {
   appearance: none;

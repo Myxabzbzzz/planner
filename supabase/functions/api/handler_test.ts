@@ -493,6 +493,23 @@ Deno.test("привычки: заморозка и статистика — Pro,
   assertEquals((await mk(`/habits/${id}/stats`, false)).body, { locked: true });
 });
 
+Deno.test("оформление: тема и акцент — Pro, сброс к умолчанию — всем", async () => {
+  const mk = async (body: unknown, pro: boolean) => {
+    const db = new FakeApiDb();
+    db.pro = pro;
+    db.rpc = async (fn: string, args: unknown[]) => {
+      db.calls.push([fn, args]);
+      return true;
+    };
+    return await run(await req("/settings/appearance", { method: "POST", body }), db);
+  };
+  const ok = await mk({ theme: "dark", accent: "ocean" }, true);
+  assertEquals([ok.status, ok.db.calls], [200, [["set_appearance", ["u1", "dark", "ocean"]]]]);
+  assertEquals((await mk({ theme: "dark", accent: "ocean" }, false)).status, 402);
+  assertEquals((await mk({ theme: "auto", accent: "amber" }, false)).status, 200);
+  assertEquals((await mk({ theme: "neon", accent: "amber" }, true)).status, 400);
+});
+
 Deno.test("POST /events requires a real date and time", async () => {
   const mk = async (body: unknown) => {
     const db = new FakeApiDb();

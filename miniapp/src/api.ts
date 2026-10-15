@@ -180,6 +180,7 @@ export function makeApi(
     subscription: () => get<Subscription>("/subscription"),
     forecast: () => get<ForecastResp>("/forecast"),
     calendar: () => get<CalendarResp>("/calendar"),
+    setAppearance: (theme: string, accent: string) => postJson<{ ok: true }>("/settings/appearance", { theme, accent }),
     habitStats: (id: string) => get<HabitStatsResp>(`/habits/${id}/stats`),
     freezeHabit: (id: string, date: string) => postJson<{ ok: true }>(`/habits/${id}/freeze`, { date }),
     unfreezeHabit: (id: string, date: string) => postJson<{ ok: true }>(`/habits/${id}/unfreeze`, { date }),

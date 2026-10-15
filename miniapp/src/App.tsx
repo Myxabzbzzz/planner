@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { makeApi } from "./api";
 import { AccountSheet } from "./components/AccountSheet";
 import { CalendarSheet } from "./components/CalendarSheet";
@@ -20,7 +20,7 @@ import { Reviews } from "./screens/Reviews";
 import { Tasks } from "./screens/Tasks";
 import { Today } from "./screens/Today";
 import { screenForState } from "./state";
-import { tg, useBackButton } from "./telegram";
+import { setAppearance, tg, useBackButton } from "./telegram";
 import type { Settings } from "./types";
 import { UndoProvider } from "./undo";
 import { currentMonth } from "./format";
@@ -65,6 +65,17 @@ export default function App() {
   const pending = reviews.data?.reviews.length ?? 0;
   const sub = useLoad(() => api.subscription().catch(() => null), [api], refresh);
   const bump = () => setRefresh((n) => n + 1);
+  // Оформление: последний выбор уже применён из браузера, а тут сверяемся с сервером —
+  // Pro мог закончиться, или выбор сделан на другом устройстве.
+  useEffect(() => {
+    let alive = true;
+    api.settings().then((s) => {
+      if (!alive) return;
+      setSettings(s);
+      setAppearance({ theme: s.theme ?? "auto", accent: s.accent ?? "amber" });
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [api]);
   // «+» в доке предлагает то, что подходит открытому экрану
   const ADD_FOR: Record<string, NewKind> = {
     today: "task", tasks: "task", money: "expense", habits: "habit", notes: "note", profile: "task",
@@ -167,6 +178,7 @@ export default function App() {
           onClose={() => setSettingsOpen(false)}
           onChanged={(s) => { setSettings(s); bump(); }}
           onAccount={() => { setSettingsOpen(false); setAccountOpen(true); }}
+          onPro={() => { setSettingsOpen(false); setProOpen(true); }}
         />
       )}
 

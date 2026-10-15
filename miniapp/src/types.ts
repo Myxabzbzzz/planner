@@ -58,6 +58,9 @@ export type Settings = {
   limit: number | null;
   notify_reminders: boolean;
   notify_daily: boolean;
+  /** оформление (Pro); без Pro сервер отдаёт auto / amber */
+  theme?: "auto" | "light" | "dark";
+  accent?: "amber" | "ocean" | "mint" | "berry" | "violet";
   notify_weekly: boolean;
 };
 export type NotifyKind = "reminders" | "daily" | "weekly";
