@@ -13,8 +13,6 @@ class FakeCaptureDb implements CaptureDb {
   async workerOnline() { return this.online; }
   limited = false;
   async rateLimit() { return !this.limited; }
-  pro = true;
-  async isPro() { return this.pro; }
   async createInbox(row: { user_id: string; source: "shortcut"; text: string; reply_chat_id: number }) { this.rows.push(row); }
 }
 
@@ -93,11 +91,9 @@ Deno.test("429 when the user floods the shortcut", async () => {
 });
 
 
-Deno.test("Shortcuts capture is a Pro feature", async () => {
-  const db = new FakeCaptureDb();
-  db.pro = false;
-  const { status, message, db: after } = await call(req(JSON.stringify({ text: "кофе" }), auth), db);
-  assertEquals(status, 402);
-  assert(message.includes("Pro"));
-  assertEquals(after.rows, []);
+// Pro её не закрывает: команду ставят в пробный период, и после него она всё равно бы работала
+Deno.test("Shortcuts capture works without Pro", async () => {
+  const { status, db: after } = await call(req(JSON.stringify({ text: "кофе" }), auth));
+  assertEquals(status, 202);
+  assertEquals(after.rows.length, 1);
 });

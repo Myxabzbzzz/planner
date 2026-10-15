@@ -28,10 +28,12 @@ select is(public.set_category_color('00000000-0000-0000-0000-00000000f702',
 select is((select color from public.categories where user_id = '00000000-0000-0000-0000-00000000f701' and name = 'еда'),
   'green', 'color stays after the foreign attempt');
 
-select is(public.set_category_color('00000000-0000-0000-0000-00000000f701',
+-- проверка цвета отдельным выражением: в одном с вызовом она видит снимок до update
+select public.set_category_color('00000000-0000-0000-0000-00000000f701',
   (select id from public.categories where user_id = '00000000-0000-0000-0000-00000000f701' and type = 'expense' and name = 'еда'),
-  null) and (select color is null from public.categories where user_id = '00000000-0000-0000-0000-00000000f701' and name = 'еда'),
-  true, 'null clears the color');
+  null);
+select is((select color from public.categories where user_id = '00000000-0000-0000-0000-00000000f701' and name = 'еда'),
+  null, 'null clears the color');
 
 select * from finish();
 rollback;

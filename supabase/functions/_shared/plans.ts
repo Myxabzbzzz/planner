@@ -14,7 +14,7 @@ export const PLANS = {
 export type Plan = keyof typeof PLANS;
 export const PLAN_IDS = Object.keys(PLANS) as Plan[];
 
-export const PRO_PITCH = "Безлимит голосовых и вопросов к ИИ, итоги недели по воскресеньям, запись с кнопки iPhone.";
+export const PRO_PITCH = "Безлимит голосовых и вопросов к ИИ, итоги недели по воскресеньям.";
 
 export const planPayload = (plan: Plan) => `pro:${plan}`;
 
