@@ -12,6 +12,7 @@ class MiniDb implements Db {
   user: User = {
     id: "u1", tg_id: ME, tg_username: "me", is_allowed: true, is_admin: true,
     onboarded_at: "2026-10-01T00:00:00Z", base_currency: "UZS", pending_action: null,
+    terms_accepted_at: "2026-10-01T00:00:00Z",
   };
   inbox: NewInbox[] = [];
   times: Array<[string, string, number, string]> = [];
@@ -29,6 +30,7 @@ class MiniDb implements Db {
   async rateLimit() { return true; }
   async applyPayment() { return true; }
   async recordRegular() { return null; }
+  async acceptTerms() { return true; }
   async subscription() { return { status: "free" as const, pro_until: null, ai_left: 3, ai_per_day: 3 }; }
   async createInbox(row: NewInbox) { this.inbox.push(row); return "11111111-1111-1111-1111-111111111111"; }
   async setInboxReply() {}

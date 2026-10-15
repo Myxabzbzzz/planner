@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { handleUpdate } from "./handlers.ts";
+import { handleUpdate, TERMS_VERSION } from "./handlers.ts";
 import type { Db, NewInbox, Queue, Subscription, User } from "./db.ts";
 import type { Invoice, Payments } from "../_shared/telegram.ts";
 import type { Button, Tg } from "../_shared/telegram.ts";
@@ -25,8 +25,19 @@ class FakeDb implements Db {
   failCreateInbox = false;
   queueData: Queue = { waiting: 0, needs_review: 0, failed: 0, oldest: null };
   async findUser(tgId: number) { return this.users.find((u) => u.tg_id === tgId) ?? null; }
+  /** Старые тесты проверяют то, что после соглашения; шаг соглашения — в своих тестах (newcomersAccept = false). */
+  newcomersAccept = true;
+  accepted: Array<[string, string]> = [];
+  async acceptTerms(userId: string, version: string) {
+    const u = this.users.find((x) => x.id === userId)!;
+    if (u.terms_accepted_at) return false;
+    u.terms_accepted_at = "2026-10-15T10:00:00Z";
+    this.accepted.push([userId, version]);
+    return true;
+  }
   async createUser(u: Omit<User, "id" | "onboarded_at" | "base_currency">) {
-    const user: User = { ...u, id: `u${this.users.length + 1}`, onboarded_at: null, base_currency: null };
+    const user: User = { ...u, id: `u${this.users.length + 1}`, onboarded_at: null, base_currency: null,
+      terms_accepted_at: this.newcomersAccept ? "2026-10-01T00:00:00Z" : null };
     this.users.push(user);
     return user;
   }
@@ -153,7 +164,7 @@ const cb = (data: string, fromId = ADMIN, messageId = 9) => ({
 function onboarded(db: FakeDb, tgId = ADMIN) {
   db.users.push({
     id: "u-on", tg_id: tgId, tg_username: "me", is_allowed: true, is_admin: tgId === ADMIN,
-    onboarded_at: "2026-10-01T00:00:00Z", base_currency: "UZS",
+    onboarded_at: "2026-10-01T00:00:00Z", base_currency: "UZS", terms_accepted_at: "2026-10-01T00:00:00Z",
   });
 }
 
@@ -676,4 +687,33 @@ Deno.test("фото чека в Pro уходит в очередь с подпи
   assertEquals(db.inbox.length, before);
   assert(tg.sent.at(-1)!.text.includes("функция Pro"));
   assertEquals(tg.sent.at(-1)!.buttons, [[{ text: "⭐ Pro", callback_data: "pro" }]]);
+});
+
+Deno.test("новичок после /start сначала принимает соглашение, потом выбирает валюту", async () => {
+  const { db, tg, deps } = setup();
+  db.newcomersAccept = false;
+  const d = { ...deps, miniappUrl: "https://app.example/" };
+  await handleUpdate(msg(ADMIN, { text: "/start" }), d);
+  const prompt = tg.sent.at(-1)!;
+  assert(prompt.text.includes("пользовательское соглашение"));
+  assertEquals(prompt.buttons!.flat().map((b) => b.url ?? b.callback_data),
+    ["https://app.example/terms.html", "https://app.example/privacy.html", "terms"]);
+
+  // пока не принял — ни валюты, ни записей; /terms и /privacy читать можно
+  await handleUpdate(msg(ADMIN, { text: "кофе 100" }), d);
+  assertEquals(db.inbox.length, 0);
+  assert(tg.sent.at(-1)!.text.includes("Принимаю"));
+  await handleUpdate(msg(ADMIN, { text: "/terms" }), d);
+  assert(tg.sent.at(-1)!.text.includes("terms.html"));
+
+  await handleUpdate(cb("terms"), d);
+  assertEquals(db.accepted, [[db.users[0].id, TERMS_VERSION]]);
+  assert(tg.edited.at(-1)!.text.startsWith("✅ Соглашение"));
+  assert(tg.sent.at(-1)!.text.includes("базовую валюту"));
+
+  // старая кнопка повторно — без второго вопроса про валюту после онбординга
+  db.users[0].onboarded_at = "2026-10-15T10:01:00Z";
+  const sent = tg.sent.length;
+  await handleUpdate(cb("terms"), d);
+  assertEquals(tg.sent.length, sent);
 });

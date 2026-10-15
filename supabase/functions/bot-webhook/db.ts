@@ -11,6 +11,8 @@ export type User = {
   onboarded_at: string | null;
   base_currency: string | null;
   pending_action?: string | null;
+  /** null — ещё не принял соглашение: дальше /start его не пускаем */
+  terms_accepted_at?: string | null;
 };
 
 export type NewInbox = {
@@ -69,13 +71,15 @@ export interface Db {
   applyPayment(userId: string, chargeId: string, plan: string, stars: number, until: string | null,
                recurring: boolean): Promise<boolean>;
   subscription(userId: string): Promise<Subscription>;
+  /** false — уже принимал раньше */
+  acceptTerms(userId: string, version: string): Promise<boolean>;
   /** «Записать трату» под напоминанием о регулярном платеже; null — платёж уже не активен. */
   recordRegular(userId: string, id: string): Promise<RecordedPayment | null>;
 }
 
 export type RecordedPayment = { id: string; created: boolean; title: string; amount: number; base_currency: string };
 
-const USER_COLS = "id,tg_id,tg_username,is_allowed,is_admin,onboarded_at,base_currency,pending_action";
+const USER_COLS = "id,tg_id,tg_username,is_allowed,is_admin,onboarded_at,base_currency,pending_action,terms_accepted_at";
 
 // deno-lint-ignore no-explicit-any
 function check<T>(r: { data: T; error: any }): T {
@@ -139,6 +143,9 @@ export function supabaseDb(sb: SupabaseClient): Db {
     },
     async recordRegular(userId, id) {
       return check(await sb.rpc("record_regular_payment", { p_user: userId, p_id: id })) as RecordedPayment | null;
+    },
+    async acceptTerms(userId, version) {
+      return check(await sb.rpc("accept_terms", { p_user: userId, p_version: version })) === true;
     },
     async subscription(userId) {
       return check(await sb.rpc("api_subscription", { p_user: userId })) as Subscription;

@@ -68,6 +68,27 @@ const termsText = (miniappUrl?: string) =>
 const RECEIPT_PRO = "🧾 Чек по фото — функция Pro: пришли фото, и я запишу трату с суммой, магазином и датой. " +
   "Текстом и голосом записывать можно и так.";
 
+// редакция соглашения на terms.html: меняется вместе с текстом, чтобы было видно, что именно принято
+export const TERMS_VERSION = "2026-10-15";
+
+function termsPrompt(miniappUrl?: string): [string, Button[][]] {
+  const text = [
+    "👋 Привет! Это B&T Planner — планер, который сам раскладывает твои сообщения на дела, встречи, траты и заметки.",
+    "",
+    "Перед началом прочитай пользовательское соглашение и политику конфиденциальности. " +
+    "Нажимая «Принимаю», ты соглашаешься с ними.",
+    ...(miniappUrl ? [] : ["", "Тексты: /terms и /privacy"]),
+  ].join("\n");
+  const links: Button[][] = miniappUrl
+    ? [[{ text: "📄 Соглашение", url: doc(miniappUrl, "terms.html") },
+        { text: "🔒 Конфиденциальность", url: doc(miniappUrl, "privacy.html") }]]
+    : [];
+  return [text, [...links, [{ text: "✅ Принимаю", callback_data: "terms" }]]];
+}
+
+const CURRENCY_PICK = "Выбери базовую валюту — в ней будут все итоги и лимиты. Менять её потом непросто.\n\n" +
+  "Как я храню твои данные — /privacy, условия и тарифы — /terms";
+
 const SAVE_FAILED = "😵 Не смог принять запись — база не ответила. Пришли её, пожалуйста, ещё раз.";
 
 const currencyButtons = (): Button[][] => [
@@ -213,6 +234,13 @@ async function handleMessage(msg: any, d: Deps) {
     return;
   }
 
+  // Без принятого соглашения дальше не идём: ни валюта, ни записи
+  if (!user.terms_accepted_at) {
+    const [prompt, buttons] = termsPrompt(d.miniappUrl);
+    await d.tg.sendMessage(chatId, prompt, buttons);
+    return;
+  }
+
   if (!user.onboarded_at) {
     const code = text?.trim().toUpperCase();
     if (code && /^[A-Z]{3}$/.test(code)) {
@@ -229,12 +257,7 @@ async function handleMessage(msg: any, d: Deps) {
       }
       return;
     }
-    await d.tg.sendMessage(
-      chatId,
-      "Привет! Выбери базовую валюту — в ней будут все итоги и лимиты. Менять её потом непросто.\n\n" +
-        "Как я храню твои данные — /privacy, условия и тарифы — /terms",
-      currencyButtons(),
-    );
+    await d.tg.sendMessage(chatId, CURRENCY_PICK, currencyButtons());
     return;
   }
 
@@ -360,6 +383,14 @@ async function handleCallback(cq: any, d: Deps) {
   if (cq.data === "pro") {
     await d.tg.answerCallback(cq.id);
     return await sendPlans(user, chatId, d);
+  }
+  if (cq.data === "terms") {
+    await d.db.acceptTerms(user.id, TERMS_VERSION);
+    await d.tg.answerCallback(cq.id, "Спасибо!");
+    await d.tg.editMessage(chatId, messageId, "✅ Соглашение и политика конфиденциальности приняты. Тексты всегда здесь: /terms");
+    // повторное нажатие на старую кнопку не должно второй раз спрашивать валюту
+    if (!user.onboarded_at) await d.tg.sendMessage(chatId, CURRENCY_PICK, currencyButtons());
+    return;
   }
   const [action, ...rest] = String(cq.data ?? "").split(":");
 
