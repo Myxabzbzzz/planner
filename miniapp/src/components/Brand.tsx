@@ -2,17 +2,21 @@ import { useRef, useState } from "react";
 import { thud } from "../telegram";
 
 /**
- * Марка: три полосы убывающей высоты. Читается как столбики прогресса —
- * и это же полосы тигра. Единственная заметная отсылка; всё остальное мельче.
+ * Марка «bars»: силуэт медведя, внутри три тигриные полосы. Полосы — не краска, а прорезь
+ * цветом фона, поэтому марка сама подстраивается под тему (в public/logo-*.svg — по файлу на тему).
  */
 export function Mark({ size = 28 }: { size?: number }) {
   return (
     <svg className="mark" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
-      <rect width="48" height="48" rx="12" fill="var(--surface-2)" />
       <g fill="var(--accent)">
-        <rect x="12" y="28" width="6" height="10" rx="3" />
-        <rect x="21" y="20" width="6" height="18" rx="3" />
-        <rect x="30" y="10" width="6" height="28" rx="3" />
+        <circle cx="12" cy="15" r="6.6" />
+        <circle cx="36" cy="15" r="6.6" />
+        <ellipse cx="24" cy="29" rx="16" ry="13.6" />
+      </g>
+      <g fill="var(--bg)">
+        <rect x="15.4" y="19.5" width="4.4" height="10.5" rx="2.2" />
+        <rect x="21.8" y="19.5" width="4.4" height="15" rx="2.2" />
+        <rect x="28.2" y="19.5" width="4.4" height="10.5" rx="2.2" />
       </g>
     </svg>
   );
@@ -44,7 +48,7 @@ export function Masthead({ name, onProfile }: { name: string; onProfile: () => v
         onPointerLeave={cancel}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <Mark size={30} />
+        <Mark size={34} />
       </button>
       <span className="wordmark">
         <span className="wm-name">B&amp;T Planner</span>
