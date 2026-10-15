@@ -104,7 +104,11 @@ export type ReviewsResp = { reviews: Review[] };
 export type CurrencyChange = { converted: number; skipped: number; from: string; to: string };
 
 /** GET /subscription — api_subscription + тарифы. pro_until — локальное время, null у «навсегда» и Free. */
-export type SubPlan = { id: "month" | "year" | "lifetime"; title: string; stars: number; recurring: boolean };
+export type SubPlan = {
+  id: "month" | "year" | "lifetime"; title: string; stars: number; recurring: boolean;
+  /** «4 месяца в подарок», «осталось 12 из 100 мест» */
+  note?: string | null;
+};
 export type Subscription = {
   status: "free" | "trial" | "pro" | "lifetime";
   pro_until: string | null;

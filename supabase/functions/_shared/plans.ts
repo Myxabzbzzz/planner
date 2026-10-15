@@ -14,6 +14,23 @@ export const PLANS = {
 export type Plan = keyof typeof PLANS;
 export const PLAN_IDS = Object.keys(PLANS) as Plan[];
 
+/** «Навсегда» продаётся только первым покупателям — дефицит честный, мест правда столько. */
+export const FOUNDER_SEATS = 100;
+
+/** Тарифы, которые ещё можно купить: когда места Founder кончились, его не показываем. */
+export const plansOnSale = (founderSold: number): Plan[] =>
+  PLAN_IDS.filter((p) => p !== "lifetime" || founderSold < FOUNDER_SEATS);
+
+/** Сколько месяцев из двенадцати год даёт бесплатно по сравнению с помесячной оплатой. */
+export const yearGiftMonths = () => Math.floor(12 - PLANS.year.stars / PLANS.month.stars);
+
+/** Короткая приписка к тарифу: выгода года и остаток мест Founder. */
+export function planNote(plan: Plan, founderSold: number): string | null {
+  if (plan === "year") return `${yearGiftMonths()} месяца в подарок`;
+  if (plan === "lifetime") return `осталось ${Math.max(FOUNDER_SEATS - founderSold, 0)} из ${FOUNDER_SEATS} мест`;
+  return null;
+}
+
 export const PRO_PITCH = "Безлимит голосовых и вопросов к ИИ, итоги недели по воскресеньям.";
 
 export const planPayload = (plan: Plan) => `pro:${plan}`;
@@ -34,8 +51,8 @@ export function invoiceFor(plan: Plan): Invoice {
   };
 }
 
-/** Ссылки на оплату всех тарифов, в порядке PLAN_IDS. */
-export async function invoiceLinks(pay: Payments): Promise<Record<Plan, string>> {
-  const links = await Promise.all(PLAN_IDS.map((p) => pay.createInvoiceLink(invoiceFor(p))));
-  return Object.fromEntries(PLAN_IDS.map((p, i) => [p, links[i]])) as Record<Plan, string>;
+/** Ссылки на оплату тарифов, в том же порядке. */
+export async function invoiceLinks(pay: Payments, plans: Plan[] = PLAN_IDS): Promise<Partial<Record<Plan, string>>> {
+  const links = await Promise.all(plans.map((p) => pay.createInvoiceLink(invoiceFor(p))));
+  return Object.fromEntries(plans.map((p, i) => [p, links[i]]));
 }

@@ -35,6 +35,8 @@ export type Subscription = {
   pro_until: string | null;
   ai_left: number | null;
   ai_per_day: number;
+  /** сколько человек уже купили «навсегда» — места Founder ограничены */
+  founder_sold?: number;
 };
 
 export interface Db {

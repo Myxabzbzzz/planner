@@ -279,8 +279,8 @@ export const devFetch: typeof fetch = async (input, init) => {
       status: "trial", pro_until: "2026-10-15T10:00", ai_left: null, ai_per_day: 3,
       plans: [
         { id: "month", title: "Pro · месяц", stars: 150, recurring: true },
-        { id: "year", title: "Pro · год", stars: 1100, recurring: false },
-        { id: "lifetime", title: "Founder · навсегда", stars: 2200, recurring: false },
+        { id: "year", title: "Pro · год", stars: 1100, recurring: false, note: "4 месяца в подарок" },
+        { id: "lifetime", title: "Founder · навсегда", stars: 2200, recurring: false, note: "осталось 63 из 100 мест" },
       ],
     });
   }

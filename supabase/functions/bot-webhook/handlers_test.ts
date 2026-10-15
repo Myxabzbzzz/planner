@@ -604,6 +604,24 @@ Deno.test("pre-checkout: our plan from a known user is approved, anything else i
   assertEquals(pay.prechecks.map(([id, ok]) => [id, ok]), [["q1", true], ["q2", false], ["q3", false]]);
 });
 
+Deno.test("Founder: /pro shows the seats left, hides the plan when sold out and declines a stale link", async () => {
+  const { db, tg, pay, deps } = paySetup();
+  onboarded(db);
+  db.sub = { ...db.sub, founder_sold: 97 };
+  await handleUpdate(msg(ADMIN, { text: "/pro" }), deps);
+  const labels = tg.sent.at(-1)!.buttons!.flat().map((b) => b.text);
+  assert(labels[1].includes("4 месяца в подарок"));
+  assert(labels[2].includes("осталось 3 из 100 мест"));
+
+  db.sub = { ...db.sub, founder_sold: 100 };
+  pay.invoices = [];
+  await handleUpdate(msg(ADMIN, { text: "/pro" }), deps);
+  assertEquals(pay.invoices.map((i) => i.payload), ["pro:month", "pro:year"]);
+  await handleUpdate({ update_id: nextUpdate++, pre_checkout_query: { id: "q9", from: { id: ADMIN }, currency: "XTR", total_amount: 2200, invoice_payload: "pro:lifetime" } }, deps);
+  assertEquals(pay.prechecks.at(-1)!.slice(0, 2), ["q9", false]);
+  assert(pay.prechecks.at(-1)![2]!.includes("Founder"));
+});
+
 Deno.test("successful payment turns Pro on once, even if Telegram repeats it", async () => {
   const { db, tg, deps } = paySetup();
   onboarded(db);

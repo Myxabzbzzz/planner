@@ -303,6 +303,16 @@ h2 {
 .card.flush > h3,
 .card.flush > .card-foot { padding: 0 16px; }
 /* ссылка-кнопка внутри текста: соглашение, тарифы */
+/* кнопка тарифа: цена, под ней приписка — «4 месяца в подарок», «осталось 12 из 100 мест» */
+.btn.plan { flex-direction: column; gap: 0; padding: 8px 20px; }
+.plan-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: .75;
+}
+
 button.link {
   appearance: none;
   border: 0;

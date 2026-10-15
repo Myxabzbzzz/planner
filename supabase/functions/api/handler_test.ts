@@ -611,6 +611,24 @@ Deno.test("GET /subscription returns the status with the plans and their Stars p
   assertEquals(r.body.plans.map((p: { id: string }) => p.id), ["month", "year", "lifetime"]);
   assertEquals(r.body.plans[0].recurring, true);
   assertEquals(r.body.plans[2].recurring, false);
+  assertEquals(r.body.plans.map((p: { note: string | null }) => p.note),
+    [null, "4 месяца в подарок", "осталось 100 из 100 мест"]);
+});
+
+Deno.test("Founder disappears from /subscription and its invoice is refused once 100 seats are sold", async () => {
+  const soldOut = () => {
+    const db = new FakeApiDb();
+    db.rpc = () => Promise.resolve({ status: "free", pro_until: null, ai_left: 3, ai_per_day: 3, founder_sold: 100 });
+    return db;
+  };
+  const r = await run(await req("/subscription"), soldOut());
+  assertEquals(r.body.plans.map((p: { id: string }) => p.id), ["month", "year"]);
+
+  const pay = new FakePay();
+  const res = await handleApi(await req("/subscription/invoice", { method: "POST", body: { plan: "lifetime" } }),
+    { db: soldOut(), botToken: TOKEN, nowSec: () => NOW, pay });
+  assertEquals([res.status, await res.json()], [409, { error: "sold_out" }]);
+  assertEquals(pay.invoices, []);
 });
 
 Deno.test("POST /subscription/invoice creates a Stars invoice link for the plan", async () => {

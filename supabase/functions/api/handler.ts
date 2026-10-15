@@ -1,6 +1,6 @@
 import type { ApiDb, InboxInsert } from "./db.ts";
 import { LIMITS } from "../_shared/limits.ts";
-import { invoiceFor, PLAN_IDS, PLANS, type Plan } from "../_shared/plans.ts";
+import { invoiceFor, PLANS, type Plan, planNote, plansOnSale } from "../_shared/plans.ts";
 import type { Files, Payments } from "../_shared/telegram.ts";
 import { type ExportData, exportFile, withColors } from "./export_book.ts";
 import { type Auth, MAX_AGE_READ, MAX_AGE_SENSITIVE, MAX_AGE_WRITE, verifyInitData } from "./initdata.ts";
@@ -554,6 +554,10 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
         const plan = (await readJson(req)).plan;
         if (!(typeof plan === "string" && Object.hasOwn(PLANS, plan))) throw new BadRequest();
         if (!d.pay) return json(503, { error: "payments_unavailable" });
+        if (plan === "lifetime") {
+          const sub = await d.db.call("api_subscription", [user.id]) as { founder_sold?: number } | null;
+          if (!plansOnSale(sub?.founder_sold ?? 0).includes("lifetime")) return json(409, { error: "sold_out" });
+        }
         return json(200, { url: await d.pay.createInvoiceLink(invoiceFor(plan as Plan)) });
       }
       const rev = new RegExp(`^/reviews/(${UUID})$`, "i").exec(path);
@@ -582,8 +586,10 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
     if (path === "/subscription") {
       const sub = await d.db.call("api_subscription", [user.id]);
       if (sub === null) return json(404, { error: "not_found" });
-      const plans = PLAN_IDS.map((id) => ({
+      const sold = Number((sub as { founder_sold?: number }).founder_sold ?? 0);
+      const plans = plansOnSale(sold).map((id) => ({
         id, title: PLANS[id].title, stars: PLANS[id].stars, recurring: "subscriptionPeriod" in PLANS[id],
+        note: planNote(id, sold),
       }));
       return json(200, { ...(sub as Record<string, unknown>), plans });
     }

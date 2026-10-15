@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Api } from "../api";
+import { type Api, ApiError } from "../api";
 import { useLoad } from "../load";
 import { saveError } from "../saveError";
 import { planPrice, subStatus } from "../subscription";
@@ -37,7 +37,12 @@ export function SubscriptionSheet({ api, onClose, onChanged }: { api: Api; onClo
       }
     } catch (e) {
       hapticResult(false);
-      setNote(saveError(e));
+      if (e instanceof ApiError && e.status === 409) {
+        setNote("Места Founder закончились — остались месяц и год.");
+        reload();
+      } else {
+        setNote(saveError(e));
+      }
     } finally {
       setBusy(null);
     }
@@ -63,9 +68,10 @@ export function SubscriptionSheet({ api, onClose, onChanged }: { api: Api; onClo
             <>
               <div className="field" style={{ marginTop: 20 }}><span>Тарифы</span></div>
               {data.plans.map((p) => (
-                <button type="button" key={p.id} className={p.id === "month" ? "btn wide block" : "btn ghost wide"}
+                <button type="button" key={p.id} className={p.id === "month" ? "btn wide block plan" : "btn ghost wide plan"}
                   style={{ marginTop: 8 }} disabled={busy !== null} onClick={() => void buy(p)}>
                   {busy === p.id ? "Открываю оплату…" : `${p.title} — ${planPrice(p)}`}
+                  {p.note && busy !== p.id && <span className="plan-note">{p.note}</span>}
                 </button>
               ))}
               <div className="card-foot">

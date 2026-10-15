@@ -1,6 +1,6 @@
 import type { Db, Subscription, User } from "./db.ts";
 import type { Button, Payments, Tg } from "../_shared/telegram.ts";
-import { invoiceLinks, PLAN_IDS, PLANS, planFromPayload, PRO_PITCH } from "../_shared/plans.ts";
+import { invoiceLinks, planFromPayload, planNote, PLANS, plansOnSale, PRO_PITCH } from "../_shared/plans.ts";
 import { MAX_VOICE_SEC, TOO_LONG_VOICE, TOO_MANY } from "../_shared/limits.ts";
 
 import type { MenuDb } from "./menu_db.ts";
@@ -117,12 +117,17 @@ async function sendPlans(user: User, chatId: number, d: Deps) {
   const head = `⭐ B&T Planner Pro\n${PRO_PITCH}\n\n${statusLine(s)}`;
   if (s.status === "lifetime") return void await d.tg.sendMessage(chatId, head);
   if (!d.pay) return void await d.tg.sendMessage(chatId, `${head}\n\nОплата скоро появится.`);
-  const links = await invoiceLinks(d.pay);
+  const sold = s.founder_sold ?? 0;
+  const onSale = plansOnSale(sold);
+  const links = await invoiceLinks(d.pay, onSale);
   await d.tg.sendMessage(
     chatId,
     `${head}\n\nОплата звёздами Telegram. Месяц продлевается сам, отменить можно в любой момент в настройках Telegram.` +
       (d.miniappUrl ? `\nОплачивая, ты принимаешь условия: ${doc(d.miniappUrl, "terms.html")}` : ""),
-    PLAN_IDS.map((p) => [{ text: `${PLANS[p].title} — ${PLANS[p].stars} ⭐`, url: links[p] }]),
+    onSale.map((p) => {
+      const note = planNote(p, sold);
+      return [{ text: `${PLANS[p].title} — ${PLANS[p].stars} ⭐${note ? ` · ${note}` : ""}`, url: links[p]! }];
+    }),
   );
 }
 
@@ -133,6 +138,10 @@ async function handlePreCheckout(q: any, d: Deps) {
   const plan = planFromPayload(q.invoice_payload);
   const user = await d.db.findUser(q.from?.id);
   const ok = plan !== null && q.currency === "XTR" && q.total_amount === PLANS[plan].stars && user?.is_allowed === true;
+  // ссылка на «навсегда» могла остаться в старом сообщении /pro, когда места уже кончились
+  if (ok && plan === "lifetime" && !plansOnSale((await d.db.subscription(user!.id)).founder_sold ?? 0).includes(plan)) {
+    return void await d.pay.answerPreCheckoutQuery(q.id, false, "Места Founder закончились — открой /pro, там год и месяц.");
+  }
   await d.pay.answerPreCheckoutQuery(q.id, ok, ok ? undefined : "Не получилось оформить — открой /pro ещё раз.");
 }
 
