@@ -771,6 +771,7 @@ Deno.test("GET /subscription returns the status with the plans and their Stars p
   assertEquals(r.body.status, "free");
   assertEquals(r.body.plans.map((p: { id: string }) => p.id), ["month", "year", "lifetime"]);
   assertEquals(r.body.plans[0].recurring, true);
+  assertEquals(r.body.plans.map((p: { rub: number }) => p.rub), [280, 2090, 4190]);
   assertEquals(r.body.plans[2].recurring, false);
   assertEquals(r.body.plans.map((p: { note: string | null }) => p.note),
     [null, "4 месяца в подарок", "осталось 100 из 100 мест"]);

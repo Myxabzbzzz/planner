@@ -633,6 +633,8 @@ Deno.test("Founder: /pro shows the seats left, hides the plan when sold out and 
   await handleUpdate(msg(ADMIN, { text: "/pro" }), deps);
   const labels = tg.sent.at(-1)!.buttons!.flat().map((b) => b.text);
   assert(labels[1].includes("4 месяца в подарок"));
+  assert(labels[0].includes("280 ₽ · 150 ⭐"));
+  assert(labels[1].includes("2 090 ₽ · 1100 ⭐"));
   assert(labels[2].includes("осталось 3 из 100 мест"));
 
   db.sub = { ...db.sub, founder_sold: 100 };

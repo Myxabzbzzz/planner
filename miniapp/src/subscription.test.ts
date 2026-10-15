@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planPrice, proBanner, subStatus } from "./subscription";
+import { planDetails, planPrice, proBanner, subStatus } from "./subscription";
 
 const base = { pro_until: null, ai_left: null, ai_per_day: 3, plans: [] };
 
@@ -18,8 +18,12 @@ describe("subscription status", () => {
     expect(subStatus({ ...base, status: "lifetime" }).title).toBe("Pro навсегда");
   });
   it("plan price says how often it is charged", () => {
-    expect(planPrice({ id: "month", title: "Pro · месяц", stars: 150, recurring: true })).toBe("150 ⭐, автопродление");
-    expect(planPrice({ id: "lifetime", title: "Founder · навсегда", stars: 2200, recurring: false })).toBe("2200 ⭐ разово");
+    expect(planPrice({ id: "month", title: "Pro · месяц", stars: 150, recurring: true })).toBe("150 ⭐");
+    const year = { id: "year" as const, title: "Pro · год", stars: 1100, rub: 2090, recurring: false, note: "4 месяца в подарок" };
+    expect(planPrice(year)).toBe("2 090 ₽");
+    expect(planDetails(year)).toBe("1100 ⭐ · разово · 4 месяца в подарок");
+    expect(planDetails({ id: "month", title: "Pro · месяц", stars: 150, rub: 280, recurring: true })).toBe("150 ⭐ · автопродление");
+    expect(planDetails({ id: "lifetime", title: "Founder · навсегда", stars: 2200, recurring: false })).toBe("разово");
   });
 });
 

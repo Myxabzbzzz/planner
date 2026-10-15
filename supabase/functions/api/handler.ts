@@ -713,7 +713,7 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
       if (sub === null) return json(404, { error: "not_found" });
       const sold = Number((sub as { founder_sold?: number }).founder_sold ?? 0);
       const plans = plansOnSale(sold).map((id) => ({
-        id, title: PLANS[id].title, stars: PLANS[id].stars, recurring: "subscriptionPeriod" in PLANS[id],
+        id, title: PLANS[id].title, stars: PLANS[id].stars, rub: PLANS[id].rub, recurring: "subscriptionPeriod" in PLANS[id],
         note: planNote(id, sold),
       }));
       return json(200, { ...(sub as Record<string, unknown>), plans });

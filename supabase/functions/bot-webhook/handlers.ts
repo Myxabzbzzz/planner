@@ -1,6 +1,6 @@
 import type { Db, Subscription, User } from "./db.ts";
 import type { Button, Payments, Tg } from "../_shared/telegram.ts";
-import { invoiceLinks, planFromPayload, planNote, PLANS, plansOnSale, PRO_PITCH } from "../_shared/plans.ts";
+import { invoiceLinks, planFromPayload, planNote, planPriceText, PLANS, plansOnSale, PRO_PITCH } from "../_shared/plans.ts";
 import { MAX_VOICE_SEC, TOO_LONG_VOICE, TOO_MANY } from "../_shared/limits.ts";
 import { fmtAmount } from "../_shared/money.ts";
 
@@ -147,11 +147,11 @@ async function sendPlans(user: User, chatId: number, d: Deps) {
   const links = await invoiceLinks(d.pay, onSale);
   await d.tg.sendMessage(
     chatId,
-    `${head}\n\nОплата звёздами Telegram. Месяц продлевается сам, отменить можно в любой момент в настройках Telegram.` +
+    `${head}\n\nСейчас оплата звёздами Telegram, картой и СБП — скоро. Месяц продлевается сам, отменить можно в любой момент в настройках Telegram.` +
       (d.miniappUrl ? `\nОплачивая, ты принимаешь условия: ${doc(d.miniappUrl, "terms.html")}` : ""),
     onSale.map((p) => {
       const note = planNote(p, sold);
-      return [{ text: `${PLANS[p].title} — ${PLANS[p].stars} ⭐${note ? ` · ${note}` : ""}`, url: links[p]! }];
+      return [{ text: `${PLANS[p].title} — ${planPriceText(p)}${note ? ` · ${note}` : ""}`, url: links[p]! }];
     }),
   );
 }

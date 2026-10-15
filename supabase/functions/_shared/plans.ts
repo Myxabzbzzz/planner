@@ -5,11 +5,16 @@ import type { Invoice, Payments } from "./telegram.ts";
  * Месяц — подписка с автопродлением (Telegram умеет только 30 дней); год и «навсегда» — разовые покупки.
  * Цены подобраны под ≈280 ₽ / 2 090 ₽ / 4 190 ₽ — сверить с курсом звезды в @PremiumBot перед запуском.
  */
+// rub — цена в рублях, та же, что на pricing.html. Пока платят звёздами, показываем обе.
 export const PLANS = {
-  month: { stars: 150, title: "Pro · месяц", subscriptionPeriod: 2592000 },
-  year: { stars: 1100, title: "Pro · год" },
-  lifetime: { stars: 2200, title: "Founder · навсегда" },
+  month: { stars: 150, rub: 280, title: "Pro · месяц", subscriptionPeriod: 2592000 },
+  year: { stars: 1100, rub: 2090, title: "Pro · год" },
+  lifetime: { stars: 2200, rub: 4190, title: "Founder · навсегда" },
 } as const;
+
+/** «2 090 ₽ · 1100 ⭐» */
+export const planPriceText = (plan: Plan) =>
+  `${PLANS[plan].rub.toLocaleString("ru-RU").replace(/\s/g, " ")} ₽ · ${PLANS[plan].stars} ⭐`;
 
 export type Plan = keyof typeof PLANS;
 export const PLAN_IDS = Object.keys(PLANS) as Plan[];

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { type Api, ApiError } from "../api";
 import { useLoad } from "../load";
 import { saveError } from "../saveError";
-import { planPrice, subStatus } from "../subscription";
+import { planDetails, planPrice, subStatus } from "../subscription";
 import { hapticResult, openInvoice, openPage, tap } from "../telegram";
 import type { SubPlan } from "../types";
 import { ErrorCard, Loading } from "./States";
@@ -78,11 +78,11 @@ export function SubscriptionSheet({ api, onClose, onChanged }: { api: Api; onClo
                 <button type="button" key={p.id} className={p.id === "month" ? "btn wide block plan" : "btn ghost wide plan"}
                   style={{ marginTop: 8 }} disabled={busy !== null} onClick={() => void buy(p)}>
                   {busy === p.id ? "Открываю оплату…" : `${p.title} — ${planPrice(p)}`}
-                  {p.note && busy !== p.id && <span className="plan-note">{p.note}</span>}
+                  {busy !== p.id && <span className="plan-note">{planDetails(p)}</span>}
                 </button>
               ))}
               <div className="card-foot">
-                Оплата звёздами Telegram. Месяц продлевается сам — отменить можно в любой момент в настройках Telegram.
+                Сейчас оплата звёздами Telegram, картой и СБП — скоро. Месяц продлевается сам — отменить можно в любой момент в настройках Telegram.
                 {" "}Оплачивая, ты принимаешь{" "}
                 <button type="button" className="link" onClick={() => openPage("terms.html")}>пользовательское соглашение</button>.
               </div>
