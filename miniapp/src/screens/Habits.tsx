@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import type { Api } from "../api";
+import { ApiError, needsPro, type Api } from "../api";
 import { Check } from "../components/Check";
 import { HabitGrid } from "../components/HabitGrid";
 import { HabitSheet } from "../components/ItemSheets";
 import { Meter } from "../components/Meter";
 import { Card, Empty, ErrorCard, Loading } from "../components/States";
 import { todayIso } from "../format";
+import { FREEZE_LIMIT, rescuableDay } from "../habitFreeze";
 import { habitView } from "../habitView";
+import { saveError } from "../saveError";
 import { weekProgress, weeksMet } from "../habitWeek";
 import { useLoad } from "../load";
 import { hapticResult } from "../telegram";
@@ -15,14 +17,31 @@ import type { Habit, Me } from "../types";
 
 const WEEKS = 8;
 
-export function Habits({ api, me, refresh = 0, onAdd }: {
+export function Habits({ api, me, refresh = 0, onAdd, onPro }: {
   api: Api; me: Me; refresh?: number; onAdd: () => void;
+  /** заморозка и статистика — Pro */
+  onPro: () => void;
 }) {
   const { data, error, loading, reload } = useLoad(() => api.habits(WEEKS), [api], refresh);
   const { over, toggle, reset } = useToggles();
   useEffect(reset, [data, reset]);
   const [editing, setEditing] = useState<Habit | null>(null);
   const today = todayIso(me.tz);
+  const [freezeNote, setFreezeNote] = useState<{ id: string; text: string } | null>(null);
+
+  /** «Сохранить серию»: заморозить пропущенный вчерашний день (Pro). */
+  const freeze = async (id: string, date: string) => {
+    setFreezeNote(null);
+    try {
+      await api.freezeHabit(id, date);
+      hapticResult(true);
+      reload();
+    } catch (e) {
+      hapticResult(false);
+      if (needsPro(e)) return onPro();
+      setFreezeNote({ id, text: e instanceof ApiError && e.status === 409 ? FREEZE_LIMIT : saveError(e) });
+    }
+  };
 
   /** Отметка любого дня, не только сегодняшнего: воркер всегда ставил лог на сегодня. */
   const markDay = async (id: string, date: string, done: boolean) => {
@@ -53,6 +72,7 @@ export function Habits({ api, me, refresh = 0, onAdd }: {
         const v = habitView(h, over[h.id]);
         const week = weekProgress(v.days, h.target_per_week);
         const metWeeks = weeksMet(v.days, h.target_per_week);
+        const rescue = rescuableDay(v.days);
         return (
           <Card key={h.id}>
             <div className="row" style={{ padding: 0, borderTop: 0 }}>
@@ -87,6 +107,14 @@ export function Habits({ api, me, refresh = 0, onAdd }: {
               </div>
             </div>
 
+            {rescue && (
+              <div className="rescue">
+                <span className="grow">Вчера пропущено — серия прервалась.</span>
+                <button type="button" className="pill on" onClick={() => void freeze(h.id, rescue)}>Сохранить серию</button>
+              </div>
+            )}
+            {freezeNote?.id === h.id && <div className="sub danger">{freezeNote.text}</div>}
+
             <div style={{ marginTop: 12 }}>
               <HabitGrid days={v.days} today={today} onToggle={(date, done) => void markDay(h.id, date, done)} />
             </div>
@@ -97,7 +125,7 @@ export function Habits({ api, me, refresh = 0, onAdd }: {
 
       {editing && (
         <HabitSheet api={api} item={editing} onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); reload(); }} />
+          onSaved={() => { setEditing(null); reload(); }} onPro={() => { setEditing(null); onPro(); }} />
       )}
     </>
   );

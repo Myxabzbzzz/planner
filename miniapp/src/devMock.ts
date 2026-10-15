@@ -47,6 +47,11 @@ function data() {
     { id: "h3", name: "Без сахара", target_per_week: 7, days: habitDays(0.7, true), streak: 14, done_today: true },
     { id: "h4", name: "10 000 шагов", target_per_week: 4, days: habitDays(0.45, false), streak: 0, done_today: false },
   ];
+  // для показа: у «Чтения» вчера пропуск после отмеченного дня (кнопка «Сохранить серию»),
+  // у «Зарядки» один замороженный день
+  habits[1].days[26] = { ...habits[1].days[26], done: false };
+  habits[1].days[25] = { ...habits[1].days[25], done: true };
+  habits[0].days[20] = { ...habits[0].days[20], done: false, frozen: true } as typeof habits[0]["days"][number];
   return { today, week, events, tasks, habits };
 }
 
@@ -286,6 +291,12 @@ export const devFetch: typeof fetch = async (input, init) => {
   }
   // ?mock=free — как видит экран человек без Pro
   const free = location.search.includes("mock=free");
+  if (/^\/habits\/[^/]+\/stats$/.test(p)) {
+    return json(free ? { locked: true } : {
+      streak: 9, best_streak: 23, done_30: 24, rate_30: 80, done_90: 71, total: 186,
+      by_weekday: [11, 12, 10, 11, 9, 5, 4], freezes_left: 1,
+    });
+  }
   if (p === "/calendar") {
     return json(free ? { locked: true } : { url: "https://izyysokbzcveohrfrtsn.supabase.co/functions/v1/calendar/3f9a1c2b7d4e8f60a1b2c3d4e5f60718293a4b5c6d7e8f90.ics" });
   }

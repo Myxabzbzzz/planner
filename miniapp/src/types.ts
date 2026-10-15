@@ -34,7 +34,8 @@ export type MoneyResp = {
   operations_total?: number;
   operations_next_before?: string | null;
 };
-export type HabitDay = { date: string; done: boolean };
+/** frozen — день заморожен (Pro): держит серию, но не считается выполненным */
+export type HabitDay = { date: string; done: boolean; frozen?: boolean };
 export type Habit = {
   id: string; name: string; target_per_week: number; days: HabitDay[]; streak: number; done_today: boolean;
 };
@@ -136,3 +137,12 @@ export type RegularResp = { base_currency: string; monthly_total: number; items:
 export type NewRegular = { title: string; amount: number; day: number; category?: string };
 
 export type CalendarResp = { url: string } | { locked: true };
+
+export type HabitStats = {
+  streak: number; best_streak: number; done_30: number; rate_30: number; done_90: number; total: number;
+  /** пн…вс за 12 недель */
+  by_weekday: number[];
+  freezes_left: number;
+};
+export type HabitStatsResp = HabitStats | { locked: true };
+

@@ -129,7 +129,9 @@ export default function App() {
             <Money api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("expense")}
             onSettings={openSettings} onBudgets={() => setBudgetsOpen(true)} onPro={() => setProOpen(true)} />
         )}
-        {tab === "habits" && <Habits api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("habit")} />}
+        {tab === "habits" && (
+          <Habits api={api} me={me.data} refresh={refresh} onAdd={() => setAdding("habit")} onPro={() => setProOpen(true)} />
+        )}
         {tab === "notes" && <Notes api={api} refresh={refresh} onAdd={() => setAdding("note")} />}
         {tab === "profile" && (
           <Profile api={api} refresh={refresh} onSettings={openSettings} onAccount={openAccount}

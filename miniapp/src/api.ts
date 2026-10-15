@@ -3,7 +3,7 @@ import type { OpEdit, OpPatch } from "./opEdit";
 import { baseMime } from "./recorder";
 import { flattenReviews, type ReviewsWire } from "./reviews";
 import type {
-  BudgetsResp, CalendarResp, Categories, CategoryColor, Created, CurrencyChange, EventsResp, ForecastResp, HabitsResp, InboxStatus, Me, MoneyResp, NewRegular, NotesResp, NotifyKind, OperationsResp, Profile, RegularResp, ReviewKind, ReviewsResp, Sent, Settings, SubPlan, Subscription, TasksResp, Today,
+  BudgetsResp, CalendarResp, Categories, CategoryColor, Created, CurrencyChange, EventsResp, ForecastResp, HabitsResp, HabitStatsResp, InboxStatus, Me, MoneyResp, NewRegular, NotesResp, NotifyKind, OperationsResp, Profile, RegularResp, ReviewKind, ReviewsResp, Sent, Settings, SubPlan, Subscription, TasksResp, Today,
 } from "./types";
 import type { NewEvent, NewHabit, NewNote, NewTask, NewTransaction } from "./newItem";
 
@@ -180,6 +180,9 @@ export function makeApi(
     subscription: () => get<Subscription>("/subscription"),
     forecast: () => get<ForecastResp>("/forecast"),
     calendar: () => get<CalendarResp>("/calendar"),
+    habitStats: (id: string) => get<HabitStatsResp>(`/habits/${id}/stats`),
+    freezeHabit: (id: string, date: string) => postJson<{ ok: true }>(`/habits/${id}/freeze`, { date }),
+    unfreezeHabit: (id: string, date: string) => postJson<{ ok: true }>(`/habits/${id}/unfreeze`, { date }),
     resetCalendar: () => postJson<{ url: string }>("/calendar/reset", {}),
     regular: () => get<RegularResp>("/regular"),
     addRegular: (body: NewRegular) => postJson<{ id: string }>("/regular", body),

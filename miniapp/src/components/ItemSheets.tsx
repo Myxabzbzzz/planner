@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { Api } from "../api";
 import { buildEventPatch, buildHabitPatch, buildNotePatch, buildTaskPatch, splitDue, type NoteKind } from "../itemEdit";
 import { type Repeat, repeatLabel } from "../repeat";
+import { HabitStatsBlock } from "./HabitStatsBlock";
 import { IconRepeat } from "./Icons";
 import { saveError } from "../saveError";
 import { hapticResult } from "../telegram";
@@ -202,9 +203,9 @@ export function NoteSheet({ api, item, onClose, onSaved }: Base<{ id: string; te
 export const TARGETS = [1, 2, 3, 4, 5, 6, 7];
 export const targetLabel = (n: number) => (n === 7 ? "каждый день" : `${n}`);
 
-export function HabitSheet({ api, item, onClose, onSaved }: Base<{
+export function HabitSheet({ api, item, onClose, onSaved, onPro }: Base<{
   id: string; name: string; target_per_week: number;
-}>) {
+}> & { onPro?: () => void }) {
   const [name, setName] = useState(item.name);
   const [target, setTarget] = useState(item.target_per_week);
   const { busy, error, run } = useRun(onSaved);
@@ -235,6 +236,7 @@ export function HabitSheet({ api, item, onClose, onSaved }: Base<{
         </div>
       </div>
       <div className="card-foot">Неделя считается выполненной, когда отметок не меньше цели.</div>
+      {onPro && <HabitStatsBlock api={api} id={item.id} onPro={onPro} />}
     </Sheet>
   );
 }

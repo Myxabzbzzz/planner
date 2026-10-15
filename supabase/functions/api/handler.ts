@@ -279,6 +279,12 @@ const CREATE_ROUTES: Record<string, [string, (b: Record<string, unknown>, u: str
   "/regular": ["add_regular_payment", newRegular],
 };
 
+function habitFreezeDay(b: Record<string, unknown>, u: string, id: string): unknown[] {
+  const date = optDate(b.date);
+  if (date === null) throw new BadRequest();
+  return [u, id, date];
+}
+
 function habitDay(b: Record<string, unknown>, u: string, id: string): unknown[] {
   const date = optDate(b.date);
   if (date === null) throw new BadRequest();
@@ -356,6 +362,8 @@ const POST_ROUTES: [RegExp, string, BodyParser][] = [
   [new RegExp(`^/recurrences/(${UUID})/stop$`, "i"), "stop_recurrence", (_b, u, id) => [u, id]],
   // и сказать «не регулярный» тоже
   [new RegExp(`^/regular/(${UUID})/dismiss$`, "i"), "set_regular_payment", (_b, u, id) => [u, id, "dismissed"]],
+  // разморозить — всем: заморозка, сделанная в Pro, не должна застревать
+  [new RegExp(`^/habits/(${UUID})/unfreeze$`, "i"), "unfreeze_habit_day", habitFreezeDay],
   [/^\/settings\/limit$/, "api_set_limit", limitArg],
   [/^\/settings\/notify$/, "api_set_notify", notifyArg],
   [new RegExp(`^/habits/(${UUID})/day$`, "i"), "set_habit_on", habitDay],
@@ -638,6 +646,17 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
         const id = await d.db.call(cr.fn, cr.args);
         return typeof id === "string" ? json(201, { id }) : json(404, { error: "not_found" });
       }
+      // Заморозка дня привычки — Pro. Ответ базы — код: «уже отмечен», «лимит» и т. п.
+      const freeze = new RegExp(`^/habits/(${UUID})/freeze$`, "i").exec(path);
+      if (freeze) {
+        const date = optDate((await readJson(req)).date);
+        if (date === null) throw new BadRequest();
+        if (!await isPro(d.db, user.id)) return PRO_REQUIRED();
+        const code = await d.db.call("freeze_habit_day", [user.id, freeze[1].toLowerCase(), date]);
+        return code === "ok" ? json(200, { ok: true })
+          : code === "not_found" ? json(404, { error: "not_found" })
+          : json(409, { error: String(code) });
+      }
       if (path === "/calendar/reset") {
         if (!await isPro(d.db, user.id)) return PRO_REQUIRED();
         if (!d.calendarBase) return json(503, { error: "calendar_unavailable" });
@@ -667,6 +686,12 @@ async function serve(req: Request, d: ApiDeps, url: URL, path: string, auth: Aut
       if (!d.calendarBase) return json(503, { error: "calendar_unavailable" });
       const r = await d.db.call("api_calendar", [user.id]) as { token: string } | null;
       return r === null ? json(404, { error: "not_found" }) : json(200, { url: `${d.calendarBase}${r.token}.ics` });
+    }
+    const stats = new RegExp(`^/habits/(${UUID})/stats$`, "i").exec(path);
+    if (stats) {
+      if (!await isPro(d.db, user.id)) return json(200, { locked: true });
+      const data = await d.db.call("api_habit_stats", [user.id, stats[1].toLowerCase()]);
+      return data === null ? json(404, { error: "not_found" }) : json(200, data);
     }
     if (path === "/forecast") {
       if (!await isPro(d.db, user.id)) return json(200, { locked: true });

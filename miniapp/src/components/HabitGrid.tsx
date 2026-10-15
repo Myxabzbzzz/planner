@@ -16,6 +16,7 @@ export function HabitGrid({ days, today, onToggle }: {
   onToggle?: (date: string, done: boolean) => void;
 }) {
   const cols = weekColumns(days.map((d) => ({ date: d.date, value: d.done })));
+  const frozen = new Set(days.filter((d) => d.frozen && !d.done).map((d) => d.date));
   return (
     <div className="hgrid-wrap">
       <div className="hgrid">
@@ -28,7 +29,8 @@ export function HabitGrid({ days, today, onToggle }: {
               if (cell === null) return <div key={wd} className="hcell future" style={{ opacity: 0 }} />;
               const done = cell.value;
               const isFuture = cell.date > today;
-              const cls = ["hcell", done ? "on" : "", cell.date === today ? "today" : "", isFuture ? "future" : ""]
+              const cls = ["hcell", done ? "on" : "", frozen.has(cell.date) ? "frozen" : "",
+                cell.date === today ? "today" : "", isFuture ? "future" : ""]
                 .filter(Boolean).join(" ");
               if (!onToggle || isFuture) return <div key={wd} className={cls} title={fmtDayTitle(cell.date)} />;
               return (
@@ -37,7 +39,7 @@ export function HabitGrid({ days, today, onToggle }: {
                   key={wd}
                   className={cls}
                   aria-pressed={done}
-                  aria-label={`${fmtDayTitle(cell.date)} — ${done ? "отмечено" : "не отмечено"}`}
+                  aria-label={`${fmtDayTitle(cell.date)} — ${done ? "отмечено" : frozen.has(cell.date) ? "заморожено" : "не отмечено"}`}
                   onClick={() => onToggle(cell.date, !done)}
                 />
               );

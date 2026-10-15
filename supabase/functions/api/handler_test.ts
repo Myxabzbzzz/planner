@@ -471,6 +471,28 @@ Deno.test("календарь: ссылка только в Pro, сброс вы
   assertEquals((await call("/calendar", true, "GET", null)).status, 503);
 });
 
+Deno.test("привычки: заморозка и статистика — Pro, разморозка — всем", async () => {
+  const id = "11111111-2222-3333-4444-555555555555";
+  const mk = async (path: string, pro: boolean, body?: unknown, answer: unknown = "ok") => {
+    const db = new FakeApiDb();
+    db.pro = pro;
+    db.rpc = async (fn: string, args: unknown[]) => {
+      db.calls.push([fn, args]);
+      return fn === "api_habit_stats" ? { best_streak: 12 } : answer;
+    };
+    return await run(await req(path, body === undefined ? {} : { method: "POST", body }), db);
+  };
+  const ok = await mk(`/habits/${id}/freeze`, true, { date: "2026-10-14" });
+  assertEquals([ok.status, ok.db.calls], [200, [["freeze_habit_day", ["u1", id, "2026-10-14"]]]]);
+  assertEquals((await mk(`/habits/${id}/freeze`, true, { date: "2026-10-14" }, "limit")).body, { error: "limit" });
+  assertEquals((await mk(`/habits/${id}/freeze`, false, { date: "2026-10-14" })).status, 402);
+  assertEquals((await mk(`/habits/${id}/freeze`, true, {})).status, 400);
+  const un = await mk(`/habits/${id}/unfreeze`, false, { date: "2026-10-14" }, true);
+  assertEquals([un.status, un.db.calls], [200, [["unfreeze_habit_day", ["u1", id, "2026-10-14"]]]]);
+  assertEquals((await mk(`/habits/${id}/stats`, true)).body, { best_streak: 12 });
+  assertEquals((await mk(`/habits/${id}/stats`, false)).body, { locked: true });
+});
+
 Deno.test("POST /events requires a real date and time", async () => {
   const mk = async (body: unknown) => {
     const db = new FakeApiDb();
