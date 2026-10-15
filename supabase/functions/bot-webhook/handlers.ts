@@ -114,7 +114,7 @@ function statusLine(s: Subscription): string {
 
 async function sendPlans(user: User, chatId: number, d: Deps) {
   const s = await d.db.subscription(user.id);
-  const head = `⭐ Планер Pro\n${PRO_PITCH}\n\n${statusLine(s)}`;
+  const head = `⭐ B&T Planner Pro\n${PRO_PITCH}\n\n${statusLine(s)}`;
   if (s.status === "lifetime") return void await d.tg.sendMessage(chatId, head);
   if (!d.pay) return void await d.tg.sendMessage(chatId, `${head}\n\nОплата скоро появится.`);
   const links = await invoiceLinks(d.pay);

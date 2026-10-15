@@ -38,7 +38,7 @@ export function Masthead({ name, onProfile }: { name: string; onProfile: () => v
     <header className="masthead">
       <button
         type="button"
-        aria-label="Планер"
+        aria-label="B&T Planner"
         onPointerDown={start}
         onPointerUp={cancel}
         onPointerLeave={cancel}
@@ -47,7 +47,7 @@ export function Masthead({ name, onProfile }: { name: string; onProfile: () => v
         <Mark size={30} />
       </button>
       <span className="wordmark">
-        <span className="wm-name">Планер</span>
+        <span className="wm-name">B&amp;T Planner</span>
         <span className="wm-sub">вся жизнь в одном месте</span>
       </span>
       <button type="button" className="avatar" onClick={onProfile} aria-label="Профиль">{initial}</button>

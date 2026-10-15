@@ -46,7 +46,7 @@ export function SubscriptionSheet({ api, onClose, onChanged }: { api: Api; onClo
 
   const st = data ? subStatus(data) : null;
   return (
-    <Sheet title="Планер Pro" busy={busy !== null} onClose={onClose}>
+    <Sheet title="B&T Planner Pro" busy={busy !== null} onClose={onClose}>
       {loading && !data && <Loading />}
       {!!error && !data && <ErrorCard onRetry={reload} />}
       {data && st && (

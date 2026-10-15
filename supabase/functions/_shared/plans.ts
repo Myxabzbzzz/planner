@@ -26,7 +26,7 @@ export function planFromPayload(payload: unknown): Plan | null {
 export function invoiceFor(plan: Plan): Invoice {
   const p = PLANS[plan];
   return {
-    title: `Планер ${p.title}`,
+    title: `B&T Planner ${p.title}`,
     description: PRO_PITCH,
     payload: planPayload(plan),
     stars: p.stars,
