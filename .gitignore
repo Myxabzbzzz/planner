@@ -13,3 +13,7 @@ supabase/functions/.env
 *.egg-info/
 docs/superpowers/
 supabase/functions/.env.test
+
+# нагрузочный тест: подписи и результаты прогонов
+loadtest/users.json
+loadtest/results/

@@ -1,0 +1,21 @@
+global:
+  # раз в 5 секунд — чтобы на графике было видно, как сервис реагирует на рост нагрузки
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: api
+    static_configs:
+      - targets: ["metrics-proxy:8787"]
+
+  - job_name: containers
+    static_configs:
+      - targets: ["docker-stats:9417"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
