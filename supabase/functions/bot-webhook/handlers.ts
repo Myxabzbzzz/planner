@@ -116,8 +116,21 @@ async function trialNote(userId: string, d: Deps): Promise<string> {
 const uname = (from: { username?: unknown }): string | null =>
   from.username ? String(from.username).toLowerCase() : null;
 
+/** Апдейт не обработан, и терять его нельзя: вебхук отвечает ошибкой, Telegram пришлёт его снова. */
+export class RetryLater extends Error {}
+
 // deno-lint-ignore no-explicit-any
 export async function handleUpdate(update: any, d: Deps): Promise<void> {
+  // Оплата: звёзды уже списаны. Если отметить апдейт и упасть на зачислении, повтор от Telegram
+  // отбросится как дубль, и Pro не включится. Поэтому оплату не отмечаем, а при сбое просим повтор;
+  // от двойного зачисления защищает apply_payment по charge_id.
+  if (update?.message?.successful_payment) {
+    try {
+      return await handleMessage(update.message, d);
+    } catch (e) {
+      throw new RetryLater("payment not applied", { cause: e });
+    }
+  }
   // #13: Telegram повторяет апдейт при таймауте вебхука — второй раз обрабатывать нельзя,
   // иначе пользователь получает два «Разбираю…» и трату записывает дважды.
   if (!(await d.db.recordUpdate(update?.update_id))) return;

@@ -536,18 +536,19 @@ async function handle(req: Request, d: ApiDeps): Promise<Response> {
   const init = req.headers.get("x-init-data") ?? "";
   const now = d.nowSec();
   const sensitive = SENSITIVE.test(path);
-  let auth = await verifyInitData(init, d.botToken, now, maxAgeFor(req.method, path));
-  // Токен сессии — тот, что прислал клиент, если он валиден и принадлежит тому же человеку,
-  // что и initData: подпись Telegram любой давности всё равно говорит, кто открыл миниапп.
+  // Подпись проверяем один раз, без ограничения давности: она в любом случае говорит, кто открыл
+  // миниапп. Окна для чтения, записи и необратимого — дальше, обычным сравнением.
   const signed = init ? await verifyInitData(init, d.botToken, now, Number.MAX_SAFE_INTEGER) : null;
+  const within = (maxAge: number) => (signed !== null && now - signed.authDate <= maxAge ? signed : null);
+  let auth = within(maxAgeFor(req.method, path));
+  // Токен сессии — тот, что прислал клиент, если он валиден и принадлежит тому же человеку, что и initData.
   let session = await verifySession(req.headers.get("x-session") ?? "", d.botToken, now);
   if (session && init && signed?.tgId !== session.tgId) session = null;
   if (!auth && session && !sensitive) auth = { tgId: session.tgId, authDate: session.iat };
   if (!auth) {
     // Подпись верна, но сессия устарела для этого действия — это не «чужой»,
     // и клиенту стоит сказать именно «переоткрой», а не «нет доступа».
-    const stale = await verifyInitData(init, d.botToken, now, MAX_AGE_READ);
-    return json(401, { error: stale || session ? "stale_session" : "unauthorized" });
+    return json(401, { error: within(MAX_AGE_READ) || session ? "stale_session" : "unauthorized" });
   }
 
   const res = await serve(req, d, url, path, auth);

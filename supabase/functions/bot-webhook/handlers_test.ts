@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { handleUpdate, TERMS_VERSION } from "./handlers.ts";
+import { handleUpdate, RetryLater, TERMS_VERSION } from "./handlers.ts";
 import type { Db, NewInbox, Queue, Subscription, User } from "./db.ts";
 import type { Invoice, Payments } from "../_shared/telegram.ts";
 import type { Button, Tg } from "../_shared/telegram.ts";
@@ -657,6 +657,27 @@ Deno.test("successful payment turns Pro on once, even if Telegram repeats it", a
   await handleUpdate(paid("ch-1"), deps);
   assertEquals(db.payments[0], ["u-on", "ch-1", "month", 150, new Date(1791108000 * 1000).toISOString(), true]);
   assertEquals(db.inbox.length, 0);
+  assertEquals(tg.sent.filter((m) => m.text.includes("Pro активен")).length, 1);
+});
+
+Deno.test("оплата не теряется, если база упала при зачислении: просим Telegram повторить тот же апдейт", async () => {
+  const { db, tg, deps } = paySetup();
+  onboarded(db);
+  const update = msg(ADMIN, { successful_payment: {
+    currency: "XTR", total_amount: 1200, invoice_payload: "pro:year", telegram_payment_charge_id: "ch-down",
+  } });
+  const apply = db.applyPayment.bind(db);
+  db.applyPayment = () => Promise.reject(new Error("db down"));
+  let err: unknown;
+  await handleUpdate(update, deps).catch((e) => (err = e));
+  assert(err instanceof RetryLater, "сбой зачисления должен вернуть Telegram ошибку, а не 200");
+
+  db.applyPayment = apply;
+  await handleUpdate(update, deps); // Telegram прислал тот же update_id ещё раз
+  assertEquals(db.paidCharges.has("ch-down"), true);
+  assertEquals(tg.sent.filter((m) => m.text.includes("Pro активен")).length, 1);
+
+  await handleUpdate(update, deps); // и ещё раз — второй раз не зачисляем и не пишем
   assertEquals(tg.sent.filter((m) => m.text.includes("Pro активен")).length, 1);
 });
 

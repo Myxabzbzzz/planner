@@ -15,9 +15,20 @@ function dataCheckString(params: URLSearchParams): string {
     .join("\n");
 }
 
+/** Ключ подписи зависит только от токена бота — выводим его один раз, а не на каждый запрос. */
+const keys = new Map<string, Promise<CryptoKey>>();
+const keyFor = (botToken: string) => {
+  let k = keys.get(botToken);
+  if (!k) {
+    k = hmac(enc.encode("WebAppData"), botToken)
+      .then((secret) => crypto.subtle.importKey("raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]));
+    keys.set(botToken, k);
+  }
+  return k;
+};
+
 async function signature(params: URLSearchParams, botToken: string): Promise<string> {
-  const secret = await hmac(enc.encode("WebAppData"), botToken);
-  return hex(await hmac(secret, dataCheckString(params)));
+  return hex(new Uint8Array(await crypto.subtle.sign("HMAC", await keyFor(botToken), enc.encode(dataCheckString(params)))));
 }
 
 function safeEqual(a: string, b: string): boolean {

@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { handleUpdate } from "./handlers.ts";
+import { handleUpdate, RetryLater } from "./handlers.ts";
 import { supabaseDb } from "./db.ts";
 import { supabaseMenuDb } from "./menu_db.ts";
 import { telegramClient } from "../_shared/telegram.ts";
@@ -27,8 +27,10 @@ Deno.serve(async (req) => {
     await handleUpdate(update, deps);
   } catch (e) {
     console.error("update failed", update?.update_id, e);
+    // оплату терять нельзя: пусть Telegram пришлёт её ещё раз
+    if (e instanceof RetryLater) return new Response("retry", { status: 500 });
   }
-  // 200 всегда: иначе Telegram повторит апдейт, а идемпотентность внутри handleUpdate
+  // В остальных случаях 200: иначе Telegram повторит апдейт, а идемпотентность внутри handleUpdate
   // отбросит повтор — и пользователь не получит вообще никакого ответа.
   return new Response("ok");
 });

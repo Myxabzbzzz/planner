@@ -29,14 +29,22 @@ export const SESSION_MINT_MAX_INIT_AGE = 3600;
 
 export type Session = { tgId: number; iat: number; orig: number };
 
-async function sign(botToken: string, payload: string): Promise<string> {
+/** Ключ выводится из токена бота — один раз на токен, а не на каждый запрос. */
+const keys = new Map<string, Promise<CryptoKey>>();
+
+async function deriveKey(botToken: string): Promise<CryptoKey> {
   const keyBytes = await crypto.subtle.sign(
     "HMAC",
     await crypto.subtle.importKey("raw", enc.encode("planner-session-v1"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]),
     enc.encode(botToken),
   );
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(payload)));
+  return await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+}
+
+async function sign(botToken: string, payload: string): Promise<string> {
+  let key = keys.get(botToken);
+  if (!key) keys.set(botToken, key = deriveKey(botToken));
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", await key, enc.encode(payload)));
   return [...mac].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
