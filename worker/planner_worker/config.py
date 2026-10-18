@@ -21,12 +21,17 @@ class Config:
     ollama_keep_alive: str | int = "30m"
     whisper_model: str = MLX_DEFAULT
     whisper_backend: str = "mlx"
+    # faster-whisper: auto — видеокарта, если есть; cpu — отдать видеокарту целиком LLM
+    whisper_device: str = "auto"
     use_laya: bool = True
     laya_threshold: float = 0.7
     worker_id: str = "laptop"
     poll_interval: float = 2.0
     # false — воркер не берёт сообщения, только подписывает быстрые команды (Mac рядом с сервером на Linux)
     inbox: bool = True
+    # сколько сообщений разбирать одновременно: пока одно ждёт Telegram/Supabase или Whisper,
+    # видеокарта считает другое. Больше OLLAMA_NUM_PARALLEL ставить смысла нет
+    concurrency: int = 1
 
 
 def keep_alive(value: str | None, platform: str = sys.platform) -> str | int:
@@ -51,9 +56,11 @@ def load_config() -> Config:
         vision_model=env.get("VISION_MODEL", Config.vision_model),
         whisper_backend=backend,
         whisper_model=model_for(backend, env.get("WHISPER_MODEL")),
+        whisper_device=env.get("WHISPER_DEVICE", Config.whisper_device),
         use_laya=env.get("USE_LAYA", "true").lower() == "true",
         laya_threshold=float(env.get("LAYA_THRESHOLD", "0.7")),
         worker_id=env.get("WORKER_ID", "laptop"),
         poll_interval=float(env.get("POLL_INTERVAL", "2")),
         inbox=env.get("WORKER_INBOX", "true").lower() == "true",
+        concurrency=max(1, int(env.get("WORKER_CONCURRENCY", "1"))),
     )

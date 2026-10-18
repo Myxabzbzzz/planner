@@ -1,5 +1,6 @@
 import logging
 import sys
+import threading
 from pathlib import Path
 from typing import Callable
 
@@ -38,14 +39,20 @@ def _faster_model(name: str, device: str):
 
 class Transcriber:
     def __init__(self, model_repo: str, download: Callable[[str], str] = _snapshot,
-                 backend: str = "mlx", load_faster: Callable[[str, str], object] = _faster_model):
+                 backend: str = "mlx", load_faster: Callable[[str, str], object] = _faster_model,
+                 device: str = "auto"):
         self.model_repo = model_repo
         self.backend = backend
+        # cpu — оставить видеокарту целиком LLM: на 8 ГБ иначе её часть уходит на процессор
+        self._want = device
         self._download = download
         self._load_faster = load_faster
         self._model: str = model_repo
         self._faster = None
         self._device = ""
+        # одна модель на все потоки воркера: распознавание по очереди, а не наперегонки
+        # (mlx не потокобезопасен, а переход faster-whisper на процессор меняет модель на ходу)
+        self._lock = threading.Lock()
 
     def warm_up(self) -> None:
         """Скачивает модель (если её нет), дальше работаем с локальной папкой без походов в сеть,
@@ -61,12 +68,20 @@ class Transcriber:
         mlx_whisper.transcribe(np.zeros(16000, dtype=np.float32), path_or_hf_repo=self._model, language="ru")
 
     def transcribe(self, path: Path) -> str:
+        with self._lock:
+            return self._transcribe(path)
+
+    def _transcribe(self, path: Path) -> str:
         if self.backend == "faster":
             return self._faster_transcribe(str(path))
         import mlx_whisper
 
         out = mlx_whisper.transcribe(str(path), path_or_hf_repo=self._model, language="ru")
         return (out.get("text") or "").strip()
+
+    @property
+    def device(self) -> str:
+        return self._device
 
     def _use(self, device: str) -> None:
         self._faster = self._load_faster(self.model_repo, device)
@@ -80,6 +95,8 @@ class Transcriber:
         # Видеокарта может отказать в двух местах: CTranslate2 собран без CUDA — падает уже
         # создание модели; нет библиотек cuBLAS/cuDNN — только первое распознавание.
         # В обоих случаях один раз переходим на процессор и дальше остаёмся там.
+        if self._faster is None and self._want == "cpu":
+            self._use("cpu")
         if self._faster is None:
             try:
                 self._use("cuda")

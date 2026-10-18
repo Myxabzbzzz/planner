@@ -1,3 +1,4 @@
+import threading
 from dataclasses import dataclass
 
 from .schemas import ExtractedItem
@@ -38,6 +39,7 @@ class Classification:
 class LayaClassifier:
     def __init__(self, agent=None):
         self._agent = agent
+        self._lock = threading.Lock()  # общая модель на все потоки воркера
 
     def _get(self):
         if self._agent is None:
@@ -50,7 +52,8 @@ class LayaClassifier:
         self.classify("прогрев")
 
     def classify(self, text: str) -> Classification:
-        ans = self._get().predict({"body": text}, SECTION_QUESTION)["answers"]["section"]
+        with self._lock:
+            ans = self._get().predict({"body": text}, SECTION_QUESTION)["answers"]["section"]
         group = ans["choice"]
         return Classification(group, float(ans["probabilities"][group]))
 

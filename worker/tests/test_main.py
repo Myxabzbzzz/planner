@@ -154,3 +154,28 @@ def test_sigterm_asks_loop_to_stop_instead_of_killing():
         assert stop.is_set()
     finally:
         signal.signal(signal.SIGTERM, old)
+
+
+def test_extra_lanes_do_not_heartbeat():
+    s = Store()
+    m.tick(s, None, None, CFG, 0.0, housekeeping=False)
+    assert (s.hb_calls, s.claim_calls) == (0, 1)
+
+
+def test_lanes_run_in_parallel_and_stop_together():
+    import threading
+
+    stop = threading.Event()
+    barrier = threading.Barrier(3, timeout=5)  # не дождётся — значит, потоки шли по очереди
+    seen = set()
+
+    def step_for(i):
+        def step(last_beat):
+            seen.add(i)
+            barrier.wait()
+            stop.set()
+            return last_beat
+        return step
+
+    m.run_lanes(3, stop, step_for)
+    assert seen == {0, 1, 2}

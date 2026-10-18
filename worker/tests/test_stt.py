@@ -90,3 +90,34 @@ def test_faster_whisper_uses_cpu_when_cuda_is_not_compiled_in():
     t = Transcriber("large-v3-turbo", backend="faster", load_faster=load)
     assert t.transcribe(Path("/tmp/a.oga")) == "кофе сорок тысяч"
     assert made == ["cuda", "cpu"]
+
+
+def test_threads_transcribe_one_at_a_time():
+    import threading
+    import time
+
+    inside, peak = [0], [0]
+
+    class Slow:
+        def transcribe(self, audio, language):
+            inside[0] += 1
+            peak[0] = max(peak[0], inside[0])
+            time.sleep(0.02)
+            inside[0] -= 1
+            return [], None
+
+    t = Transcriber("large-v3-turbo", backend="faster", load_faster=lambda name, device: Slow())
+    threads = [threading.Thread(target=t.transcribe, args=(Path("/tmp/a.oga"),)) for _ in range(4)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert peak[0] == 1
+
+
+def test_whisper_device_cpu_never_touches_the_gpu():
+    made = []
+    t = Transcriber("large-v3-turbo", backend="faster", device="cpu",
+                    load_faster=lambda name, device: made.append(device) or FakeFaster(device))
+    t.transcribe(Path("/tmp/a.oga"))
+    assert made == ["cpu"] and t.device == "cpu"

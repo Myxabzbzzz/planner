@@ -5,6 +5,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 import httpx
 from supabase import create_client
@@ -35,12 +36,14 @@ def _log_failure(what: str) -> None:
         log.exception(what)
 
 
-def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None, claim_inbox: bool = True) -> float:
+def tick(store, tg, pipeline, cfg, last_beat: float, job_runner=None, claim_inbox: bool = True,
+         housekeeping: bool = True) -> float:
     """One loop iteration; never raises on transient errors. Returns new last_beat.
 
     claim_inbox=False — воркер только подписывает быстрые команды. Пульс он тогда не шлёт:
-    по пульсу бот говорит «разберу сейчас», а сообщения этот воркер не разбирает."""
-    if time.monotonic() - last_beat >= HEARTBEAT_EVERY:
+    по пульсу бот говорит «разберу сейчас», а сообщения этот воркер не разбирает.
+    housekeeping=False — дополнительный поток: пульс и рассылку об ошибках шлёт только первый."""
+    if housekeeping and time.monotonic() - last_beat >= HEARTBEAT_EVERY:
         last_beat = time.monotonic()
         try:
             if claim_inbox:
@@ -85,8 +88,23 @@ def stop_on_sigterm() -> threading.Event:
     return stop
 
 
+def run_lanes(n: int, stop: threading.Event, step_for: Callable[[int], Callable[[float], float]]) -> None:
+    """n потоков разбирают очередь одновременно. Одно сообщение двоим не достанется:
+    claim_inbox берёт строку через SKIP LOCKED — так же, как при нескольких воркерах."""
+    def loop(step: Callable[[float], float]) -> None:
+        last_beat = 0.0
+        while not stop.is_set():
+            last_beat = step(last_beat)
+
+    lanes = [threading.Thread(target=loop, args=(step_for(i),), name=f"lane-{i}") for i in range(n)]
+    for t in lanes:
+        t.start()
+    for t in lanes:
+        t.join()
+
+
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(threadName)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpcore"):  # their INFO logs contain the bot token in URLs
         logging.getLogger(noisy).setLevel(logging.WARNING)
     cfg = load_config()
@@ -94,7 +112,7 @@ def main() -> None:
     store = Store(create_client(cfg.supabase_url, cfg.supabase_service_key))
     tg = TelegramClient(cfg.telegram_bot_token, http)
     classifier = LayaClassifier() if cfg.use_laya else None
-    stt = Transcriber(cfg.whisper_model, backend=cfg.whisper_backend)
+    stt = Transcriber(cfg.whisper_model, backend=cfg.whisper_backend, device=cfg.whisper_device)
     llm = OllamaClient(cfg.ollama_url, cfg.ollama_model, http, cfg.ollama_keep_alive)
     pipeline = Pipeline(
         store=store,
@@ -110,8 +128,8 @@ def main() -> None:
     )
 
     if cfg.inbox:
-        log.info("warming up models (whisper=%s %s, laya=%s, llm=%s)…",
-                 cfg.whisper_backend, cfg.whisper_model, cfg.use_laya, cfg.ollama_model)
+        log.info("warming up models (whisper=%s %s on %s, laya=%s, llm=%s)…",
+                 cfg.whisper_backend, cfg.whisper_model, cfg.whisper_device, cfg.use_laya, cfg.ollama_model)
         try:
             stt.warm_up()
         except Exception as e:  # без сети на старте — модель подгрузится при первом голосовом
@@ -135,9 +153,12 @@ def main() -> None:
         raise SystemExit("WORKER_INBOX=false, а подписывать быстрые команды здесь нечем — воркеру нечего делать")
 
     stop = stop_on_sigterm()
-    last_beat = 0.0
-    while not stop.is_set():
-        last_beat = tick(store, tg, pipeline, cfg, last_beat, job_runner=job_runner, claim_inbox=cfg.inbox)
+    lanes = cfg.concurrency if cfg.inbox else 1
+    log.info("processing up to %s messages at once", lanes)
+    # быстрые команды и пульс — только в первом потоке, остальные лишь разбирают сообщения
+    run_lanes(lanes, stop, lambda i: lambda last_beat: tick(
+        store, tg, pipeline, cfg, last_beat, job_runner=job_runner if i == 0 else None,
+        claim_inbox=cfg.inbox, housekeeping=i == 0))
     log.info("stopped")
 
 
