@@ -35,10 +35,11 @@ select is(public.spawn_recurrences('2026-11-10 09:00+03'), 1, 'one instance afte
 select is((select max(starts_at at time zone 'Europe/Moscow')::date from public.items
             where user_id = '00000000-0000-0000-0000-00000000ec01'), '2026-11-12'::date, 'the nearest Thursday, not the missed ones');
 
--- задача без времени по будням с субботы начинается с понедельника
-select public.create_recurrence('00000000-0000-0000-0000-00000000ec01', 'task', 'Зарядка', '2026-10-17', null, null, 'weekdays');
+-- задача без времени по будням с субботы начинается с понедельника. Суббота следующей недели,
+-- а не дата-константа: api_tasks('upcoming') сравнивает с настоящим сегодня (now())
+select public.create_recurrence('00000000-0000-0000-0000-00000000ec01', 'task', 'Зарядка', (date_trunc('week', now() at time zone 'Europe/Moscow')::date + 12), null, null, 'weekdays');
 select is((select (due_at at time zone 'Europe/Moscow')::date::text || ' ' || due_has_time
-             from public.items where title = 'Зарядка'), '2026-10-19 false', 'weekdays from Saturday start on Monday, no time');
+             from public.items where title = 'Зарядка'), (date_trunc('week', now() at time zone 'Europe/Moscow')::date + 14)::text || ' false', 'weekdays from Saturday start on Monday, no time');
 
 -- в списке задач видно, что дело повторяется
 select is((select t->'repeat'->>'freq' from jsonb_array_elements(
